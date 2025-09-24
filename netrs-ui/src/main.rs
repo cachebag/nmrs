@@ -1,16 +1,35 @@
-use netrs_core::NetworkManager;
+use gtk::prelude::*;
+use gtk::{Application, ApplicationWindow, Box as GtkBox, Label, Button, Orientation};
 
-#[tokio::main]
-async fn main() {
-    let nm = NetworkManager::new().await.expect("Failed to connect to NetworkManager");
+fn main() {
+    let app = Application::builder()
+        .application_id("org.netrs.ui")
+        .build();
 
-    match nm.list_networks().await {
-        Ok(networks) => {
-            println!("Available networks:");
-            for n in networks {
-                println!("{} (strength: {}%) secure: {}", n.ssid, n.strength, n.secure);
-            }
-        }
-        Err(e) => eprintln!("Error listing networks: {e}"),
-    }
+    app.connect_activate(|app| {
+        let window = ApplicationWindow::builder()
+            .application(app)
+            .title("netrs")
+            .default_width(400)
+            .default_height(300)
+            .build();
+
+        let vbox = GtkBox::new(Orientation::Vertical, 10);
+
+        let label = Label::new(Some("Hello from netrs!"));
+
+        let button = Button::with_label("Quit");
+        let win_clone = window.clone();
+        button.connect_clicked(move |_| {
+            win_clone.close();
+        });
+
+        vbox.append(&label);
+        vbox.append(&button);
+
+        window.set_child(Some(&vbox));
+        window.present();
+    });
+
+    app.run();
 }
