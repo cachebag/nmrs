@@ -1,0 +1,10 @@
+[package]
+name = "netrs-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+zbus = "5.11.0"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2.0.16"
+tracing = "0.1.41"

@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "netrs-core", 
+  "netrs-ui"
+]
+
+resolver = "3"
