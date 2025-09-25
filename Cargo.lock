@@ -792,12 +792,14 @@ dependencies = [
  "thiserror",
  "tracing",
  "zbus",
+ "zvariant",
 ]
 
 [[package]]
 name = "netrs-ui"
 version = "0.1.0"
 dependencies = [
+ "glib",
  "gtk4",
  "netrs-core",
  "tokio",
