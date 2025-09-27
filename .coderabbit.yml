@@ -1,0 +1,22 @@
+language: en-US
+tone_instructions: >
+  Prefer idiomatic Rust/GTK4 suggestions only when
+  they clearly improve correctness, safety, or readability. If there are no
+  meaningful issues, say “LGTM” Mark any subjective ideas
+  as non-blocking (nit).
+
+reviews:
+  profile: chill            
+  high_level_summary: false
+  review_status: true
+  commit_status: true
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords: ["WIP", "draft"]
+  path_filters:
+    - "netrs-core/**"
+    - "netrs-ui/**"
+    - "!target/**"
