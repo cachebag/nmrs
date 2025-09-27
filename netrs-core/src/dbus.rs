@@ -56,8 +56,10 @@ impl NetworkManager {
                 .await?;
 
             let interface = d_proxy.interface().await?;
-            let device_type = d_proxy.device_type().await?;
-            let state = d_proxy.state().await?;
+            let raw_type = d_proxy.device_type().await?;
+            let device_type = raw_type.into();
+            let raw_state = d_proxy.state().await?;
+            let state = raw_state.into();
             let managed = d_proxy.managed().await.ok();
             let driver = d_proxy.driver().await.ok();
 
