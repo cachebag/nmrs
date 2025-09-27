@@ -45,7 +45,13 @@ async fn main() -> Result<(), ConnectionError> {
                 match nm2.list_devices().await {
                     Ok(devs) => {
                         for d in devs {
-                            eprintln!("Device: {:?}", d);
+                            eprintln!(
+                                "{} ({}) - {} [driver: {}]",
+                                d.interface,
+                                d.device_type,
+                                d.state,
+                                d.driver.as_deref().unwrap_or("unknown")
+                            );
                         }
                     }
                     Err(e) => eprintln!("Error: {:?}", e),
