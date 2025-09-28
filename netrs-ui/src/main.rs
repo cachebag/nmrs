@@ -1,13 +1,15 @@
 use glib::MainContext;
 use gtk::prelude::*;
-use gtk::{Align, Application, ApplicationWindow, Box as GtkBox, Button, CenterBox, Orientation};
+use gtk::{
+    Align, Application, ApplicationWindow, Box as GtkBox, Button, CenterBox, Label, ListBox,
+    ListBoxRow, Orientation,
+};
 use netrs_core::NetworkManager;
 use netrs_core::models::ConnectionError;
 
 #[tokio::main]
 async fn main() -> Result<(), ConnectionError> {
     let nm = NetworkManager::new().await?;
-    // move nm into the closure by putting it in an Arc
     let nm = std::sync::Arc::new(nm);
 
     let app = Application::builder()
@@ -29,6 +31,44 @@ async fn main() -> Result<(), ConnectionError> {
         let quit = Button::with_label("Quit");
         let show_devices = Button::with_label("Show available devices");
 
+        let device_list = ListBox::new();
+
+        // Handler for showing devices
+        let nm_inner = nm_clone.clone();
+        let device_list_clone = device_list.clone();
+        show_devices.connect_clicked(move |_| {
+            let nm2 = nm_inner.clone();
+            let device_list_ref = device_list_clone.clone();
+
+            MainContext::default().spawn_local(async move {
+                match nm2.list_devices().await {
+                    Ok(devs) => {
+                        // Schedule UI update on GTK main thread
+                        glib::idle_add_local_once(move || {
+                            while let Some(child) = device_list_ref.first_child() {
+                                device_list_ref.remove(&child);
+                            }
+
+                            for d in devs {
+                                let row = ListBoxRow::new();
+                                let label = Label::new(Some(&format!(
+                                    "{} ({}) - {} [{}]",
+                                    d.interface,
+                                    d.device_type,
+                                    d.state,
+                                    d.driver.as_deref().unwrap_or("unknown"),
+                                )));
+                                row.set_child(Some(&label));
+                                device_list_ref.append(&row);
+                            }
+                            device_list_ref.show();
+                        });
+                    }
+                    Err(e) => eprintln!("Error: {:?}", e),
+                }
+            });
+        });
+
         grid.attach(&show_devices, 0, 0, 1, 1);
         grid.attach(&quit, 0, 2, 3, 1);
 
@@ -37,29 +77,8 @@ async fn main() -> Result<(), ConnectionError> {
             win_clone.close();
         });
 
-        let nm_inner = nm_clone.clone();
-        show_devices.connect_clicked(move |_| {
-            // run async inside GTK main loop
-            let nm2 = nm_inner.clone();
-            MainContext::default().spawn_local(async move {
-                match nm2.list_devices().await {
-                    Ok(devs) => {
-                        for d in devs {
-                            eprintln!(
-                                "{} ({}) - {} [driver: {}]",
-                                d.interface,
-                                d.device_type,
-                                d.state,
-                                d.driver.as_deref().unwrap_or("unknown")
-                            );
-                        }
-                    }
-                    Err(e) => eprintln!("Error: {:?}", e),
-                }
-            });
-        });
-
         sidebar.append(&grid);
+        sidebar.append(&device_list);
 
         let layout = CenterBox::new();
         layout.set_start_widget(Some(&sidebar));
