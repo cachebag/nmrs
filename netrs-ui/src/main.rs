@@ -26,6 +26,7 @@ async fn main() -> Result<(), ConnectionError> {
             .build();
 
         let sidebar = GtkBox::new(Orientation::Vertical, 5);
+        let central = GtkBox::new(Orientation::Vertical, 5);
 
         let grid = gtk::Grid::new();
         let quit = Button::with_label("Quit");
@@ -78,11 +79,14 @@ async fn main() -> Result<(), ConnectionError> {
         });
 
         sidebar.append(&grid);
-        sidebar.append(&device_list);
+        central.append(&device_list);
 
         let layout = CenterBox::new();
         layout.set_start_widget(Some(&sidebar));
+        layout.set_center_widget(Some(&central));
         sidebar.set_valign(Align::Center);
+        central.set_halign(Align::Center);
+        central.set_valign(Align::Center);
 
         window.set_child(Some(&layout));
         window.present();
