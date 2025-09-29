@@ -788,8 +788,10 @@ dependencies = [
 name = "netrs-core"
 version = "0.1.0"
 dependencies = [
+ "async-io",
  "serde",
  "thiserror",
+ "tokio",
  "tracing",
  "zbus",
  "zvariant",

@@ -9,6 +9,7 @@ pub fn networks_view(networks: &[models::Network]) -> ListBox {
         let row = ListBoxRow::new();
         let hbox = Box::new(Orientation::Horizontal, 6);
 
+        row.add_css_class("network-selection");
         let ssid = Label::new(Some(&net.ssid));
 
         hbox.append(&ssid);

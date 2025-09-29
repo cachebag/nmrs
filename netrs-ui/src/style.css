@@ -1,25 +1,25 @@
-/* Dark global background */
+/* Global dark background */
 window {
-    background-color: #1e1e1e;
+    background-color: #121212;  /* deeper dark */
     color: #e0e0e0;
 }
 
 /* Header bar */
 headerbar {
-    background: #2a2a2a;
+    background: #1e1e1e;
     color: #e0e0e0;
-    border-bottom: 1px solid #3a3a3a;
+    border-bottom: 1px solid #2c2c2c;
 }
 
-/* Switch */
+/* Switch (toggle) */
 switch {
-    background-color: #3a3a3a;
+    background-color: #2a2a2a;
     border-radius: 12px;
     padding: 2px;
 }
 
 switch slider {
-    background-color: #e0e0e0;
+    background-color: #bbbbbb;
     border-radius: 10px;
 }
 
@@ -30,4 +30,50 @@ switch:checked {
 
 switch:checked slider {
     background-color: #ffffff;
+}
+
+/* Network selection rows */
+.network-selection {
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: 4px;
+    background: #1e1e1e;  
+    border: 1px solid #2c2c2c;
+}
+
+.network-selection label {
+    font-size: 14px;
+    color: #e0e0e0;
+}
+
+/* Hover effect */
+.network-selection:hover {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+
+/* Selected row */
+.network-selection:selected {
+    background: #3a7bd5;
+    color: #ffffff;
+}
+
+/* ListBox container */
+list {
+    background: #121212;
+    border: none;
+}
+
+/* Individual rows */
+list > row {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* Row when selected */
+list > row:selected {
+    background: #3a7bd5;
+    color: #ffffff;
 }
