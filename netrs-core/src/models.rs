@@ -2,11 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Network {
+    pub device: String,
     pub ssid: String,
-    pub strength: u8,
-    pub secure: bool,
+    pub bssid: Option<String>,
+    pub strength: Option<u8>,
 }
 
 #[derive(Debug, Clone)]
