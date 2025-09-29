@@ -1,4 +1,5 @@
 use crate::models::{Device, Network};
+use std::collections::HashMap;
 use zbus::Connection;
 use zbus::Result;
 use zbus::proxy;
@@ -8,6 +9,7 @@ pub struct NetworkManager {
     conn: Connection,
 }
 
+// Proxies for D-Bus interfaces
 #[proxy(
     interface = "org.freedesktop.NetworkManager.Device",
     default_service = "org.freedesktop.NetworkManager"
@@ -36,6 +38,30 @@ trait NMDevice {
 )]
 trait NM {
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+}
+
+#[proxy(
+    interface = "org.freedesktop.NetworkManager.Device.Wireless",
+    default_service = "org.freedesktop.NetworkManager"
+)]
+trait NMWireless {
+    fn get_all_access_points(&self) -> Result<Vec<OwnedObjectPath>>;
+    fn request_scan(&self, options: HashMap<String, zvariant::Value<'_>>) -> Result<()>;
+}
+
+#[proxy(
+    interface = "org.freedesktop.NetworkManager.AccessPoint",
+    default_service = "org.freedesktop.NetworkManager"
+)]
+trait NMAccessPoint {
+    #[zbus(property)]
+    fn ssid(&self) -> Result<Vec<u8>>;
+
+    #[zbus(property)]
+    fn strength(&self) -> Result<u8>;
+
+    #[zbus(property)]
+    fn hw_address(&self) -> Result<String>;
 }
 
 impl NetworkManager {
@@ -76,8 +102,49 @@ impl NetworkManager {
     }
 
     pub async fn list_networks(&self) -> Result<Vec<Network>> {
-        // TODO: query NetworkManager via D-Bus
-        Ok(vec![])
+        let nm = NMProxy::new(&self.conn).await?;
+        let devices = nm.get_devices().await?;
+
+        let mut networks = Vec::new();
+
+        for dp in devices {
+            let d_proxy = NMDeviceProxy::builder(&self.conn)
+                .path(dp.clone())?
+                .build()
+                .await?;
+            if d_proxy.device_type().await? != 2 {
+                continue;
+            }
+
+            let wifi = NMWirelessProxy::builder(&self.conn)
+                .path(dp.clone())?
+                .build()
+                .await?;
+
+            let opts = HashMap::new();
+            let _ = wifi.request_scan(opts).await;
+
+            // TODO: Subscribe or sleep
+
+            for ap_path in wifi.get_all_access_points().await? {
+                let ap = NMAccessPointProxy::builder(&self.conn)
+                    .path(ap_path.clone())?
+                    .build()
+                    .await?;
+                let ssid_bytes = ap.ssid().await?;
+                let ssid = String::from_utf8_lossy(&ssid_bytes).into_owned();
+                let strength = ap.strength().await?;
+                let bssid = ap.hw_address().await?;
+
+                networks.push(Network {
+                    device: dp.to_string(),
+                    ssid,
+                    bssid: Some(bssid),
+                    strength: Some(strength),
+                });
+            }
+        }
+        Ok(networks)
     }
 
     pub async fn connect(&self, _ssid: &str, _password: &str) -> Result<()> {
