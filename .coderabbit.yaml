@@ -4,7 +4,7 @@ tone_instructions: >
   If no meaningful issues, respond “LGTM.” 
   Mark subjective feedback as non-blocking (nit). 
   Do not use emojis, ascii art, or unrelated content. 
-  Limit scope to netrs PRs.
+  Limit scope to netrs PRs
 
 reviews:
   profile: chill           
