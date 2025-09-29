@@ -3,7 +3,8 @@ tone_instructions: >
   Prefer idiomatic Rust suggestions only when
   they clearly improve correctness, safety, or readability. If there are no
   meaningful issues, say “LGTM” Mark any subjective ideas
-  as non-blocking (nit).
+  as non-blocking (nit). Do NOT use emojis, ascii art or anything else that is 
+  not directly related to the PR or the development of netrs
 
 reviews:
   profile: chill           
