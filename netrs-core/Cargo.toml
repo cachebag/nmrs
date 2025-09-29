@@ -9,3 +9,4 @@ zvariant = "5.7.0"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2.0.16"
 tracing = "0.1.41"
+tokio = "1.47.1"

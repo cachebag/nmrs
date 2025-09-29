@@ -1,5 +1,6 @@
-use crate::models::{Device, Network};
+use crate::models::{Device, DeviceState, DeviceType, Network};
 use std::collections::HashMap;
+use tokio::time::{Duration, sleep};
 use zbus::Connection;
 use zbus::Result;
 use zbus::proxy;
@@ -38,6 +39,12 @@ trait NMDevice {
 )]
 trait NM {
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+
+    #[zbus(property)]
+    fn wireless_enabled(&self) -> zbus::Result<bool>;
+
+    #[zbus(property)]
+    fn set_wireless_enabled(&self, value: bool) -> zbus::Result<()>;
 }
 
 #[proxy(
@@ -132,7 +139,10 @@ impl NetworkManager {
                     .build()
                     .await?;
                 let ssid_bytes = ap.ssid().await?;
-                let ssid = String::from_utf8_lossy(&ssid_bytes).into_owned();
+                let ssid = match std::str::from_utf8(&ssid_bytes) {
+                    Ok(s) if !s.is_empty() => s.to_string(),
+                    _ => "<Hidden Network>".to_string(),
+                };
                 let strength = ap.strength().await?;
                 let bssid = ap.hw_address().await?;
 
@@ -149,6 +159,62 @@ impl NetworkManager {
 
     pub async fn connect(&self, _ssid: &str, _password: &str) -> Result<()> {
         // TODO: implement AddAndActivateConnection
+        Ok(())
+    }
+
+    pub async fn wifi_enabled(&self) -> Result<bool> {
+        let nm = NMProxy::new(&self.conn).await?;
+        nm.wireless_enabled().await
+    }
+
+    pub async fn set_wifi_enabled(&self, value: bool) -> zbus::Result<()> {
+        let nm = NMProxy::new(&self.conn).await?;
+        nm.set_wireless_enabled(value).await
+    }
+
+    pub async fn wait_for_wifi_ready(&self, nm: &NetworkManager) -> Result<()> {
+        for _ in 0..20 {
+            // FIXME: longer? shorter? is this even where the issue is?
+            let devices = nm.list_devices().await?;
+            for dev in devices {
+                if dev.device_type == DeviceType::Wifi
+                    && (dev.state == DeviceState::Disconnected
+                        || dev.state == DeviceState::Activated)
+                {
+                    return Ok(());
+                }
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        Err(zbus::Error::Failure(
+            "Wi-Fi device never became ready".into(),
+        ))
+    }
+
+    pub async fn scan_networks(&self) -> zbus::Result<()> {
+        let nm = NMProxy::new(&self.conn).await?;
+        let devices = nm.get_devices().await?;
+
+        for dp in devices {
+            let d_proxy = NMDeviceProxy::builder(&self.conn)
+                .path(dp.clone())?
+                .build()
+                .await?;
+
+            if d_proxy.device_type().await? != 2 {
+                continue;
+            }
+
+            let wifi = NMWirelessProxy::builder(&self.conn)
+                .path(dp.clone())?
+                .build()
+                .await?;
+
+            let opts = std::collections::HashMap::new();
+            let _ = wifi.request_scan(opts).await;
+        }
+
         Ok(())
     }
 }

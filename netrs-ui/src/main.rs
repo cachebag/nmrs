@@ -1,7 +1,5 @@
 use gtk::Application;
 use gtk::prelude::*;
-use netrs_core::{NetworkManager, models::ConnectionError};
-use std::sync::Arc;
 
 mod style;
 mod ui;
@@ -9,19 +7,15 @@ mod ui;
 use crate::style::load_css;
 
 #[tokio::main]
-async fn main() -> Result<(), ConnectionError> {
-    let nm = Arc::new(NetworkManager::new().await?);
-    let networks = nm.list_networks().await?;
-
+async fn main() {
     let app = Application::builder()
         .application_id("org.netrs.ui")
         .build();
 
     app.connect_activate(move |app| {
         load_css();
-        ui::build_ui(app, networks.clone());
+        ui::build_ui(app);
     });
 
     app.run();
-    Ok(())
 }

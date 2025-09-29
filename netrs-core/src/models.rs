@@ -20,7 +20,7 @@ pub struct Device {
     pub driver: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DeviceType {
     Ethernet,
     Wifi,
@@ -29,7 +29,7 @@ pub enum DeviceType {
     Other(u32),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DeviceState {
     Unmanaged,
     Unavailable,
