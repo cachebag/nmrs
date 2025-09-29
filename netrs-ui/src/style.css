@@ -1,0 +1,33 @@
+/* Dark global background */
+window {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+}
+
+/* Header bar */
+headerbar {
+    background: #2a2a2a;
+    color: #e0e0e0;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+/* Switch */
+switch {
+    background-color: #3a3a3a;
+    border-radius: 12px;
+    padding: 2px;
+}
+
+switch slider {
+    background-color: #e0e0e0;
+    border-radius: 10px;
+}
+
+/* Switch when active */
+switch:checked {
+    background-color: #3a7bd5;
+}
+
+switch:checked slider {
+    background-color: #ffffff;
+}

@@ -1,12 +1,14 @@
-use gtk::Application;
 use gtk::prelude::*;
+use gtk::{Application, ApplicationWindow, Box as GtkBox, Orientation, Label};
 use netrs_core::NetworkManager;
 use netrs_core::models::ConnectionError;
 use std::sync::Arc;
 
 mod ui;
+mod style;
 
-use ui::{device_list, sidebar, window};
+use crate::style::load_css;
+use crate::ui::header::build_header;
 
 #[tokio::main]
 async fn main() -> Result<(), ConnectionError> {
@@ -17,15 +19,27 @@ async fn main() -> Result<(), ConnectionError> {
         .application_id("org.netrs.ui")
         .build();
 
-    let nm_clone = nm.clone();
+    let _nm_clone = nm.clone();
     app.connect_activate(move |app| {
-        let main_window = window::create_window(app);
+        load_css();
 
-        let (central, device_list) = device_list::create_device_list();
+        let win = ApplicationWindow::builder()
+            .application(app)
+            .title("")
+            .default_width(800)
+            .default_height(600)
+            .build();
 
-        let sidebar_widget = sidebar::create_sidebar(nm_clone.clone(), &device_list, &main_window);
+        let root = GtkBox::new(Orientation::Vertical, 6);
 
-        window::setup_layout(&main_window, &sidebar_widget, &central);
+        let status = Label::new(None);
+        let header = build_header(&status);
+        win.set_titlebar(Some(&header));
+
+        root.append(&status);
+        win.set_child(Some(&root));
+
+        win.show();
     });
 
     app.run();
