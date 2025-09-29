@@ -1,10 +1,10 @@
 language: en-US
 tone_instructions: >
-  Idiomatic Rust suggestions only when
-  they improve correctness, safety, or readability. If no
-  meaningful issues, say “LGTM” Mark any subjective ideas
-  as non-blocking (nit). NO use of emojis, ascii art or anything that is 
-  not directly related to the PR or the development of netrs
+  Idiomatic Rust suggestions only if they improve correctness, safety, or readability. 
+  If no meaningful issues, respond “LGTM.” 
+  Mark subjective feedback as non-blocking (nit). 
+  Do not use emojis, ascii art, or unrelated content. 
+  Limit scope to netrs PRs.
 
 reviews:
   profile: chill           
