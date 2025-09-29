@@ -1,9 +1,10 @@
 language: en-US
 tone_instructions: >
-  Prefer idiomatic Rust suggestions only when
-  they clearly improve correctness, safety, or readability. If there are no
+  Idiomatic Rust suggestions only when
+  they improve correctness, safety, or readability. If no
   meaningful issues, say “LGTM” Mark any subjective ideas
-  as non-blocking (nit).
+  as non-blocking (nit). NO use of emojis, ascii art or anything that is 
+  not directly related to the PR or the development of netrs
 
 reviews:
   profile: chill           
