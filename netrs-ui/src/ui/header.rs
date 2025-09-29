@@ -10,7 +10,7 @@ pub fn build_header(status: &Label) -> HeaderBar {
 
     wifi_box.append(&wifi_label);
     wifi_box.append(&wifi_switch);
- 
+
     let status_clone = status.clone();
     wifi_switch.connect_active_notify(move |sw| {
         if sw.is_active() {

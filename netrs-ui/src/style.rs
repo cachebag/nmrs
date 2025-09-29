@@ -1,6 +1,6 @@
-use gtk::gdk::Display;
 use gtk::CssProvider;
 use gtk::STYLE_PROVIDER_PRIORITY_APPLICATION;
+use gtk::gdk::Display;
 
 pub fn load_css() {
     let provider = CssProvider::new();

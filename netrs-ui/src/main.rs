@@ -1,11 +1,11 @@
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Box as GtkBox, Orientation, Label};
+use gtk::{Application, ApplicationWindow, Box as GtkBox, Label, Orientation};
 use netrs_core::NetworkManager;
 use netrs_core::models::ConnectionError;
 use std::sync::Arc;
 
-mod ui;
 mod style;
+mod ui;
 
 use crate::style::load_css;
 use crate::ui::header::build_header;
