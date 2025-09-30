@@ -1,5 +1,4 @@
 use crate::models::{Device, DeviceState, DeviceType, Network};
-use async_io::Timer;
 use std::collections::HashMap;
 use std::time::Duration;
 use zbus::Connection;
@@ -163,8 +162,10 @@ impl NetworkManager {
 
         // If we have networks, return them even if some scans failed
         // If no networks and we had scan errors, return the error
-        if networks.is_empty() && scan_error.is_some() {
-            return Err(scan_error.unwrap());
+        if networks.is_empty() {
+            if let Some(nw) = scan_error {
+                return Err(nw);
+            }
         }
 
         Ok(networks)
@@ -197,7 +198,7 @@ impl NetworkManager {
                     return Ok(());
                 }
             }
-            Timer::after(Duration::from_secs(1)).await;
+            futures_timer::Delay::new(Duration::from_secs(1)).await;
         }
 
         Err(zbus::Error::Failure(
