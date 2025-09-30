@@ -2,24 +2,25 @@ pub mod header;
 pub mod networks;
 
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Box, Label, Orientation, ScrolledWindow};
-use netrs_core::models::Network;
+use gtk::{Application, ApplicationWindow, Box as GtkBox, Label, Orientation, ScrolledWindow};
 
-pub fn build_ui(app: &Application, networks: Vec<Network>) {
+pub fn build_ui(app: &Application) {
     let win = ApplicationWindow::new(app);
     win.set_title(Some("netrs"));
     win.set_default_size(400, 600);
 
-    let vbox = Box::new(Orientation::Vertical, 0);
+    let vbox = GtkBox::new(Orientation::Vertical, 0);
 
     let status = Label::new(None);
-    let header = header::build_header(&status);
+
+    let list_container = GtkBox::new(Orientation::Vertical, 0);
+
+    let header = header::build_header(&status, &list_container);
     vbox.append(&header);
 
-    let list = networks::networks_view(&networks);
     let scroller = ScrolledWindow::new();
     scroller.set_vexpand(true);
-    scroller.set_child(Some(&list));
+    scroller.set_child(Some(&list_container));
     vbox.append(&scroller);
 
     win.set_child(Some(&vbox));

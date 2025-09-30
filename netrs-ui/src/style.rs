@@ -5,7 +5,6 @@ use gtk::gdk::Display;
 pub fn load_css() {
     let provider = CssProvider::new();
 
-    // Convert bytes to string literal
     let css = include_str!("style.css");
     provider.load_from_data(css);
 
