@@ -37,7 +37,7 @@ trait NMDevice {
     default_service = "org.freedesktop.NetworkManager",
     default_path = "/org/freedesktop/NetworkManager"
 )]
-trait NM {
+pub trait NM {
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 
     #[zbus(property)]
@@ -51,9 +51,15 @@ trait NM {
     interface = "org.freedesktop.NetworkManager.Device.Wireless",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait NMWireless {
+pub trait NMWireless {
     fn get_all_access_points(&self) -> Result<Vec<OwnedObjectPath>>;
     fn request_scan(&self, options: HashMap<String, zvariant::Value<'_>>) -> Result<()>;
+
+    #[zbus(signal)]
+    fn access_point_added(&self, path: OwnedObjectPath);
+
+    #[zbus(signal)]
+    fn access_point_removed(&self, path: OwnedObjectPath);
 }
 
 #[proxy(
@@ -113,7 +119,6 @@ impl NetworkManager {
         let devices = nm.get_devices().await?;
 
         let mut networks = Vec::new();
-        let mut scan_error = None;
 
         for dp in devices {
             let d_proxy = NMDeviceProxy::builder(&self.conn)
@@ -129,25 +134,15 @@ impl NetworkManager {
                 .build()
                 .await?;
 
-            let opts = HashMap::new();
-            if let Err(e) = wifi.request_scan(opts).await {
-                if scan_error.is_none() {
-                    scan_error = Some(e);
-                }
-            }
-
-            // TODO: Subscribe or sleep
-
             for ap_path in wifi.get_all_access_points().await? {
                 let ap = NMAccessPointProxy::builder(&self.conn)
                     .path(ap_path.clone())?
                     .build()
                     .await?;
                 let ssid_bytes = ap.ssid().await?;
-                let ssid = match std::str::from_utf8(&ssid_bytes) {
-                    Ok(s) if !s.is_empty() => s.to_string(),
-                    _ => "<Hidden Network>".to_string(),
-                };
+                let ssid = std::str::from_utf8(&ssid_bytes)
+                    .unwrap_or("<Hidden Network>")
+                    .to_string();
                 let strength = ap.strength().await?;
                 let bssid = ap.hw_address().await?;
 
@@ -158,14 +153,8 @@ impl NetworkManager {
                     strength: Some(strength),
                 });
             }
-        }
 
-        // If we have networks, return them even if some scans failed
-        // If no networks and we had scan errors, return the error
-        if networks.is_empty() {
-            if let Some(nw) = scan_error {
-                return Err(nw);
-            }
+            let _ = wifi.request_scan(HashMap::new()).await;
         }
 
         Ok(networks)

@@ -796,6 +796,7 @@ version = "0.1.0"
 dependencies = [
  "async-io",
  "futures-timer",
+ "futures-util",
  "serde",
  "thiserror",
  "tokio",
@@ -808,10 +809,12 @@ dependencies = [
 name = "netrs-ui"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "glib",
  "gtk4",
  "netrs-core",
  "tokio",
+ "zbus",
 ]
 
 [[package]]

@@ -1,7 +1,9 @@
-use glib::timeout_future_seconds;
+use futures_util::StreamExt;
 use gtk::prelude::*;
 use gtk::{Align, Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
 use netrs_core::NetworkManager;
+use netrs_core::dbus::{NMProxy, NMWirelessProxy};
+use zbus::Connection;
 
 use crate::ui::networks;
 
@@ -40,6 +42,13 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                                         .set_text(&format!("Error fetching networks: {err}"));
                                 }
                             }
+
+                            // subscribe for live updates
+                            spawn_signal_listeners(
+                                list_container_clone.clone(),
+                                status_clone.clone(),
+                            )
+                            .await;
                         } else {
                             let disabled_label = Label::new(Some("Wi-Fi is disabled"));
                             disabled_label.set_halign(Align::Center);
@@ -77,17 +86,17 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                             status_clone.set_text("Enabling...");
 
                             if nm.wait_for_wifi_ready().await.is_ok() {
-                                if let Err(err) = nm.scan_networks().await {
-                                    status_clone.set_text(&format!("Error scanning: {err}"));
-                                }
-
-                                timeout_future_seconds(2).await;
-
                                 match nm.list_networks().await {
                                     Ok(nets) => {
                                         status_clone.set_text("");
                                         let list: ListBox = networks::networks_view(&nets);
                                         list_container.append(&list);
+
+                                        spawn_signal_listeners(
+                                            list_container.clone(),
+                                            status_clone.clone(),
+                                        )
+                                        .await;
                                     }
                                     Err(err) => {
                                         status_clone
@@ -120,5 +129,82 @@ fn clear_children(container: &gtk::Box) {
     while let Some(widget) = child {
         child = widget.next_sibling();
         container.remove(&widget);
+    }
+}
+
+async fn spawn_signal_listeners(list_container: GtkBox, status: Label) {
+    let conn = match Connection::system().await {
+        Ok(c) => c,
+        Err(e) => {
+            status.set_text(&format!("DBus conn error: {e}"));
+            return;
+        }
+    };
+
+    let nm_proxy = match NMProxy::new(&conn).await {
+        Ok(p) => p,
+        Err(e) => {
+            status.set_text(&format!("NM proxy error: {e}"));
+            return;
+        }
+    };
+
+    let devices = match nm_proxy.get_devices().await {
+        Ok(d) => d,
+        Err(e) => {
+            status.set_text(&format!("Get devices error: {e}"));
+            return;
+        }
+    };
+
+    for dev_path in devices {
+        let builder = match NMWirelessProxy::builder(&conn).path(dev_path.clone()) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+
+        let wifi = match builder.build().await {
+            Ok(proxy) => proxy,
+            Err(_) => continue,
+        };
+
+        let mut added = match wifi.receive_access_point_added().await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let mut removed = match wifi.receive_access_point_removed().await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+
+        let list_container_signal = list_container.clone();
+        let status_signal = status.clone();
+
+        glib::MainContext::default().spawn_local(async move {
+            loop {
+                tokio::select! {
+                    _ = added.next() => {
+                        refresh_networks(&list_container_signal, &status_signal).await;
+                    }
+                    _ = removed.next() => {
+                        refresh_networks(&list_container_signal, &status_signal).await;
+                    }
+                }
+            }
+        });
+    }
+}
+
+async fn refresh_networks(list_container: &GtkBox, status: &Label) {
+    match NetworkManager::new().await {
+        Ok(nm) => match nm.list_networks().await {
+            Ok(nets) => {
+                clear_children(list_container);
+                let list: ListBox = networks::networks_view(&nets);
+                list_container.append(&list);
+            }
+            Err(e) => status.set_text(&format!("Error refreshing networks: {e}")),
+        },
+        Err(e) => status.set_text(&format!("Error refreshing networks: {e}")),
     }
 }
