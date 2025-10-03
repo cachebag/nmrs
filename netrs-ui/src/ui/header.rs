@@ -183,12 +183,18 @@ async fn spawn_signal_listeners(list_container: GtkBox, status: Label) {
         glib::MainContext::default().spawn_local(async move {
             loop {
                 tokio::select! {
-                    _ = added.next() => {
-                        refresh_networks(&list_container_signal, &status_signal).await;
-                    }
-                    _ = removed.next() => {
-                        refresh_networks(&list_container_signal, &status_signal).await;
-                    }
+                    event = added.next() => match event {
+                        Some(_) => {
+                            refresh_networks(&list_container_signal, &status_signal).await;
+                        }
+                        None => break,
+                    },
+                    event = removed.next() => match event {
+                        Some(_) => {
+                            refresh_networks(&list_container_signal, &status_signal).await;
+                        }
+                        None => break,
+                    },
                 }
             }
         });
