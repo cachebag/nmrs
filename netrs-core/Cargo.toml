@@ -1,3 +1,4 @@
+# netrs-core/Cargo.toml
 [package]
 name = "netrs-core"
 version = "0.1.0"
@@ -13,3 +14,6 @@ tokio = "1.47.1"
 async-io = "2.6.0"
 futures-timer = "3.0.3"
 futures-util = "0.3.31"
+neli = "0.7.1"
+if-addrs = "0.14.0"
+ipnetwork = "0.21.1"
