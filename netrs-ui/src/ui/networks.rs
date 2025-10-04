@@ -1,8 +1,9 @@
 use gtk::prelude::*;
-use gtk::{Box, Label, ListBox, ListBoxRow, Orientation};
+use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
 use netrs_core::models;
 
 pub fn networks_view(networks: &[models::Network]) -> ListBox {
+    let conn_threshold = 75;
     let list = ListBox::new();
 
     for net in networks {
@@ -13,9 +14,30 @@ pub fn networks_view(networks: &[models::Network]) -> ListBox {
         let ssid = Label::new(Some(&net.ssid));
 
         hbox.append(&ssid);
+
+        let spacer = Box::new(Orientation::Horizontal, 0);
+        spacer.set_hexpand(true);
+        hbox.append(&spacer);
+
         if let Some(s) = net.strength {
+            let icon_name = if net.secured {
+                "network-wireless-encrypted-symbolic"
+            } else {
+                "network-wireless-signal-excellent-symbolic"
+            };
+
+            let image = Image::from_icon_name(icon_name);
+            if net.secured { image.add_css_class("wifi-secure"); } else { image.add_css_class("wifi-open"); }
             let strength_label = Label::new(Some(&format!("{s}%")));
+
+            hbox.append(&image);
             hbox.append(&strength_label);
+
+            if s >= conn_threshold {
+                strength_label.add_css_class("network-okay");
+            } else {
+                strength_label.add_css_class("network-poor");
+            }
         }
 
         row.set_child(Some(&hbox));

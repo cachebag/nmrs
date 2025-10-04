@@ -75,6 +75,15 @@ trait NMAccessPoint {
 
     #[zbus(property)]
     fn hw_address(&self) -> Result<String>;
+
+    #[zbus(property)]
+    fn flags(&self) -> Result<u32>;
+
+    #[zbus(property)]
+    fn wpa_flags(&self) -> Result<u32>;
+
+    #[zbus(property)]
+    fn rsn_flags(&self) -> Result<u32>;
 }
 
 impl NetworkManager {
@@ -118,7 +127,7 @@ impl NetworkManager {
         let nm = NMProxy::new(&self.conn).await?;
         let devices = nm.get_devices().await?;
 
-        let mut networks = Vec::new();
+        let mut networks: HashMap<String, Network> = HashMap::new();
 
         for dp in devices {
             let d_proxy = NMDeviceProxy::builder(&self.conn)
@@ -145,19 +154,34 @@ impl NetworkManager {
                     .to_string();
                 let strength = ap.strength().await?;
                 let bssid = ap.hw_address().await?;
+                let flags = ap.flags().await?;
+                let wpa = ap.wpa_flags().await?;
+                let rsn = ap.rsn_flags().await?;
 
-                networks.push(Network {
+                let secured = (flags & 0x1) != 0 || wpa != 0 || rsn != 0;
+
+                let new_net = Network {
                     device: dp.to_string(),
-                    ssid,
+                    ssid: ssid.clone(),
                     bssid: Some(bssid),
                     strength: Some(strength),
-                });
+                    secured,
+                };
+
+                networks
+                    .entry(ssid)
+                    .and_modify(|n| {
+                        if strength > n.strength.unwrap_or(0) {
+                            *n = new_net.clone();
+                        }
+                        if new_net.secured {
+                            n.secured = true;
+                        }
+                    })
+                    .or_insert(new_net);
             }
-
-            let _ = wifi.request_scan(HashMap::new()).await;
         }
-
-        Ok(networks)
+        Ok(networks.into_values().collect())
     }
 
     pub async fn connect(&self, _ssid: &str, _password: &str) -> Result<()> {

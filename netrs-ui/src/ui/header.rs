@@ -1,14 +1,23 @@
 use futures_util::StreamExt;
+use glib::ControlFlow;
 use gtk::prelude::*;
-use gtk::{Align, Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
+use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
 use netrs_core::NetworkManager;
 use netrs_core::dbus::{NMProxy, NMWirelessProxy};
+use std::cell::Cell;
 use zbus::Connection;
+
+thread_local! {
+    static REFRESH_SCHEDULED: Cell<bool> = const { Cell::new(false) };
+}
 
 use crate::ui::networks;
 
 pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
     let header = HeaderBar::new();
+
+    let status = status.clone();
+    let list_container = list_container.clone();
 
     let wifi_box = GtkBox::new(Orientation::Horizontal, 6);
     let wifi_label = Label::new(Some("Wi-Fi"));
@@ -16,6 +25,9 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
 
     wifi_box.append(&wifi_label);
     wifi_box.append(&wifi_switch);
+
+    header.pack_start(&wifi_box);
+    header.pack_end(&status);
 
     {
         let list_container_clone = list_container.clone();
@@ -49,11 +61,6 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                                 status_clone.clone(),
                             )
                             .await;
-                        } else {
-                            let disabled_label = Label::new(Some("Wi-Fi is disabled"));
-                            disabled_label.set_halign(Align::Center);
-                            disabled_label.set_valign(Align::Center);
-                            list_container_clone.append(&disabled_label);
                         }
                     }
                     Err(err) => status_clone.set_text(&format!("Error: {err}")),
@@ -64,16 +71,13 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
     }
 
     {
-        let list_container = list_container.clone();
-        let status_clone = status.clone();
-
         wifi_switch.connect_active_notify(move |sw| {
-            let list_container = list_container.clone();
-            let status_clone = status_clone.clone();
+            let list_container_clone = list_container.clone();
+            let status_clone = status.clone();
             let sw = sw.clone();
 
             glib::MainContext::default().spawn_local(async move {
-                clear_children(&list_container);
+                clear_children(&list_container_clone);
 
                 match NetworkManager::new().await {
                     Ok(nm) => {
@@ -83,20 +87,21 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                         }
 
                         if sw.is_active() {
-                            status_clone.set_text("Enabling...");
-
                             if nm.wait_for_wifi_ready().await.is_ok() {
+                                let _ = nm.scan_networks().await;
+                                status_clone.set_text("Scanning...");
+
+                                spawn_signal_listeners(
+                                    list_container_clone.clone(),
+                                    status_clone.clone(),
+                                )
+                                .await;
+
                                 match nm.list_networks().await {
                                     Ok(nets) => {
                                         status_clone.set_text("");
                                         let list: ListBox = networks::networks_view(&nets);
-                                        list_container.append(&list);
-
-                                        spawn_signal_listeners(
-                                            list_container.clone(),
-                                            status_clone.clone(),
-                                        )
-                                        .await;
+                                        list_container_clone.append(&list);
                                     }
                                     Err(err) => {
                                         status_clone
@@ -106,12 +111,6 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                             } else {
                                 status_clone.set_text("Wi-Fi failed to initialize");
                             }
-                        } else {
-                            status_clone.set_text("Wi-Fi is disabled");
-                            let disabled_label = Label::new(Some("Wi-Fi is disabled"));
-                            disabled_label.set_halign(Align::Center);
-                            disabled_label.set_valign(Align::Center);
-                            list_container.append(&disabled_label);
                         }
                     }
                     Err(err) => status_clone.set_text(&format!("Error: {err}")),
@@ -120,7 +119,6 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
         });
     }
 
-    header.pack_start(&wifi_box);
     header
 }
 
@@ -185,13 +183,13 @@ async fn spawn_signal_listeners(list_container: GtkBox, status: Label) {
                 tokio::select! {
                     event = added.next() => match event {
                         Some(_) => {
-                            refresh_networks(&list_container_signal, &status_signal).await;
+                            schedule_refresh(list_container_signal.clone(), status_signal.clone()).await;
                         }
                         None => break,
                     },
                     event = removed.next() => match event {
                         Some(_) => {
-                            refresh_networks(&list_container_signal, &status_signal).await;
+                            schedule_refresh(list_container_signal.clone(), status_signal.clone()).await;
                         }
                         None => break,
                     },
@@ -213,4 +211,28 @@ async fn refresh_networks(list_container: &GtkBox, status: &Label) {
         },
         Err(e) => status.set_text(&format!("Error refreshing networks: {e}")),
     }
+}
+
+async fn schedule_refresh(list_container: GtkBox, status: Label) {
+    REFRESH_SCHEDULED.with(|flag| {
+        if flag.get() {
+            return;
+        }
+        flag.set(true);
+
+        let list_container_clone = list_container.clone();
+        let status_clone = status.clone();
+
+        glib::timeout_add_seconds_local(1, move || {
+            let list_container_inner = list_container_clone.clone();
+            let status_inner = status_clone.clone();
+
+            glib::MainContext::default().spawn_local(async move {
+                refresh_networks(&list_container_inner, &status_inner).await;
+                REFRESH_SCHEDULED.with(|f| f.set(false));
+            });
+
+            ControlFlow::Break
+        });
+    });
 }

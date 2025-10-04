@@ -7,6 +7,9 @@ edition = "2024"
 netrs-core = { path = "../netrs-core" }
 tokio = { version = "1.47.1", features = ["full"] }
 gtk = { version = "0.10.1", package = "gtk4" }
-glib = { version = "0.21.3"}
+glib = "0.21.3"
 futures-util = "0.3.31"
 zbus = "5.11.0"
+smithay-client-toolkit = "0.20.0"
+calloop = "0.14.3"
+relm4 = "0.10.0"

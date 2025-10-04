@@ -8,6 +8,7 @@ pub struct Network {
     pub ssid: String,
     pub bssid: Option<String>,
     pub strength: Option<u8>,
+    pub secured: bool,
 }
 
 #[derive(Debug, Clone)]
