@@ -67,8 +67,12 @@ switch:checked slider {
   color: white;
 }
 
-label.network-okay {
+label.network-good {
   color: green;
+}
+
+label.network-okay {
+  color: orange;
 }
 
 label.network-poor {
