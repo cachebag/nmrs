@@ -59,6 +59,22 @@ switch:checked slider {
     color: #ffffff;
 }
 
+.wifi-secure {
+  color: white;
+}
+
+.wifi-open {
+  color: white;
+}
+
+label.network-okay {
+  color: green;
+}
+
+label.network-poor {
+  color: red;
+}
+
 /* ListBox container */
 list {
     background: #121212;
