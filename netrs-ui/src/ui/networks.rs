@@ -34,6 +34,8 @@ pub fn networks_view(networks: &[models::Network]) -> ListBox {
             hbox.append(&strength_label);
 
             if s >= conn_threshold {
+                strength_label.add_css_class("network-good");
+            } else if s > 65 {
                 strength_label.add_css_class("network-okay");
             } else {
                 strength_label.add_css_class("network-poor");
