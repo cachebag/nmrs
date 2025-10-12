@@ -97,3 +97,18 @@ list > row:selected {
     background: #3a7bd5;
     color: #ffffff;
 }
+
+dialog {
+    background-color: #2b2b2b;
+    border-radius: 8px;
+    margin: 16px;
+}
+
+entry {
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+.diag-buttons {
+  padding-bottom: 12px;
+}
