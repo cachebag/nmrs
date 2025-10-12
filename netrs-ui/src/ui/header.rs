@@ -13,9 +13,13 @@ thread_local! {
 
 use crate::ui::networks;
 
-pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
+pub fn build_header(
+    status: &Label,
+    list_container: &GtkBox,
+    parent_window: &gtk::ApplicationWindow,
+) -> HeaderBar {
     let header = HeaderBar::new();
-
+    let parent_window = parent_window.clone();
     let status = status.clone();
     let list_container = list_container.clone();
 
@@ -34,6 +38,7 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
         let status_clone = status.clone();
         let wifi_switch_clone = wifi_switch.clone();
 
+        let pw = parent_window.clone();
         glib::MainContext::default().spawn_local(async move {
             clear_children(&list_container_clone);
 
@@ -46,7 +51,7 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                             status_clone.set_text("");
                             match nm.list_networks().await {
                                 Ok(nets) => {
-                                    let list: ListBox = networks::networks_view(&nets);
+                                    let list: ListBox = networks::networks_view(&nets, &pw);
                                     list_container_clone.append(&list);
                                 }
                                 Err(err) => {
@@ -59,6 +64,7 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                             spawn_signal_listeners(
                                 list_container_clone.clone(),
                                 status_clone.clone(),
+                                &pw,
                             )
                             .await;
                         }
@@ -71,7 +77,9 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
     }
 
     {
+        let pw2 = parent_window.clone();
         wifi_switch.connect_active_notify(move |sw| {
+            let pw = pw2.clone();
             let list_container_clone = list_container.clone();
             let status_clone = status.clone();
             let sw = sw.clone();
@@ -94,13 +102,14 @@ pub fn build_header(status: &Label, list_container: &GtkBox) -> HeaderBar {
                                 spawn_signal_listeners(
                                     list_container_clone.clone(),
                                     status_clone.clone(),
+                                    &pw,
                                 )
                                 .await;
 
                                 match nm.list_networks().await {
                                     Ok(nets) => {
                                         status_clone.set_text("");
-                                        let list: ListBox = networks::networks_view(&nets);
+                                        let list: ListBox = networks::networks_view(&nets, &pw);
                                         list_container_clone.append(&list);
                                     }
                                     Err(err) => {
@@ -130,7 +139,11 @@ fn clear_children(container: &gtk::Box) {
     }
 }
 
-async fn spawn_signal_listeners(list_container: GtkBox, status: Label) {
+async fn spawn_signal_listeners(
+    list_container: GtkBox,
+    status: Label,
+    parent_window: &gtk::ApplicationWindow,
+) {
     let conn = match Connection::system().await {
         Ok(c) => c,
         Err(e) => {
@@ -178,18 +191,19 @@ async fn spawn_signal_listeners(list_container: GtkBox, status: Label) {
         let list_container_signal = list_container.clone();
         let status_signal = status.clone();
 
+        let pw = parent_window.clone();
         glib::MainContext::default().spawn_local(async move {
             loop {
                 tokio::select! {
                     event = added.next() => match event {
                         Some(_) => {
-                            schedule_refresh(list_container_signal.clone(), status_signal.clone()).await;
+                            schedule_refresh(list_container_signal.clone(), status_signal.clone(), &pw).await;
                         }
                         None => break,
                     },
                     event = removed.next() => match event {
                         Some(_) => {
-                            schedule_refresh(list_container_signal.clone(), status_signal.clone()).await;
+                            schedule_refresh(list_container_signal.clone(), status_signal.clone(), &pw).await;
                         }
                         None => break,
                     },
@@ -199,12 +213,16 @@ async fn spawn_signal_listeners(list_container: GtkBox, status: Label) {
     }
 }
 
-async fn refresh_networks(list_container: &GtkBox, status: &Label) {
+async fn refresh_networks(
+    list_container: &GtkBox,
+    status: &Label,
+    parent_window: &gtk::ApplicationWindow,
+) {
     match NetworkManager::new().await {
         Ok(nm) => match nm.list_networks().await {
             Ok(nets) => {
                 clear_children(list_container);
-                let list: ListBox = networks::networks_view(&nets);
+                let list: ListBox = networks::networks_view(&nets, parent_window);
                 list_container.append(&list);
             }
             Err(e) => status.set_text(&format!("Error refreshing networks: {e}")),
@@ -213,7 +231,11 @@ async fn refresh_networks(list_container: &GtkBox, status: &Label) {
     }
 }
 
-async fn schedule_refresh(list_container: GtkBox, status: Label) {
+async fn schedule_refresh(
+    list_container: GtkBox,
+    status: Label,
+    parent_window: &gtk::ApplicationWindow,
+) {
     REFRESH_SCHEDULED.with(|flag| {
         if flag.get() {
             return;
@@ -223,12 +245,14 @@ async fn schedule_refresh(list_container: GtkBox, status: Label) {
         let list_container_clone = list_container.clone();
         let status_clone = status.clone();
 
+        let pw = parent_window.clone();
         glib::timeout_add_seconds_local(1, move || {
             let list_container_inner = list_container_clone.clone();
             let status_inner = status_clone.clone();
 
+            let pw2 = pw.clone();
             glib::MainContext::default().spawn_local(async move {
-                refresh_networks(&list_container_inner, &status_inner).await;
+                refresh_networks(&list_container_inner, &status_inner, &pw2).await;
                 REFRESH_SCHEDULED.with(|f| f.set(false));
             });
 
