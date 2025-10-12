@@ -1,10 +1,11 @@
 use crate::models::{Device, DeviceState, DeviceType, Network};
 use std::collections::HashMap;
 use std::time::Duration;
+use uuid::Uuid;
 use zbus::Connection;
 use zbus::Result;
 use zbus::proxy;
-use zvariant::OwnedObjectPath;
+use zvariant::{OwnedObjectPath, Value};
 
 pub struct NetworkManager {
     conn: Connection,
@@ -45,6 +46,13 @@ pub trait NM {
 
     #[zbus(property)]
     fn set_wireless_enabled(&self, value: bool) -> zbus::Result<()>;
+
+    fn add_and_activate_connection(
+        &self,
+        connection: HashMap<&str, HashMap<&str, zvariant::Value<'_>>>,
+        device: OwnedObjectPath,
+        specific_object: OwnedObjectPath,
+    ) -> zbus::Result<(OwnedObjectPath, OwnedObjectPath)>;
 }
 
 #[proxy(
@@ -184,8 +192,73 @@ impl NetworkManager {
         Ok(networks.into_values().collect())
     }
 
-    pub async fn connect(&self, _ssid: &str, _password: &str) -> Result<()> {
-        // TODO: implement AddAndActivateConnection
+    pub async fn connect(&self, ssid: &str, _password: &str) -> Result<()> {
+        let nm = NMProxy::new(&self.conn).await?;
+        let devices = nm.get_devices().await?;
+
+        // find first wireless device
+        let mut wifi_device: Option<OwnedObjectPath> = None;
+        for dp in devices {
+            let d_proxy = NMDeviceProxy::builder(&self.conn)
+                .path(dp.clone())?
+                .build()
+                .await?;
+
+            if d_proxy.device_type().await? == 2 {
+                wifi_device = Some(dp.clone());
+                break;
+            }
+        }
+
+        let wifi_device =
+            wifi_device.ok_or(zbus::Error::Failure("no Wi-Fi device found".into()))?;
+
+        // find the ap that matches the SSID
+        let wifi = NMWirelessProxy::builder(&self.conn)
+            .path(wifi_device.clone())?
+            .build()
+            .await?;
+
+        let mut ap_path: Option<OwnedObjectPath> = None;
+        for ap in wifi.get_all_access_points().await? {
+            let ap_proxy = NMAccessPointProxy::builder(&self.conn)
+                .path(ap.clone())?
+                .build()
+                .await?;
+            let ssid_bytes = ap_proxy.ssid().await?;
+            let ap_ssid = std::str::from_utf8(&ssid_bytes).unwrap_or("");
+            if ap_ssid == ssid {
+                ap_path = Some(ap.clone());
+                break;
+            }
+        }
+
+        let ap_path = ap_path.ok_or(zbus::Error::Failure("SSID not found".into()))?;
+
+        let connection: HashMap<&str, HashMap<&str, zvariant::Value<'_>>> = {
+            let mut s_conn = HashMap::new();
+            s_conn.insert("type", Value::from("802-11-wireless"));
+            s_conn.insert("id", Value::from(ssid));
+            s_conn.insert("uuid", Value::from(Uuid::new_v4().to_string()));
+
+            let mut s_wifi = HashMap::new();
+            s_wifi.insert("ssid", Value::from(ssid.as_bytes().to_vec()));
+            s_wifi.insert("mode", Value::from("infrastructure"));
+
+            let mut s_sec = HashMap::new();
+            s_sec.insert("key-mgmt", Value::from("wpa-psk"));
+            s_sec.insert("psk", Value::from(_password));
+
+            let mut conn = HashMap::new();
+            conn.insert("connection", s_conn);
+            conn.insert("802-11-wireless", s_wifi);
+            conn.insert("802-11-wireless-security", s_sec);
+            conn
+        };
+
+        nm.add_and_activate_connection(connection, wifi_device, ap_path)
+            .await?;
+
         Ok(())
     }
 

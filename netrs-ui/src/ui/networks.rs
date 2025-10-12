@@ -1,14 +1,22 @@
+use glib::clone;
+use gtk::GestureClick;
 use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
 use netrs_core::models;
 
-pub fn networks_view(networks: &[models::Network]) -> ListBox {
+use crate::ui::connect;
+
+pub fn networks_view(
+    networks: &[models::Network],
+    parent_window: &gtk::ApplicationWindow,
+) -> ListBox {
     let conn_threshold = 75;
     let list = ListBox::new();
 
     for net in networks {
         let row = ListBoxRow::new();
         let hbox = Box::new(Orientation::Horizontal, 6);
+        let gesture = GestureClick::new();
 
         row.add_css_class("network-selection");
         let ssid = Label::new(Some(&net.ssid));
@@ -27,7 +35,11 @@ pub fn networks_view(networks: &[models::Network]) -> ListBox {
             };
 
             let image = Image::from_icon_name(icon_name);
-            if net.secured { image.add_css_class("wifi-secure"); } else { image.add_css_class("wifi-open"); }
+            if net.secured {
+                image.add_css_class("wifi-secure");
+            } else {
+                image.add_css_class("wifi-open");
+            }
             let strength_label = Label::new(Some(&format!("{s}%")));
 
             hbox.append(&image);
@@ -41,6 +53,20 @@ pub fn networks_view(networks: &[models::Network]) -> ListBox {
                 strength_label.add_css_class("network-poor");
             }
         }
+
+        // debouncing is not needed here unless we add logic for single clicks
+        gesture.connect_pressed(clone!(
+            #[weak]
+            parent_window,
+            move |_, n_press, _x, _y| {
+                if n_press == 2 {
+                    println!("Double click");
+                    connect::connect_modal(&parent_window);
+                }
+            }
+        ));
+
+        row.add_controller(gesture);
 
         row.set_child(Some(&hbox));
         list.append(&row);

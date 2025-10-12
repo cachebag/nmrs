@@ -1,3 +1,4 @@
+pub mod connect;
 pub mod header;
 pub mod networks;
 
@@ -15,7 +16,7 @@ pub fn build_ui(app: &Application) {
 
     let list_container = GtkBox::new(Orientation::Vertical, 0);
 
-    let header = header::build_header(&status, &list_container);
+    let header = header::build_header(&status, &list_container, &win);
     vbox.append(&header);
 
     let scroller = ScrolledWindow::new();
