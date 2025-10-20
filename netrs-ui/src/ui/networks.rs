@@ -2,7 +2,7 @@ use glib::clone;
 use gtk::GestureClick;
 use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
-use netrs_core::models;
+use netrs_core::{models, NetworkManager};
 
 use crate::ui::connect;
 
@@ -55,13 +55,30 @@ pub fn networks_view(
         }
 
         // debouncing is not needed here unless we add logic for single clicks
+        let ssid_str = net.ssid.clone();
+        let secured = net.secured;
         gesture.connect_pressed(clone!(
             #[weak]
             parent_window,
             move |_, n_press, _x, _y| {
-                if n_press == 2 {
+                if n_press == 2 && secured {
                     println!("Double click");
-                    connect::connect_modal(&parent_window);
+                    connect::connect_modal(&parent_window, &ssid_str);
+                } else if n_press == 2 {
+                    eprintln!("Connecting to {ssid_str}");
+                    glib::MainContext::default().spawn_local({
+                        let ssid = ssid_str.clone();
+                        async move {
+                            match NetworkManager::new().await {
+                                Ok(nm) => {
+                                    if let Err(err) = nm.connect(&ssid, "").await {
+                                        eprintln!("Failed to connect network: {err}");
+                                    }
+                                }
+                                Err(err) => eprintln!("Failed to init NetworkManager: {err}"),
+                            }
+                        }
+                    });
                 }
             }
         ));

@@ -1,4 +1,5 @@
 use crate::models::{Device, DeviceState, DeviceType, Network};
+use std::arch::x86_64::_pdep_u32;
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
@@ -245,14 +246,17 @@ impl NetworkManager {
             s_wifi.insert("ssid", Value::from(ssid.as_bytes().to_vec()));
             s_wifi.insert("mode", Value::from("infrastructure"));
 
-            let mut s_sec = HashMap::new();
-            s_sec.insert("key-mgmt", Value::from("wpa-psk"));
-            s_sec.insert("psk", Value::from(_password));
-
             let mut conn = HashMap::new();
             conn.insert("connection", s_conn);
             conn.insert("802-11-wireless", s_wifi);
-            conn.insert("802-11-wireless-security", s_sec);
+            
+            if !_password.is_empty() {
+                let mut s_sec = HashMap::new();
+                s_sec.insert("key-mgmt", Value::from("wpa-psk"));
+                s_sec.insert("psk", Value::from(_password));
+                conn.insert("802-11-wireless-security", s_sec);
+            }
+
             conn
         };
 

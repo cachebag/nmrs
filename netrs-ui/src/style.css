@@ -98,17 +98,25 @@ list > row:selected {
     color: #ffffff;
 }
 
-dialog {
-    background-color: #2b2b2b;
-    border-radius: 8px;
-    margin: 16px;
+.modern-dialog {
+  border-radius: 12px;
+  background: #2b2b2b;
 }
 
-entry {
-    border-radius: 4px;
-    padding: 4px 8px;
+.dialog-label {
+  color: #e0e0e0;
+  font-size: 14px;
 }
 
-.diag-buttons {
-  padding-bottom: 12px;
+.password-entry {
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #3a3a3a;
+  color: #f5f5f5;
 }
+
+button {
+  border-radius: 8px;
+  padding: 6px 14px;
+}
+
