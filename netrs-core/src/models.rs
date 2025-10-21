@@ -9,6 +9,8 @@ pub struct Network {
     pub bssid: Option<String>,
     pub strength: Option<u8>,
     pub secured: bool,
+    pub is_psk: bool,
+    pub is_eap: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -19,6 +21,33 @@ pub struct Device {
     pub state: DeviceState,
     pub managed: Option<bool>,
     pub driver: Option<String>,
+}
+
+pub enum EapMethod {
+    Peap, // PEAPv0/EAP-MSCHAPv2
+    Ttls, // EAP-TTLS
+}
+
+pub enum Phase2 {
+    Mschapv2,
+    Pap,
+}
+
+pub struct EapOptions {
+    pub identity: String,
+    pub password: String,
+    pub anonymous_identity: Option<String>,
+    pub domain_suffix_match: Option<String>,
+    pub ca_cert_path: Option<String>,
+    pub system_ca_certs: bool,
+    pub method: EapMethod,
+    pub phase2: Phase2,
+}
+
+pub enum WifiSecurity {
+    Open,
+    WpaPsk { psk: String },
+    WpaEap { opts: EapOptions },
 }
 
 #[derive(Debug, Clone, PartialEq)]
