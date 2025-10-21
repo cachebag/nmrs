@@ -1,5 +1,4 @@
 use crate::models::{Device, DeviceState, DeviceType, Network};
-use std::arch::x86_64::_pdep_u32;
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
@@ -7,9 +6,11 @@ use zbus::Connection;
 use zbus::Result;
 use zbus::proxy;
 use zvariant::{OwnedObjectPath, Value};
+use futures_timer::Delay;
 
 pub struct NetworkManager {
     conn: Connection,
+    cache: tokio::sync::RwLock<Vec<Network>>,
 }
 
 // Proxies for D-Bus interfaces
@@ -98,7 +99,10 @@ trait NMAccessPoint {
 impl NetworkManager {
     pub async fn new() -> zbus::Result<Self> {
         let conn = Connection::system().await?;
-        Ok(Self { conn })
+        Ok(Self { 
+            conn,
+            cache: tokio::sync::RwLock::new(Vec::new()),
+        })
     }
 
     pub async fn list_devices(&self) -> Result<Vec<Device>> {
@@ -134,6 +138,9 @@ impl NetworkManager {
 
     pub async fn list_networks(&self) -> Result<Vec<Network>> {
         let nm = NMProxy::new(&self.conn).await?;
+        if self.cache.read().await.is_empty() {
+            Delay::new(Duration::from_millis(800)).await;
+        }
         let devices = nm.get_devices().await?;
 
         let mut networks: HashMap<String, Network> = HashMap::new();
@@ -158,9 +165,12 @@ impl NetworkManager {
                     .build()
                     .await?;
                 let ssid_bytes = ap.ssid().await?;
-                let ssid = std::str::from_utf8(&ssid_bytes)
-                    .unwrap_or("<Hidden Network>")
-                    .to_string();
+                let ssid = if ssid_bytes.is_empty() {
+                    "<Hidden Network>".to_string()
+                } else {
+                    let s = std::str::from_utf8(&ssid_bytes).unwrap_or("<Hidden Network");
+                    s.to_string()
+                };
                 let strength = ap.strength().await?;
                 let bssid = ap.hw_address().await?;
                 let flags = ap.flags().await?;
@@ -190,7 +200,20 @@ impl NetworkManager {
                     .or_insert(new_net);
             }
         }
-        Ok(networks.into_values().collect())
+
+        let result: Vec<Network> = networks.into_values().collect();
+
+        if !result.is_empty() {
+            println!("cache updates with {} networks", result.len());
+            *self.cache.write().await = result.clone();
+        }
+
+        if result.is_empty() {
+            println!("using cached results here");
+            Ok(self.cache.read().await.clone())
+        } else {
+            Ok(result)
+        }
     }
 
     pub async fn connect(&self, ssid: &str, _password: &str) -> Result<()> {
