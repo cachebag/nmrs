@@ -1,12 +1,12 @@
 use crate::models::{Device, DeviceState, DeviceType, Network};
+use crate::wifi_builders::build_wifi_connection;
+use futures_timer::Delay;
 use std::collections::HashMap;
 use std::time::Duration;
-use uuid::Uuid;
 use zbus::Connection;
 use zbus::Result;
 use zbus::proxy;
-use zvariant::{OwnedObjectPath, Value};
-use futures_timer::Delay;
+use zvariant::{ObjectPath, OwnedObjectPath};
 
 pub struct NetworkManager {
     conn: Connection,
@@ -70,6 +70,9 @@ pub trait NMWireless {
 
     #[zbus(signal)]
     fn access_point_removed(&self, path: OwnedObjectPath);
+
+    #[zbus(property)]
+    fn active_access_point(&self) -> Result<OwnedObjectPath>;
 }
 
 #[proxy(
@@ -99,7 +102,7 @@ trait NMAccessPoint {
 impl NetworkManager {
     pub async fn new() -> zbus::Result<Self> {
         let conn = Connection::system().await?;
-        Ok(Self { 
+        Ok(Self {
             conn,
             cache: tokio::sync::RwLock::new(Vec::new()),
         })
@@ -178,6 +181,11 @@ impl NetworkManager {
                 let rsn = ap.rsn_flags().await?;
 
                 let secured = (flags & 0x1) != 0 || wpa != 0 || rsn != 0;
+                let is_psk = (wpa & 0x0100) != 0 || (rsn & 0x0100) != 0;
+                let is_eap = (wpa & 0x0200) != 0 || (rsn & 0x0200) != 0;
+
+                // Add this line ↓
+                println!("{} → WPA={wpa:#06x} RSN={rsn:#06x} → EAP={is_eap}", ssid);
 
                 let new_net = Network {
                     device: dp.to_string(),
@@ -185,6 +193,8 @@ impl NetworkManager {
                     bssid: Some(bssid),
                     strength: Some(strength),
                     secured,
+                    is_psk,
+                    is_eap,
                 };
 
                 networks
@@ -216,18 +226,18 @@ impl NetworkManager {
         }
     }
 
-    pub async fn connect(&self, ssid: &str, _password: &str) -> Result<()> {
+    pub async fn connect(&self, ssid: &str, creds: crate::models::WifiSecurity) -> Result<()> {
+        // Get NetworkManager proxy
         let nm = NMProxy::new(&self.conn).await?;
         let devices = nm.get_devices().await?;
 
-        // find first wireless device
+        // Find the first Wi-Fi device (device_type == 2)
         let mut wifi_device: Option<OwnedObjectPath> = None;
         for dp in devices {
             let d_proxy = NMDeviceProxy::builder(&self.conn)
                 .path(dp.clone())?
                 .build()
                 .await?;
-
             if d_proxy.device_type().await? == 2 {
                 wifi_device = Some(dp.clone());
                 break;
@@ -237,7 +247,6 @@ impl NetworkManager {
         let wifi_device =
             wifi_device.ok_or(zbus::Error::Failure("no Wi-Fi device found".into()))?;
 
-        // find the ap that matches the SSID
         let wifi = NMWirelessProxy::builder(&self.conn)
             .path(wifi_device.clone())?
             .build()
@@ -245,11 +254,11 @@ impl NetworkManager {
 
         let mut ap_path: Option<OwnedObjectPath> = None;
         for ap in wifi.get_all_access_points().await? {
-            let ap_proxy = NMAccessPointProxy::builder(&self.conn)
+            let apx = NMAccessPointProxy::builder(&self.conn)
                 .path(ap.clone())?
                 .build()
                 .await?;
-            let ssid_bytes = ap_proxy.ssid().await?;
+            let ssid_bytes = apx.ssid().await?;
             let ap_ssid = std::str::from_utf8(&ssid_bytes).unwrap_or("");
             if ap_ssid == ssid {
                 ap_path = Some(ap.clone());
@@ -257,33 +266,19 @@ impl NetworkManager {
             }
         }
 
-        let ap_path = ap_path.ok_or(zbus::Error::Failure("SSID not found".into()))?;
+        let specific_object = ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
+        let settings = build_wifi_connection(ssid, &creds);
 
-        let connection: HashMap<&str, HashMap<&str, zvariant::Value<'_>>> = {
-            let mut s_conn = HashMap::new();
-            s_conn.insert("type", Value::from("802-11-wireless"));
-            s_conn.insert("id", Value::from(ssid));
-            s_conn.insert("uuid", Value::from(Uuid::new_v4().to_string()));
+        let networks = self.list_networks().await?;
+        if let Some(current) = networks
+            .iter()
+            .find(|n| n.secured && n.strength.is_some() && n.ssid == ssid)
+        {
+            eprintln!("Already connected to {current:?} skipping connect()");
+            return Ok(());
+        }
 
-            let mut s_wifi = HashMap::new();
-            s_wifi.insert("ssid", Value::from(ssid.as_bytes().to_vec()));
-            s_wifi.insert("mode", Value::from("infrastructure"));
-
-            let mut conn = HashMap::new();
-            conn.insert("connection", s_conn);
-            conn.insert("802-11-wireless", s_wifi);
-            
-            if !_password.is_empty() {
-                let mut s_sec = HashMap::new();
-                s_sec.insert("key-mgmt", Value::from("wpa-psk"));
-                s_sec.insert("psk", Value::from(_password));
-                conn.insert("802-11-wireless-security", s_sec);
-            }
-
-            conn
-        };
-
-        nm.add_and_activate_connection(connection, wifi_device, ap_path)
+        nm.add_and_activate_connection(settings, wifi_device, specific_object)
             .await?;
 
         Ok(())
@@ -343,5 +338,42 @@ impl NetworkManager {
         }
 
         Ok(())
+    }
+
+    pub async fn current_ssid(&self) -> Option<String> {
+        // find active Wi-Fi device
+        let nm = NMProxy::new(&self.conn).await.ok()?;
+        let devices = nm.get_devices().await.ok()?;
+
+        for dp in devices {
+            let dev = NMDeviceProxy::builder(&self.conn)
+                .path(dp.clone())
+                .ok()?
+                .build()
+                .await
+                .ok()?;
+            if dev.device_type().await.ok()? != 2 {
+                continue;
+            }
+
+            let wifi = NMWirelessProxy::builder(&self.conn)
+                .path(dp.clone())
+                .ok()?
+                .build()
+                .await
+                .ok()?;
+            if let Ok(active_ap) = wifi.active_access_point().await
+                && active_ap.as_str() != "/"
+            {
+                let builder = NMAccessPointProxy::builder(&self.conn)
+                    .path(active_ap)
+                    .ok()?;
+                let ap = builder.build().await.ok()?;
+                let ssid_bytes = ap.ssid().await.ok()?;
+                let ssid = std::str::from_utf8(&ssid_bytes).ok()?;
+                return Some(ssid.to_string());
+            }
+        }
+        None
     }
 }
