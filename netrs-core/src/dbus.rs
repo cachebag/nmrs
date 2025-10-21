@@ -184,7 +184,6 @@ impl NetworkManager {
                 let is_psk = (wpa & 0x0100) != 0 || (rsn & 0x0100) != 0;
                 let is_eap = (wpa & 0x0200) != 0 || (rsn & 0x0200) != 0;
 
-                // Add this line ↓
                 println!("{} → WPA={wpa:#06x} RSN={rsn:#06x} → EAP={is_eap}", ssid);
 
                 let new_net = Network {
