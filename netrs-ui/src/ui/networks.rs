@@ -2,7 +2,8 @@ use glib::clone;
 use gtk::GestureClick;
 use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
-use netrs_core::{models, NetworkManager};
+use netrs_core::models::WifiSecurity;
+use netrs_core::{NetworkManager, models};
 
 use crate::ui::connect;
 
@@ -57,13 +58,14 @@ pub fn networks_view(
         // debouncing is not needed here unless we add logic for single clicks
         let ssid_str = net.ssid.clone();
         let secured = net.secured;
+        let is_eap = net.is_eap;
         gesture.connect_pressed(clone!(
             #[weak]
             parent_window,
             move |_, n_press, _x, _y| {
                 if n_press == 2 && secured {
                     println!("Double click");
-                    connect::connect_modal(&parent_window, &ssid_str);
+                    connect::connect_modal(&parent_window, &ssid_str, is_eap);
                 } else if n_press == 2 {
                     eprintln!("Connecting to {ssid_str}");
                     glib::MainContext::default().spawn_local({
@@ -71,7 +73,8 @@ pub fn networks_view(
                         async move {
                             match NetworkManager::new().await {
                                 Ok(nm) => {
-                                    if let Err(err) = nm.connect(&ssid, "").await {
+                                    let creds = WifiSecurity::Open;
+                                    if let Err(err) = nm.connect(&ssid, creds).await {
                                         eprintln!("Failed to connect network: {err}");
                                     }
                                 }
