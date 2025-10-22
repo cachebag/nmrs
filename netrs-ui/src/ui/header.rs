@@ -19,18 +19,23 @@ pub fn build_header(
     parent_window: &gtk::ApplicationWindow,
 ) -> HeaderBar {
     let header = HeaderBar::new();
+    header.set_show_title_buttons(false);
     let parent_window = parent_window.clone();
     let status = status.clone();
     let list_container = list_container.clone();
 
     let wifi_box = GtkBox::new(Orientation::Horizontal, 6);
     let wifi_label = Label::new(Some("Wi-Fi"));
-    let wifi_switch = Switch::new();
+    wifi_label.set_halign(gtk::Align::Start);
+    wifi_label.add_css_class("wifi-label");
 
     wifi_box.append(&wifi_label);
-    wifi_box.append(&wifi_switch);
-
     header.pack_start(&wifi_box);
+
+    let wifi_switch = Switch::new();
+    wifi_switch.set_valign(gtk::Align::Center);
+    header.pack_end(&wifi_switch);
+
     header.pack_end(&status);
 
     {
@@ -59,14 +64,6 @@ pub fn build_header(
                                         .set_text(&format!("Error fetching networks: {err}"));
                                 }
                             }
-
-                            // subscribe for live updates
-                            spawn_signal_listeners(
-                                list_container_clone.clone(),
-                                status_clone.clone(),
-                                &pw,
-                            )
-                            .await;
                         }
                     }
                     Err(err) => status_clone.set_text(&format!("Error: {err}")),
