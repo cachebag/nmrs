@@ -49,6 +49,9 @@ pub trait NM {
     #[zbus(property)]
     fn set_wireless_enabled(&self, value: bool) -> zbus::Result<()>;
 
+    #[zbus(property)]
+    fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+
     fn add_and_activate_connection(
         &self,
         connection: HashMap<&str, HashMap<&str, zvariant::Value<'_>>>,
@@ -184,7 +187,7 @@ impl NetworkManager {
                 let is_psk = (wpa & 0x0100) != 0 || (rsn & 0x0100) != 0;
                 let is_eap = (wpa & 0x0200) != 0 || (rsn & 0x0200) != 0;
 
-                println!("{} → WPA={wpa:#06x} RSN={rsn:#06x} → EAP={is_eap}", ssid);
+                // println!("{} → WPA={wpa:#06x} RSN={rsn:#06x} → EAP={is_eap}", ssid);
 
                 let new_net = Network {
                     device: dp.to_string(),
@@ -226,23 +229,28 @@ impl NetworkManager {
     }
 
     pub async fn connect(&self, ssid: &str, creds: crate::models::WifiSecurity) -> Result<()> {
-        // Get NetworkManager proxy
+        println!(
+            "Connecting to '{}' | secured={} is_psk={} is_eap={}",
+            ssid,
+            creds.secured(),
+            creds.is_psk(),
+            creds.is_eap()
+        );
+
         let nm = NMProxy::new(&self.conn).await?;
         let devices = nm.get_devices().await?;
 
-        // Find the first Wi-Fi device (device_type == 2)
         let mut wifi_device: Option<OwnedObjectPath> = None;
         for dp in devices {
-            let d_proxy = NMDeviceProxy::builder(&self.conn)
+            let dev = NMDeviceProxy::builder(&self.conn)
                 .path(dp.clone())?
                 .build()
                 .await?;
-            if d_proxy.device_type().await? == 2 {
+            if dev.device_type().await? == 2 {
                 wifi_device = Some(dp.clone());
                 break;
             }
         }
-
         let wifi_device =
             wifi_device.ok_or(zbus::Error::Failure("no Wi-Fi device found".into()))?;
 
@@ -250,6 +258,41 @@ impl NetworkManager {
             .path(wifi_device.clone())?
             .build()
             .await?;
+
+        if let Some(active) = self.current_ssid().await {
+            if active == ssid {
+                eprintln!("Already connected to {active}, skipping connect()");
+                return Ok(());
+            } else {
+                eprintln!("Currently connected to {active}, disconnecting before reconnecting...");
+                if let Ok(conns) = nm.active_connections().await {
+                    for c in conns {
+                        let ac_proxy = zbus::Proxy::new(
+                            &self.conn,
+                            "org.freedesktop.NetworkManager",
+                            c.clone(),
+                            "org.freedesktop.NetworkManager.Connection.Active",
+                        )
+                        .await?;
+                        let _ = ac_proxy.call_method("Deactivate", &()).await;
+                    }
+                }
+
+                for _ in 0..10 {
+                    let d = NMDeviceProxy::builder(&self.conn)
+                        .path(wifi_device.clone())?
+                        .build()
+                        .await?;
+                    if DeviceState::from(d.state().await?) == DeviceState::Disconnected {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
+            }
+        }
+
+        let _ = wifi.request_scan(HashMap::new()).await;
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
         let mut ap_path: Option<OwnedObjectPath> = None;
         for ap in wifi.get_all_access_points().await? {
@@ -265,21 +308,24 @@ impl NetworkManager {
             }
         }
 
-        let specific_object = ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
         let settings = build_wifi_connection(ssid, &creds);
 
-        let networks = self.list_networks().await?;
-        if let Some(current) = networks
-            .iter()
-            .find(|n| n.secured && n.strength.is_some() && n.ssid == ssid)
-        {
-            eprintln!("Already connected to {current:?} skipping connect()");
-            return Ok(());
+        if matches!(creds, crate::models::WifiSecurity::Open) {
+            println!("Connecting to open network '{}'", ssid);
+            nm.add_and_activate_connection(
+                settings,
+                wifi_device.clone(),
+                ObjectPath::from_str_unchecked("/").into(),
+            )
+            .await?;
+        } else {
+            let specific_object =
+                ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
+            nm.add_and_activate_connection(settings, wifi_device.clone(), specific_object)
+                .await?;
         }
 
-        nm.add_and_activate_connection(settings, wifi_device, specific_object)
-            .await?;
-
+        println!("Connection request for '{}' submitted successfully", ssid);
         Ok(())
     }
 
