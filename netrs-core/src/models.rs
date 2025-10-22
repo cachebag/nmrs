@@ -131,3 +131,17 @@ impl Display for DeviceState {
         }
     }
 }
+
+impl WifiSecurity {
+    pub fn secured(&self) -> bool {
+        !matches!(self, WifiSecurity::Open)
+    }
+
+    pub fn is_psk(&self) -> bool {
+        matches!(self, WifiSecurity::WpaPsk { .. })
+    }
+
+    pub fn is_eap(&self) -> bool {
+        matches!(self, WifiSecurity::WpaEap { .. })
+    }
+}

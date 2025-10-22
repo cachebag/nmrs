@@ -4,11 +4,25 @@ window {
     color: #e0e0e0;
 }
 
+scrollbar {
+  background: transparent;
+  border: none;
+  min-width: 0;
+  min-height: 0;
+}
+
+scrollbar slider,
+scrollbar trough {
+  background: transparent;
+  border: none;
+}
+
 /* Header bar */
 headerbar {
     background: #1e1e1e;
     color: #e0e0e0;
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 2px solid #3a3a3a;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 /* Switch (toggle) */
@@ -118,5 +132,10 @@ list > row:selected {
 button {
   border-radius: 8px;
   padding: 6px 14px;
+}
+
+.wifi-label {
+  font-weight: bold;
+  font-size: 15px;
 }
 
