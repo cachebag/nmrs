@@ -1108,7 +1108,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "netrs-core"
+name = "nix"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
+name = "nmrs-core"
 version = "0.1.0"
 dependencies = [
  "async-io",
@@ -1127,31 +1140,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "netrs-ui"
+name = "nmrs-ui"
 version = "0.1.0"
 dependencies = [
  "calloop",
  "futures-util",
  "glib",
  "gtk4",
- "netrs-core",
+ "nmrs-core",
  "relm4",
  "smithay-client-toolkit",
  "tokio",
  "zbus",
-]
-
-[[package]]
-name = "nix"
-version = "0.30.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
-dependencies = [
- "bitflags",
- "cfg-if",
- "cfg_aliases",
- "libc",
- "memoffset",
 ]
 
 [[package]]
