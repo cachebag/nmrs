@@ -139,3 +139,23 @@ button {
   font-size: 15px;
 }
 
+.network-arrow {
+  opacity: 0.5;
+  margin-left: 10px;
+  color: white;
+}
+
+.network-selection:hover .network-arrow {
+  opacity: 0.9;
+  transition: opacity 150ms ease;
+}
+
+headerbar .wifi-label {
+  margin-right: 20px;
+}
+
+headerbar label:last-child {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 4px;
+}

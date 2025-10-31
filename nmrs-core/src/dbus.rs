@@ -58,6 +58,8 @@ pub trait NM {
         device: OwnedObjectPath,
         specific_object: OwnedObjectPath,
     ) -> zbus::Result<(OwnedObjectPath, OwnedObjectPath)>;
+
+    fn deactivate_connection(&self, active_connetion: OwnedObjectPath) -> zbus::Result<()>;
 }
 
 #[proxy(
@@ -266,15 +268,8 @@ impl NetworkManager {
             } else {
                 eprintln!("Currently connected to {active}, disconnecting before reconnecting...");
                 if let Ok(conns) = nm.active_connections().await {
-                    for c in conns {
-                        let ac_proxy = zbus::Proxy::new(
-                            &self.conn,
-                            "org.freedesktop.NetworkManager",
-                            c.clone(),
-                            "org.freedesktop.NetworkManager.Connection.Active",
-                        )
-                        .await?;
-                        let _ = ac_proxy.call_method("Deactivate", &()).await;
+                    for conn_path in conns {
+                        let _ = nm.deactivate_connection(conn_path).await;
                     }
                 }
 
@@ -311,7 +306,7 @@ impl NetworkManager {
         let settings = build_wifi_connection(ssid, &creds);
 
         if matches!(creds, crate::models::WifiSecurity::Open) {
-            println!("Connecting to open network '{}'", ssid);
+            println!("Connecting to open network '{ssid}'");
             nm.add_and_activate_connection(
                 settings,
                 wifi_device.clone(),
@@ -325,7 +320,7 @@ impl NetworkManager {
                 .await?;
         }
 
-        println!("Connection request for '{}' submitted successfully", ssid);
+        println!("Connection request for '{ssid}' submitted successfully");
         Ok(())
     }
 
