@@ -61,7 +61,6 @@ pub fn networks_view(
         arrow.add_css_class("network-arrow");
         hbox.append(&arrow);
 
-        // debouncing is not needed here unless we add logic for single clicks
         let ssid_str = net.ssid.clone();
         let secured = net.secured;
         let is_eap = net.is_eap;
