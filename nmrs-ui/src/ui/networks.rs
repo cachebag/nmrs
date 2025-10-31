@@ -2,8 +2,8 @@ use glib::clone;
 use gtk::GestureClick;
 use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
-use netrs_core::models::WifiSecurity;
-use netrs_core::{NetworkManager, models};
+use nmrs_core::models::WifiSecurity;
+use nmrs_core::{NetworkManager, models};
 
 use crate::ui::connect;
 

@@ -1,7 +1,7 @@
 [workspace]
 members = [
-  "netrs-core", 
-  "netrs-ui"
+  "nmrs-core", 
+  "nmrs-ui"
 ]
 
 resolver = "3"

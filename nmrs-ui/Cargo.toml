@@ -1,10 +1,10 @@
 [package]
-name = "netrs-ui"
+name = "nmrs-ui"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-netrs-core = { path = "../netrs-core" }
+nmrs-core = { path = "../nmrs-core" }
 tokio = { version = "1.47.1", features = ["full"] }
 gtk = { version = "0.10.1", package = "gtk4" }
 glib = "0.21.3"
