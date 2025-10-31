@@ -3,7 +3,7 @@ use zvariant::Value;
 
 use crate::models;
 
-fn bytes(val: &str) -> Vec<u8> {
+/*fn bytes(val: &str) -> Vec<u8> {
     val.as_bytes().to_vec()
 }
 
@@ -104,5 +104,36 @@ pub fn build_wifi_connection(
             conn.insert("802-1x", e1x);
         }
     }
+    conn
+}*/
+
+pub fn build_wifi_connection(
+    ssid: &str,
+    security: &models::WifiSecurity,
+) -> HashMap<&'static str, HashMap<&'static str, zvariant::Value<'static>>> {
+    let mut conn = HashMap::new();
+
+    let mut s_conn = HashMap::new();
+    s_conn.insert("type", Value::from("802-11-wireless"));
+    s_conn.insert("id", Value::from(ssid.to_string()));
+    s_conn.insert("uuid", Value::from(uuid::Uuid::new_v4().to_string()));
+    conn.insert("connection", s_conn);
+
+    let mut s_wifi = HashMap::new();
+    s_wifi.insert("ssid", Value::from(ssid.as_bytes().to_vec()));
+    s_wifi.insert("mode", Value::from("infrastructure"));
+    conn.insert("802-11-wireless", s_wifi);
+
+    match security {
+        models::WifiSecurity::Open => {}
+        models::WifiSecurity::WpaPsk { psk } => {
+            let mut s_sec = HashMap::new();
+            s_sec.insert("key-mgmt", Value::from("wpa-psk"));
+            s_sec.insert("psk", Value::from(psk.to_string()));
+            conn.insert("802-11-wireless-security", s_sec);
+        }
+        _ => {}
+    }
+
     conn
 }

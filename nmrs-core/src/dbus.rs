@@ -59,7 +59,7 @@ pub trait NM {
         specific_object: OwnedObjectPath,
     ) -> zbus::Result<(OwnedObjectPath, OwnedObjectPath)>;
 
-    fn deactivate_connection(&self, active_connetion: OwnedObjectPath) -> zbus::Result<()>;
+    fn deactivate_connection(&self, active_connection: OwnedObjectPath) -> zbus::Result<()>;
 }
 
 #[proxy(
@@ -336,7 +336,6 @@ impl NetworkManager {
 
     pub async fn wait_for_wifi_ready(&self) -> Result<()> {
         for _ in 0..20 {
-            // FIXME: longer? shorter? is this even where the issue is?
             let devices = self.list_devices().await?;
             for dev in devices {
                 if dev.device_type == DeviceType::Wifi
