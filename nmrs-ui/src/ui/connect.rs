@@ -3,7 +3,7 @@ use gtk::{
     ApplicationWindow, Box as GtkBox, Dialog, Entry, EventControllerKey, Label, Orientation,
     prelude::*,
 };
-use netrs_core::{
+use nmrs_core::{
     NetworkManager,
     models::{EapMethod, EapOptions, Phase2, WifiSecurity},
 };

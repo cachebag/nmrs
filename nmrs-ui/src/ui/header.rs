@@ -2,8 +2,8 @@ use futures_util::StreamExt;
 use glib::ControlFlow;
 use gtk::prelude::*;
 use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
-use netrs_core::NetworkManager;
-use netrs_core::dbus::{NMProxy, NMWirelessProxy};
+use nmrs_core::NetworkManager;
+use nmrs_core::dbus::{NMProxy, NMWirelessProxy};
 use std::cell::Cell;
 use zbus::Connection;
 
