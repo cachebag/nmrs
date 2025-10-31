@@ -1,4 +1,5 @@
 use glib::clone;
+use gtk::Align;
 use gtk::GestureClick;
 use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
@@ -54,6 +55,11 @@ pub fn networks_view(
                 strength_label.add_css_class("network-poor");
             }
         }
+
+        let arrow = Image::from_icon_name("go-next-symbolic");
+        arrow.set_halign(Align::End);
+        arrow.add_css_class("network-arrow");
+        hbox.append(&arrow);
 
         // debouncing is not needed here unless we add logic for single clicks
         let ssid_str = net.ssid.clone();

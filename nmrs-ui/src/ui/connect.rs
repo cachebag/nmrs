@@ -45,7 +45,7 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
     let user_entry = if is_eap {
         let user_label = Label::new(Some("Username:"));
         let user_entry = Entry::new();
-        user_entry.set_placeholder_text(Some("student@university.edu"));
+        user_entry.set_placeholder_text(Some("email, username, id..."));
         vbox.append(&user_label);
         vbox.append(&user_entry);
         Some(user_entry)
