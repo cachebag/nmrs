@@ -10,7 +10,7 @@ use gtk::{
 
 pub fn build_ui(app: &Application) {
     let win = ApplicationWindow::new(app);
-    win.set_title(Some("nmrs"));
+    win.set_title(Some(""));
     win.set_default_size(400, 600);
 
     let vbox = GtkBox::new(Orientation::Vertical, 0);

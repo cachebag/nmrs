@@ -425,7 +425,7 @@ impl NetworkManager {
         None
     }
 
-    pub async fn show_details(&self, ssid: &str) -> zbus::Result<NetworkInfo> {
+    pub async fn show_details(&self, net: &Network) -> zbus::Result<NetworkInfo> {
         let nm = NMProxy::new(&self.conn).await?;
         for dp in nm.get_devices().await? {
             let dev = NMDeviceProxy::builder(&self.conn)
@@ -448,8 +448,8 @@ impl NetworkManager {
                     .await?;
 
                 let ssid_bytes = ap.ssid().await?;
-                if std::str::from_utf8(&ssid_bytes).unwrap_or("") == ssid {
-                    let strength = ap.strength().await?;
+                if std::str::from_utf8(&ssid_bytes).unwrap_or("") == net.ssid {
+                    let strength = net.strength.unwrap_or(0);
                     let bssid = ap.hw_address().await?;
                     let flags = ap.flags().await?;
                     let wpa_flags = ap.wpa_flags().await?;
@@ -488,14 +488,14 @@ impl NetworkManager {
                     };
 
                     let active_ssid = self.current_ssid().await;
-                    let status = if active_ssid.as_deref() == Some(ssid) {
+                    let status = if active_ssid.as_deref() == Some(&net.ssid) {
                         "Connected".to_string()
                     } else {
                         "Disconnected".to_string()
                     };
 
                     let channel = freq.and_then(NetworkManager::channel_from_freq);
-                    let rate_mbps = max_br.map(|kbit| (kbit / 1000));
+                    let rate_mbps = max_br.map(|kbit| kbit / 1000);
                     let bars = NetworkManager::bars_from_strength(strength).to_string();
                     let mode = mode_raw
                         .map(NetworkManager::mode_to_string)
@@ -503,7 +503,7 @@ impl NetworkManager {
                         .to_string();
 
                     return Ok(NetworkInfo {
-                        ssid: ssid.to_string(),
+                        ssid: net.ssid.clone(),
                         bssid,
                         strength,
                         freq,

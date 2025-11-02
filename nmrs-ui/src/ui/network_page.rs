@@ -1,6 +1,6 @@
 use glib::clone;
 use gtk::prelude::*;
-use gtk::{Align, Box, Button, Image, Label, Orientation, Separator};
+use gtk::{Align, Box, Button, Image, Label, Orientation};
 use nmrs_core::models::NetworkInfo;
 
 pub fn network_page(info: &NetworkInfo, stack: &gtk::Stack) -> Box {
@@ -31,15 +31,13 @@ pub fn network_page(info: &NetworkInfo, stack: &gtk::Stack) -> Box {
     header.append(&title);
     container.append(&header);
 
-    // ------------------------------
-    // Status section
-    // ------------------------------
-    let status_box = Box::new(Orientation::Vertical, 6);
-    status_box.add_css_class("status-section");
+    // Basic info section
+    let basic_box = Box::new(Orientation::Vertical, 6);
+    basic_box.add_css_class("basic-section");
 
-    let status_header = Label::new(Some("Status"));
-    status_header.add_css_class("section-header");
-    status_box.append(&status_header);
+    let basic_header = Label::new(Some("Basic"));
+    basic_header.add_css_class("section-header");
+    basic_box.append(&basic_header);
 
     let status_fields = [
         ("Connection Status", info.status.as_str()),
@@ -52,32 +50,25 @@ pub fn network_page(info: &NetworkInfo, stack: &gtk::Stack) -> Box {
         row.set_halign(Align::Start);
 
         let key = Label::new(Some(label));
-        key.add_css_class("status-key");
+        key.add_css_class("basic-key");
         key.set_halign(Align::Start);
 
         let val = Label::new(Some(value));
-        val.add_css_class("status-value");
+        val.add_css_class("basic-value");
         val.set_halign(Align::Start);
 
         row.append(&key);
         row.append(&val);
-        status_box.append(&row);
+        basic_box.append(&row);
     }
 
-    container.append(&status_box);
+    container.append(&basic_box);
 
-    // Separator
-    let sep = Separator::new(Orientation::Horizontal);
-    sep.add_css_class("divider");
-    container.append(&sep);
-
-    // ------------------------------
-    // Advanced Information
-    // ------------------------------
+    // Advanced info section
     let advanced_box = Box::new(Orientation::Vertical, 8);
     advanced_box.add_css_class("advanced-section");
 
-    let advanced_header = Label::new(Some("Advanced Information"));
+    let advanced_header = Label::new(Some("Advanced"));
     advanced_header.add_css_class("section-header");
     advanced_box.append(&advanced_header);
 

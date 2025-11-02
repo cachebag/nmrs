@@ -32,6 +32,11 @@ switch:checked slider {
   background-color: #ffffff;
 }
 
+.wifi-label {
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
 list {
   background: #121212;
   border: none;
@@ -100,16 +105,15 @@ label.network-poor { color: #ef4444; }
   margin-bottom: 4px;
 }
 
+.network-arrow {
+  color: white;
+}
+
 .network-info {
   margin-top: 14px;
   padding-left: 6px;
 }
 .info-row { padding: 2px 0; }
-.info-label {
-  color: #a3a3a3;
-  font-size: 13px;
-  min-width: 120px;
-}
 .info-value {
   color: #ffffff;
   font-size: 14px;
@@ -128,12 +132,12 @@ label.network-poor { color: #ef4444; }
 }
 
 .advanced-section,
-.status-section {
+.basic-section {
   padding-left: 0;
   margin-left: 0;
 }
 
-.status-key,
+.basic-key,
 .info-label {
   font-weight: 600;
   font-size: 13px;
@@ -142,7 +146,7 @@ label.network-poor { color: #ef4444; }
   text-decoration: underline;
 }
 
-.status-value,
+.basic-value,
 .info-value {
   font-size: 14px;
   color: #ffffff;
@@ -155,4 +159,12 @@ label.network-poor { color: #ef4444; }
   margin-bottom: 10px;
   opacity: 0.25;
   border-bottom: 1px solid #2a2a2a;
+}
+
+.wifi-secure {
+  color: white;
+}
+
+.wifi-open {
+  color: white;
 }
