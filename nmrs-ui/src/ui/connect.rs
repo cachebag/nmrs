@@ -45,6 +45,7 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
     let user_entry = if is_eap {
         let user_label = Label::new(Some("Username:"));
         let user_entry = Entry::new();
+        user_entry.add_css_class("pw-entry");
         user_entry.set_placeholder_text(Some("email, username, id..."));
         vbox.append(&user_label);
         vbox.append(&user_entry);
@@ -55,6 +56,7 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
 
     let label = Label::new(Some("Password:"));
     let entry = Entry::new();
+    entry.add_css_class("pw-entry");
     entry.set_placeholder_text(Some("Password"));
     entry.set_visibility(false);
     vbox.append(&label);

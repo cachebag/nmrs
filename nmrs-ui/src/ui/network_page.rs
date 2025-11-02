@@ -1,43 +1,58 @@
+use glib::clone;
 use gtk::prelude::*;
-use gtk::{Box, Button, Image, Label, Orientation};
+use gtk::{Align, Box, Button, Image, Label, Orientation};
 use nmrs_core::models::NetworkInfo;
-use relm4::RelmWidgetExt;
 
-pub fn network_page(info: &NetworkInfo) -> Box {
-    let container = Box::new(Orientation::Vertical, 16);
+pub fn network_page(info: &NetworkInfo, stack: &gtk::Stack) -> Box {
+    let container = Box::new(Orientation::Vertical, 0);
     container.add_css_class("network-page");
-    container.set_margin_all(20);
 
-    let header = Box::new(Orientation::Horizontal, 8);
+    let back = Button::with_label("← Back");
+    back.add_css_class("back-button");
+    back.set_halign(Align::Start);
+    back.set_cursor_from_name(Some("pointer"));
+    back.connect_clicked(clone!(
+        #[weak]
+        stack,
+        move |_| {
+            stack.set_visible_child_name("networks");
+        }
+    ));
+    container.append(&back);
+
+    let header = Box::new(Orientation::Horizontal, 6);
     let icon = Image::from_icon_name("network-wireless-signal-excellent-symbolic");
-    icon.set_pixel_size(32);
+    icon.set_pixel_size(22);
     let title = Label::new(Some(&info.ssid));
     title.add_css_class("network-title");
     header.append(&icon);
     header.append(&title);
     container.append(&header);
 
-    let details = Box::new(Orientation::Vertical, 4);
-    let bssid = Label::new(Some(&format!("BSSID: {}", info.bssid)));
-    let strength = Label::new(Some(&format!("Signal: {}%", info.strength)));
-    let security = Label::new(Some(&format!("Security: {}", info.security)));
-    details.append(&bssid);
-    details.append(&strength);
-    details.append(&security);
-    container.append(&details);
+    let info_box = Box::new(Orientation::Vertical, 6);
+    info_box.add_css_class("network-info");
 
-    let actions = Box::new(Orientation::Horizontal, 12);
-    actions.set_halign(gtk::Align::End);
+    let fields = [
+        ("BSSID", &info.bssid),
+        ("Signal Strength", &format!("{}%", info.strength)),
+        ("Security", &info.security),
+    ];
 
-    let disconnect = Button::with_label("Disconnect");
-    disconnect.add_css_class("disconnect-btn");
-    actions.append(&disconnect);
+    for (label, value) in fields {
+        let row = Box::new(Orientation::Horizontal, 6);
+        let key = Label::new(Some(label));
+        key.add_css_class("info-label");
+        key.set_halign(Align::Start);
 
-    let forget = Button::with_label("Forget");
-    forget.add_css_class("forget-btn");
-    actions.append(&forget);
+        let val = Label::new(Some(value));
+        val.add_css_class("info-value");
+        val.set_halign(Align::Start);
 
-    container.append(&actions);
+        row.append(&key);
+        row.append(&val);
+        info_box.append(&row);
+    }
 
+    container.append(&info_box);
     container
 }
