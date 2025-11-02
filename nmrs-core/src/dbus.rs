@@ -325,9 +325,23 @@ impl NetworkManager {
         } else {
             let specific_object =
                 ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
-            nm.add_and_activate_connection(settings, wifi_device.clone(), specific_object)
-                .await?;
+            match nm
+                .add_and_activate_connection(settings, wifi_device.clone(), specific_object)
+                .await
+            {
+                Ok(_) => println!("add_and_activate_connection() succeeded"),
+                Err(e) => {
+                    eprintln!("add_and_activate_connection() failed: {e}");
+                    return Err(e);
+                }
+            }
         }
+
+        let dev_proxy = NMDeviceProxy::builder(&self.conn)
+            .path(wifi_device.clone())?
+            .build()
+            .await?;
+        println!("Dev state after connect(): {:?}", dev_proxy.state().await?);
 
         println!("Connection request for '{ssid}' submitted successfully");
         Ok(())
