@@ -1,4 +1,4 @@
-use crate::models::{Device, DeviceState, DeviceType, Network};
+use crate::models::{Device, DeviceState, DeviceType, Network, NetworkInfo};
 use crate::wifi_builders::build_wifi_connection;
 use futures_timer::Delay;
 use std::collections::HashMap;
@@ -414,5 +414,52 @@ impl NetworkManager {
             }
         }
         None
+    }
+
+    pub async fn show_details(&self, ssid: &str) -> zbus::Result<NetworkInfo> {
+        let nm = NMProxy::new(&self.conn).await?;
+        for dp in nm.get_devices().await? {
+            let dev = NMDeviceProxy::builder(&self.conn)
+                .path(dp.clone())?
+                .build()
+                .await?;
+            if dev.device_type().await? != 2 {
+                continue;
+            }
+
+            let wifi = NMWirelessProxy::builder(&self.conn)
+                .path(dp.clone())?
+                .build()
+                .await?;
+
+            for ap_path in wifi.get_all_access_points().await? {
+                let ap = NMAccessPointProxy::builder(&self.conn)
+                    .path(ap_path.clone())?
+                    .build()
+                    .await?;
+
+                let ssid_bytes = ap.ssid().await?;
+                if std::str::from_utf8(&ssid_bytes).unwrap_or("") == ssid {
+                    let strength = ap.strength().await?;
+                    let bssid = ap.hw_address().await?;
+                    let wpa = ap.wpa_flags().await?;
+                    let rsn = ap.rsn_flags().await?;
+                    let security = if wpa != 0 || rsn != 0 {
+                        "secured"
+                    } else {
+                        "open"
+                    };
+                    return Ok(NetworkInfo {
+                        ssid: ssid.to_string(),
+                        bssid,
+                        strength,
+                        freq: None,
+                        security: security.to_string(),
+                    });
+                }
+            }
+        }
+
+        Err(zbus::Error::Failure("Network not found".into()))
     }
 }

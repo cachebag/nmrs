@@ -159,3 +159,77 @@ headerbar label:last-child {
   opacity: 0.7;
   margin-top: 4px;
 }
+
+.network-arrow:hover {
+  opacity: 1.0;
+  transform: scale(1.1);
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.network-details label {
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.network-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.network-page {
+  background: #1e1e1e;
+  border-radius: 12px;
+  border: 1px solid #3a3a3a;
+  padding: 20px;
+}
+
+.network-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.network-detail {
+  font-size: 14px;
+  color: #cccccc;
+  margin-left: 6px;
+}
+
+.disconnect-btn {
+  background: #3a7bd5;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 6px 14px;
+}
+
+.forget-btn {
+  background: #d54d3a;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 6px 14px;
+}
+
+.network-dialog {
+  background: #1a1a1a;
+  border: none;
+  box-shadow: none;
+}
+
+.network-page {
+  border-radius: 12px;
+  background: #1a1a1a;
+  padding: 20px;
+}
+
+button.disconnect-btn {
+  background: #2563eb;
+  color: white;
+  border-radius: 8px;
+}
+
+button.forget-btn {
+  background: #b91c1c;
+  color: white;
+  border-radius: 8px;
+}
