@@ -1,5 +1,6 @@
 pub mod connect;
 pub mod header;
+pub mod network_page;
 pub mod networks;
 
 use gtk::prelude::*;

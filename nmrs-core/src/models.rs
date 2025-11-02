@@ -13,6 +13,14 @@ pub struct Network {
     pub is_eap: bool,
 }
 
+pub struct NetworkInfo {
+    pub ssid: String,
+    pub bssid: String,
+    pub strength: u8,
+    pub freq: Option<u32>,
+    pub security: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Device {
     pub path: String,
@@ -113,7 +121,7 @@ impl Display for DeviceType {
             DeviceType::Wifi => write!(f, "Wi-Fi"),
             DeviceType::WifiP2P => write!(f, "Wi-Fi P2P"),
             DeviceType::Loopback => write!(f, "Loopback"),
-            DeviceType::Other(v) => write!(f, "Other({})", v),
+            DeviceType::Other(v) => write!(f, "Other({v})"),
         }
     }
 }
@@ -127,7 +135,7 @@ impl Display for DeviceState {
             DeviceState::Prepare => write!(f, "Preparing"),
             DeviceState::Config => write!(f, "Configuring"),
             DeviceState::Activated => write!(f, "Activated"),
-            DeviceState::Other(v) => write!(f, "Other({})", v),
+            DeviceState::Other(v) => write!(f, "Other({v})"),
         }
     }
 }
