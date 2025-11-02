@@ -115,3 +115,44 @@ label.network-poor { color: #ef4444; }
   font-size: 14px;
   font-weight: 500;
 }
+
+.section-header {
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #2a2a2a;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  color: #bfbfbf;
+  letter-spacing: 0.5px;
+}
+
+.advanced-section,
+.status-section {
+  padding-left: 0;
+  margin-left: 0;
+}
+
+.status-key,
+.info-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #a3a3a3;
+  margin-bottom: 2px;
+  text-decoration: underline;
+}
+
+.status-value,
+.info-value {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.divider {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  opacity: 0.25;
+  border-bottom: 1px solid #2a2a2a;
+}

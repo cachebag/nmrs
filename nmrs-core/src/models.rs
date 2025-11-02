@@ -18,7 +18,12 @@ pub struct NetworkInfo {
     pub bssid: String,
     pub strength: u8,
     pub freq: Option<u32>,
+    pub channel: Option<u16>,
+    pub mode: String,
+    pub rate_mbps: Option<u32>,
+    pub bars: String,
     pub security: String,
+    pub status: String,
 }
 
 #[derive(Debug, Clone)]

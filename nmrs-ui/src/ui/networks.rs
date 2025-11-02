@@ -74,8 +74,12 @@ pub fn networks_view(
                     if let Ok(nm) = NetworkManager::new().await
                         && let Ok(details) = nm.show_details(&ssid_clone).await
                     {
-                        let page = network_page(&details, &stack);
-                        stack.add_named(&page, Some("details"));
+                        let container = network_page(&details, &stack);
+
+                        if let Some(old) = stack.child_by_name("details") {
+                            stack.remove(&old);
+                        }
+                        stack.add_named(&container, Some("details"));
                         stack.set_visible_child_name("details");
                     }
                 });
