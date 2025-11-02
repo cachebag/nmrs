@@ -37,6 +37,7 @@ pub fn build_header(
     let wifi_switch = Switch::new();
     wifi_switch.set_valign(gtk::Align::Center);
     header.pack_end(&wifi_switch);
+    wifi_switch.set_size_request(24, 24);
 
     header.pack_end(&status);
 
@@ -48,6 +49,7 @@ pub fn build_header(
         let stack_clone = stack.clone();
 
         glib::MainContext::default().spawn_local(async move {
+            stack_clone.set_visible_child_name("loading");
             clear_children(&list_container_clone);
 
             match NetworkManager::new().await {
@@ -56,12 +58,15 @@ pub fn build_header(
                         wifi_switch_clone.set_active(enabled);
 
                         if enabled {
-                            status_clone.set_text("");
+                            status_clone.set_text("Scanning...");
+                            let _ = nm.scan_networks().await;
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                             match nm.list_networks().await {
                                 Ok(nets) => {
                                     let list: ListBox =
                                         networks::networks_view(&nets, &pw, &stack_clone);
                                     list_container_clone.append(&list);
+                                    stack_clone.set_visible_child_name("networks");
                                 }
                                 Err(err) => {
                                     status_clone
@@ -117,6 +122,7 @@ pub fn build_header(
                                         let list: ListBox =
                                             networks::networks_view(&nets, &pw, &stack_inner);
                                         list_container_clone.append(&list);
+                                        stack_inner.set_visible_child_name("networks");
                                     }
                                     Err(err) => {
                                         status_clone

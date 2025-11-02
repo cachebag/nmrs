@@ -168,3 +168,19 @@ label.network-poor { color: #ef4444; }
 .wifi-open {
   color: white;
 }
+
+.loading-spinner {
+  margin-top: 12px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.forget-button {
+    font-size: 0.85em;
+    opacity: 0.7;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+.forget-button:hover {
+    opacity: 1;
+}

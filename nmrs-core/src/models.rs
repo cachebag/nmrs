@@ -13,6 +13,7 @@ pub struct Network {
     pub is_eap: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkInfo {
     pub ssid: String,
     pub bssid: String,

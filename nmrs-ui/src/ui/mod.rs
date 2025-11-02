@@ -5,7 +5,8 @@ pub mod networks;
 
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box as GtkBox, Label, Orientation, ScrolledWindow, Stack,
+    Application, ApplicationWindow, Box as GtkBox, Label, Orientation, ScrolledWindow, Spinner,
+    Stack,
 };
 
 pub fn build_ui(app: &Application) {
@@ -18,8 +19,19 @@ pub fn build_ui(app: &Application) {
     let list_container = GtkBox::new(Orientation::Vertical, 0);
 
     let stack = Stack::new();
+
+    let spinner = Spinner::new();
+    spinner.set_halign(gtk::Align::Center);
+    spinner.set_valign(gtk::Align::Center);
+    spinner.set_property("width-request", 24i32);
+    spinner.set_property("height-request", 24i32);
+    spinner.add_css_class("loading-spinner");
+    spinner.start();
+
+    stack.add_named(&spinner, Some("loading"));
+    stack.set_visible_child_name("loading");
+
     stack.add_named(&list_container, Some("networks"));
-    stack.set_visible_child_name("networks");
 
     let header = header::build_header(&status, &list_container, &win, &stack);
     vbox.append(&header);

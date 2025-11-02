@@ -1,9 +1,10 @@
 use glib::clone;
 use gtk::prelude::*;
 use gtk::{Align, Box, Button, Image, Label, Orientation};
+use nmrs_core::NetworkManager;
 use nmrs_core::models::NetworkInfo;
 
-pub fn network_page(info: &NetworkInfo, stack: &gtk::Stack) -> Box {
+pub fn network_page(info: NetworkInfo, stack: &gtk::Stack) -> Box {
     let container = Box::new(Orientation::Vertical, 12);
     container.add_css_class("network-page");
 
@@ -27,8 +28,36 @@ pub fn network_page(info: &NetworkInfo, stack: &gtk::Stack) -> Box {
     icon.set_pixel_size(24);
     let title = Label::new(Some(&info.ssid));
     title.add_css_class("network-title");
+
+    let spacer = Box::new(Orientation::Horizontal, 0);
+    spacer.set_hexpand(true);
+
+    let forget_btn = Button::with_label("Forget");
+    forget_btn.add_css_class("forget-button");
+    forget_btn.set_halign(Align::End);
+    forget_btn.set_valign(Align::Center);
+    forget_btn.set_cursor_from_name(Some("pointer"));
+
+    forget_btn.connect_clicked(clone!(
+        #[strong]
+        info,
+        #[weak]
+        stack,
+        move |_| {
+            let ssid = info.ssid.clone();
+            glib::MainContext::default().spawn_local(async move {
+                if let Ok(nm) = NetworkManager::new().await {
+                    let _ = nm.forget(&ssid).await;
+                    stack.set_visible_child_name("networks");
+                }
+            });
+        }
+    ));
+
     header.append(&icon);
     header.append(&title);
+    header.append(&spacer);
+    header.append(&forget_btn);
     container.append(&header);
 
     // Basic info section

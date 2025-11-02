@@ -547,4 +547,123 @@ impl NetworkManager {
             _ => "Unknown",
         }
     }
+
+    pub async fn forget(&self, ssid: &str) -> zbus::Result<()> {
+        use std::collections::HashMap;
+        use zvariant::{OwnedObjectPath, Value};
+
+        let nm = NMProxy::new(&self.conn).await?;
+
+        // 1) Disconnect any Wi-Fi device currently connected to this SSID
+        let devices = nm.get_devices().await?;
+        for dev_path in &devices {
+            let dev = NMDeviceProxy::builder(&self.conn)
+                .path(dev_path.clone())?
+                .build()
+                .await?;
+            if dev.device_type().await? != 2 {
+                continue;
+            }
+
+            let wifi = NMWirelessProxy::builder(&self.conn)
+                .path(dev_path.clone())?
+                .build()
+                .await?;
+            if let Ok(ap_path) = wifi.active_access_point().await
+                && ap_path.as_str() != "/"
+            {
+                let ap = NMAccessPointProxy::builder(&self.conn)
+                    .path(ap_path.clone())?
+                    .build()
+                    .await?;
+                if let Ok(bytes) = ap.ssid().await
+                    && std::str::from_utf8(&bytes).ok() == Some(ssid)
+                {
+                    let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
+                        .destination("org.freedesktop.NetworkManager")?
+                        .path(dev_path.clone())?
+                        .interface("org.freedesktop.NetworkManager.Device")?
+                        .build()
+                        .await?;
+                    let _ = dev_proxy.call_method("Disconnect", &()).await;
+
+                    for _ in 0..10 {
+                        if dev.state().await? == 30 {
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    }
+                }
+            }
+        }
+
+        // 2) Delete any saved profiles for this SSID
+        let settings: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
+            .destination("org.freedesktop.NetworkManager")?
+            .path("/org/freedesktop/NetworkManager/Settings")?
+            .interface("org.freedesktop.NetworkManager.Settings")?
+            .build()
+            .await?;
+
+        let list_reply = settings.call_method("ListConnections", &()).await?;
+        let conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
+
+        let mut deleted_any = false;
+
+        for cpath in conns {
+            let cproxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
+                .destination("org.freedesktop.NetworkManager")?
+                .path(cpath.clone())?
+                .interface("org.freedesktop.NetworkManager.Settings.Connection")?
+                .build()
+                .await?;
+
+            if let Ok(id) = cproxy.get_property::<String>("Id").await
+                && id == ssid
+            {
+                let _ = cproxy.call_method("Delete", &()).await;
+                deleted_any = true;
+                continue;
+            }
+
+            if let Ok(msg) = cproxy.call_method("GetSettings", &()).await {
+                let body = msg.body();
+                let settings_map: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
+
+                if let Some(conn_sec) = settings_map.get("connection")
+                    && let Some(Value::Str(id)) = conn_sec.get("id")
+                    && id.as_str() == ssid
+                {
+                    let _ = cproxy.call_method("Delete", &()).await;
+                    deleted_any = true;
+                    continue;
+                }
+
+                if let Some(wifi_sec) = settings_map.get("802-11-wireless")
+                    && let Some(Value::Array(arr)) = wifi_sec.get("ssid")
+                {
+                    let mut raw = Vec::new();
+                    for v in arr.iter() {
+                        if let Ok(b) = u8::try_from(v.clone()) {
+                            raw.push(b);
+                        }
+                    }
+                    if std::str::from_utf8(&raw).ok() == Some(ssid) {
+                        let _ = cproxy.call_method("Delete", &()).await;
+                        deleted_any = true;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        if deleted_any {
+            println!("Forgot and disconnected '{ssid}'");
+            Ok(())
+        } else {
+            Err(zbus::Error::Failure(format!(
+                "No saved connection for {ssid}"
+            )))
+        }
+    }
 }
