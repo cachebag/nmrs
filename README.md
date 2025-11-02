@@ -1,7 +1,7 @@
 ![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)
 # nmrs
 #### Wayland-native frontend for NetworkManager. Provides a GTK4 UI and a D-Bus proxy core, built in Rust.
-<img width="752" height="802" alt="image" src="https://github.com/user-attachments/assets/3494e88e-5cdd-4848-9fd7-b85b9a5ea2ef" />
+<img width="603" height="718" alt="image" src="https://github.com/user-attachments/assets/67f424b2-4c48-4d87-8ec2-7ae2db090048" />
 
 # 
 
