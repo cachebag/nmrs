@@ -102,6 +102,15 @@ trait NMAccessPoint {
 
     #[zbus(property)]
     fn rsn_flags(&self) -> Result<u32>;
+
+    #[zbus(property)]
+    fn frequency(&self) -> Result<u32>;
+
+    #[zbus(property)]
+    fn max_bitrate(&self) -> Result<u32>;
+
+    #[zbus(property)]
+    fn mode(&self) -> Result<u32>;
 }
 
 impl NetworkManager {
@@ -416,7 +425,7 @@ impl NetworkManager {
         None
     }
 
-    pub async fn show_details(&self, ssid: &str) -> zbus::Result<NetworkInfo> {
+    pub async fn show_details(&self, net: &Network) -> zbus::Result<NetworkInfo> {
         let nm = NMProxy::new(&self.conn).await?;
         for dp in nm.get_devices().await? {
             let dev = NMDeviceProxy::builder(&self.conn)
@@ -439,27 +448,103 @@ impl NetworkManager {
                     .await?;
 
                 let ssid_bytes = ap.ssid().await?;
-                if std::str::from_utf8(&ssid_bytes).unwrap_or("") == ssid {
-                    let strength = ap.strength().await?;
+                if std::str::from_utf8(&ssid_bytes).unwrap_or("") == net.ssid {
+                    let strength = net.strength.unwrap_or(0);
                     let bssid = ap.hw_address().await?;
-                    let wpa = ap.wpa_flags().await?;
-                    let rsn = ap.rsn_flags().await?;
-                    let security = if wpa != 0 || rsn != 0 {
-                        "secured"
+                    let flags = ap.flags().await?;
+                    let wpa_flags = ap.wpa_flags().await?;
+                    let rsn_flags = ap.rsn_flags().await?;
+                    let freq = ap.frequency().await.ok();
+                    let max_br = ap.max_bitrate().await.ok();
+                    let mode_raw = ap.mode().await.ok();
+
+                    let wep = (flags & 0x1) != 0 && wpa_flags == 0 && rsn_flags == 0;
+                    let wpa1 = wpa_flags != 0;
+                    let wpa2_or_3 = rsn_flags != 0;
+                    let psk = ((wpa_flags | rsn_flags) & 0x0100) != 0;
+                    let eap = ((wpa_flags | rsn_flags) & 0x0200) != 0;
+
+                    let mut parts = Vec::new();
+                    if wep {
+                        parts.push("WEP");
+                    }
+                    if wpa1 {
+                        parts.push("WPA");
+                    }
+                    if wpa2_or_3 {
+                        parts.push("WPA2/WPA3");
+                    }
+                    if psk {
+                        parts.push("PSK");
+                    }
+                    if eap {
+                        parts.push("802.1X");
+                    }
+
+                    let security = if parts.is_empty() {
+                        "Open".to_string()
                     } else {
-                        "open"
+                        parts.join(" + ")
                     };
+
+                    let active_ssid = self.current_ssid().await;
+                    let status = if active_ssid.as_deref() == Some(&net.ssid) {
+                        "Connected".to_string()
+                    } else {
+                        "Disconnected".to_string()
+                    };
+
+                    let channel = freq.and_then(NetworkManager::channel_from_freq);
+                    let rate_mbps = max_br.map(|kbit| kbit / 1000);
+                    let bars = NetworkManager::bars_from_strength(strength).to_string();
+                    let mode = mode_raw
+                        .map(NetworkManager::mode_to_string)
+                        .unwrap_or("Unknown")
+                        .to_string();
+
                     return Ok(NetworkInfo {
-                        ssid: ssid.to_string(),
+                        ssid: net.ssid.clone(),
                         bssid,
                         strength,
-                        freq: None,
-                        security: security.to_string(),
+                        freq,
+                        channel,
+                        mode,
+                        rate_mbps,
+                        bars,
+                        security,
+                        status,
                     });
                 }
             }
         }
-
         Err(zbus::Error::Failure("Network not found".into()))
+    }
+
+    fn channel_from_freq(mhz: u32) -> Option<u16> {
+        match mhz {
+            2412..=2472 => Some(((mhz - 2412) / 5 + 1) as u16), // ch 1..13
+            2484 => Some(14),
+            5000..=5900 => Some(((mhz - 5000) / 5) as u16), // common 5 GHz mapping
+            5955..=7115 => Some(((mhz - 5955) / 5 + 1) as u16), // 6 GHz ch 1..233
+            _ => None,
+        }
+    }
+
+    fn bars_from_strength(s: u8) -> &'static str {
+        match s {
+            0..=24 => "▂___",
+            25..=49 => "▂▄__",
+            50..=74 => "▂▄▆_",
+            _ => "▂▄▆█",
+        }
+    }
+
+    fn mode_to_string(m: u32) -> &'static str {
+        match m {
+            1 => "Adhoc",
+            2 => "Infra",
+            3 => "AP",
+            _ => "Unknown",
+        }
     }
 }

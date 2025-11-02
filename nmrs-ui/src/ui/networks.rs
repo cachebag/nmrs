@@ -63,19 +63,23 @@ pub fn networks_view(
         arrow.set_cursor_from_name(Some("pointer"));
 
         let arrow_click = GestureClick::new();
-        let ssid_clone = net.ssid.clone();
+        let net_clone = net.clone();
 
         arrow_click.connect_pressed(clone!(
             #[weak]
             stack,
             move |_, _, _, _| {
-                let ssid_clone = ssid_clone.clone();
+                let net_data = net_clone.clone();
                 glib::MainContext::default().spawn_local(async move {
                     if let Ok(nm) = NetworkManager::new().await
-                        && let Ok(details) = nm.show_details(&ssid_clone).await
+                        && let Ok(details) = nm.show_details(&net_data).await
                     {
-                        let page = network_page(&details, &stack);
-                        stack.add_named(&page, Some("details"));
+                        let container = network_page(&details, &stack);
+
+                        if let Some(old) = stack.child_by_name("details") {
+                            stack.remove(&old);
+                        }
+                        stack.add_named(&container, Some("details"));
                         stack.set_visible_child_name("details");
                     }
                 });
