@@ -26,13 +26,14 @@ libgdk-pixbuf2.0-dev libpango1.0-dev libcairo2-dev \
 libgtk-4-dev libadwaita-1-dev
 ```
 
-## Project Structure
+## Tests
+Tests live in each crate’s tests/ directory.
 
-```bash 
-nmrs-core/   – D-Bus backend. Handles connections, access points, and NetworkManager IPC.
-nmrs-ui/     – GTK4 frontend. Displays network state, handles user interaction.
-```
-#### References: 
+Run all tests with `cargo test`
+
+Add new tests in the appropriate crate following existing patterns.
+
+#### References/Docs: 
 - https://networkmanager.dev/docs/api/latest/
 - https://gtk-rs.org/gtk4-rs/stable/latest/docs/gtk4/
 
