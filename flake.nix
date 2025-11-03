@@ -25,10 +25,9 @@
           inherit system;
           overlays = [(import rust-overlay)];
         };
-        naersk-lib = pkgs.callPackage naersk {};
         toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
-        naersk' = pkgs.callPackage naersk {
+        naersk-package = pkgs.callPackage naersk {
           cargo = toolchain;
           rustc = toolchain;
           clippy = toolchain;
@@ -58,7 +57,7 @@
             '';
           };
 
-        packages.default = naersk-lib.buildPackage ./.;
+        packages.default = naersk-package.buildPackage ./.;
       }
     );
 }
