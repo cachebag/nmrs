@@ -43,6 +43,8 @@ Add new tests in the appropriate crate following existing patterns.
 * Avoid adding dependencies without discussion.
 * Respect the existing module structure and conventions.
 * CI must pass before merge.
+* No more than 1-2 commits for most PR's. Always squash where necessary.
+* If the respective branch for a PR goes out of sync, this project prefers you _rebase_
 
 ## Issues
 
