@@ -30,11 +30,11 @@ libgtk-4-dev libadwaita-1-dev
 
 ```bash 
 nmrs-core/   – D-Bus backend. Handles connections, access points, and NetworkManager IPC.
-               Reference: https://developer-old.gnome.org/NetworkManager/stable/spec.html
-
 nmrs-ui/     – GTK4 frontend. Displays network state, handles user interaction.
-               Reference: https://gtk-rs.org/gtk4-rs/stable/latest/
 ```
+#### References: 
+- https://networkmanager.dev/docs/api/latest/
+- https://gtk-rs.org/gtk4-rs/stable/latest/docs/gtk4/
 
 ## Guidelines
 
