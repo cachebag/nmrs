@@ -18,7 +18,7 @@
 
  #
 
- This project is still in development. If you would like to contribute, please read the contribution guide. Here's a quick setup guide to get you started:
+This project is still in development. If you would like to contribute, please read the [contribution guide](./CONTRIBUTING.md). Here's a quick list of setup steps to get you started:
 
 **Requirements**
 * Rust toolchain (`rustup`, `cargo`, `rustc`)
