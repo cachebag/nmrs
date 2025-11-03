@@ -249,9 +249,10 @@ impl NetworkManager {
         );
 
         let nm = NMProxy::new(&self.conn).await?;
-        let devices = nm.get_devices().await?;
 
+        let devices = nm.get_devices().await?;
         let mut wifi_device: Option<OwnedObjectPath> = None;
+
         for dp in devices {
             let dev = NMDeviceProxy::builder(&self.conn)
                 .path(dp.clone())?
@@ -259,9 +260,11 @@ impl NetworkManager {
                 .await?;
             if dev.device_type().await? == 2 {
                 wifi_device = Some(dp.clone());
+                eprintln!("   Found WiFi device: {dp}");
                 break;
             }
         }
+
         let wifi_device =
             wifi_device.ok_or(zbus::Error::Failure("no Wi-Fi device found".into()))?;
 
@@ -271,32 +274,50 @@ impl NetworkManager {
             .await?;
 
         if let Some(active) = self.current_ssid().await {
+            eprintln!("Currently connected to: {active}");
             if active == ssid {
                 eprintln!("Already connected to {active}, skipping connect()");
                 return Ok(());
             } else {
-                eprintln!("Currently connected to {active}, disconnecting before reconnecting...");
+                eprintln!("Disconnecting from {active}.");
                 if let Ok(conns) = nm.active_connections().await {
                     for conn_path in conns {
+                        eprintln!("Deactivating connection: {conn_path}");
                         let _ = nm.deactivate_connection(conn_path).await;
                     }
                 }
 
-                for _ in 0..10 {
+                for i in 0..10 {
                     let d = NMDeviceProxy::builder(&self.conn)
                         .path(wifi_device.clone())?
                         .build()
                         .await?;
-                    if DeviceState::from(d.state().await?) == DeviceState::Disconnected {
+                    let state = DeviceState::from(d.state().await?);
+                    eprintln!("Loop {i}: Device state = {state:?}");
+
+                    if state == DeviceState::Disconnected
+                        || state == DeviceState::Unavailable
+                        || state == DeviceState::Deactivating
+                    {
+                        eprintln!("Device disconneced or deactivating");
                         break;
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+                    Delay::new(Duration::from_millis(300)).await;
                 }
+
+                eprintln!("Disconnect complete");
             }
+        } else {
+            eprintln!("Not currently connected to any network");
         }
 
-        let _ = wifi.request_scan(HashMap::new()).await;
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        match wifi.request_scan(HashMap::new()).await {
+            Ok(_) => eprintln!("Scan requested successfully"),
+            Err(e) => eprintln!("Scan request FAILED: {e}"),
+        }
+        Delay::new(Duration::from_secs(3)).await;
+        eprintln!("Scan wait complete");
 
         let mut ap_path: Option<OwnedObjectPath> = None;
         for ap in wifi.get_all_access_points().await? {
@@ -306,34 +327,30 @@ impl NetworkManager {
                 .await?;
             let ssid_bytes = apx.ssid().await?;
             let ap_ssid = std::str::from_utf8(&ssid_bytes).unwrap_or("");
+            eprintln!("Found AP: '{ap_ssid}'");
             if ap_ssid == ssid {
                 ap_path = Some(ap.clone());
+                eprintln!("Matched target SSID");
                 break;
             }
         }
 
+        if ap_path.is_none() {
+            eprintln!("Could not find AP for '{ssid}'");
+        }
+
         let settings = build_wifi_connection(ssid, &creds);
 
-        if matches!(creds, crate::models::WifiSecurity::Open) {
-            println!("Connecting to open network '{ssid}'");
-            nm.add_and_activate_connection(
-                settings,
-                wifi_device.clone(),
-                ObjectPath::from_str_unchecked("/").into(),
-            )
-            .await?;
-        } else {
-            let specific_object =
-                ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
-            match nm
-                .add_and_activate_connection(settings, wifi_device.clone(), specific_object)
-                .await
-            {
-                Ok(_) => println!("add_and_activate_connection() succeeded"),
-                Err(e) => {
-                    eprintln!("add_and_activate_connection() failed: {e}");
-                    return Err(e);
-                }
+        let specific_object = ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
+
+        match nm
+            .add_and_activate_connection(settings, wifi_device.clone(), specific_object)
+            .await
+        {
+            Ok(_) => eprintln!("add_and_activate_connection() succeeded"),
+            Err(e) => {
+                eprintln!("add_and_activate_connection() failed: {e}");
+                return Err(e);
             }
         }
 
@@ -341,9 +358,9 @@ impl NetworkManager {
             .path(wifi_device.clone())?
             .build()
             .await?;
-        println!("Dev state after connect(): {:?}", dev_proxy.state().await?);
+        eprintln!("Dev state after connect(): {:?}", dev_proxy.state().await?);
+        eprintln!("---Connection request for '{ssid}' submitted successfully---");
 
-        println!("Connection request for '{ssid}' submitted successfully");
         Ok(())
     }
 
@@ -568,7 +585,6 @@ impl NetworkManager {
 
         let nm = NMProxy::new(&self.conn).await?;
 
-        // 1) Disconnect any Wi-Fi device currently connected to this SSID
         let devices = nm.get_devices().await?;
         for dev_path in &devices {
             let dev = NMDeviceProxy::builder(&self.conn)
@@ -611,7 +627,6 @@ impl NetworkManager {
             }
         }
 
-        // 2) Delete any saved profiles for this SSID
         let settings: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
             .destination("org.freedesktop.NetworkManager")?
             .path("/org/freedesktop/NetworkManager/Settings")?
@@ -672,7 +687,7 @@ impl NetworkManager {
         }
 
         if deleted_any {
-            println!("Forgot and disconnected '{ssid}'");
+            eprintln!("Forgot and disconnected '{ssid}'");
             Ok(())
         } else {
             Err(zbus::Error::Failure(format!(

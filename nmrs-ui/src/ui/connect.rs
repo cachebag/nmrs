@@ -78,11 +78,16 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
                 .unwrap_or_default();
             let ssid = ssid_owned.clone();
 
-            println!("User entered username={username}, password={pwd}");
+            eprintln!("User entered username={username}, password={pwd}");
 
             glib::MainContext::default().spawn_local(async move {
+                eprintln!("---in spawned task here--");
+                eprintln!("Creating NetworkManager");
+
                 match NetworkManager::new().await {
                     Ok(nm) => {
+                        println!("NetworkManager created successfully");
+
                         let creds = if is_eap {
                             WifiSecurity::WpaEap {
                                 opts: EapOptions {
@@ -100,12 +105,16 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
                             WifiSecurity::WpaPsk { psk: pwd }
                         };
 
-                        if let Err(err) = nm.connect(&ssid, creds).await {
-                            eprintln!("Failed to connect: {err}");
+                        println!("Calling nm.connect() for '{ssid}'");
+                        match nm.connect(&ssid, creds).await {
+                            Ok(_) => println!("nm.connect() succeeded!"),
+                            Err(err) => eprintln!("nm.connect() failed: {err}"),
                         }
                     }
-                    Err(err) => eprintln!("Failed to init NetworkManager: {err}"),
+                    Err(err) => eprintln!("Failed to create NetworkManager: {err}"),
                 }
+
+                println!("---finsihed spawned task---");
             });
 
             dialog_rc.close();
