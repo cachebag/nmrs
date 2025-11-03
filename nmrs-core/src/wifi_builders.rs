@@ -117,23 +117,36 @@ pub fn build_wifi_connection(
     s_conn.insert("type", Value::from("802-11-wireless"));
     s_conn.insert("id", Value::from(ssid.to_string()));
     s_conn.insert("uuid", Value::from(uuid::Uuid::new_v4().to_string()));
+    s_conn.insert("autoconnect", Value::from(true));
+    s_conn.insert("interface-name", Value::from("wlan0"));
     conn.insert("connection", s_conn);
 
     let mut s_wifi = HashMap::new();
     s_wifi.insert("ssid", Value::from(ssid.as_bytes().to_vec()));
     s_wifi.insert("mode", Value::from("infrastructure"));
-    conn.insert("802-11-wireless", s_wifi);
 
     match security {
         models::WifiSecurity::Open => {}
         models::WifiSecurity::WpaPsk { psk } => {
+            s_wifi.insert("security", Value::from("802-11-wireless-security"));
             let mut s_sec = HashMap::new();
             s_sec.insert("key-mgmt", Value::from("wpa-psk"));
+            s_sec.insert("auth-alg", Value::from("open"));
             s_sec.insert("psk", Value::from(psk.to_string()));
             conn.insert("802-11-wireless-security", s_sec);
         }
         _ => {}
     }
+
+    conn.insert("802-11-wireless", s_wifi);
+
+    let mut ipv4 = HashMap::new();
+    ipv4.insert("method", Value::from("auto"));
+    conn.insert("ipv4", ipv4);
+
+    let mut ipv6 = HashMap::new();
+    ipv6.insert("method", Value::from("auto"));
+    conn.insert("ipv6", ipv6);
 
     conn
 }

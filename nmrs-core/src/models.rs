@@ -13,6 +13,7 @@ pub struct Network {
     pub is_eap: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkInfo {
     pub ssid: String,
     pub bssid: String,
@@ -80,6 +81,8 @@ pub enum DeviceState {
     Prepare,
     Config,
     Activated,
+    Deactivating,
+    Failed,
     Other(u32),
 }
 
@@ -114,6 +117,8 @@ impl From<u32> for DeviceState {
             40 => DeviceState::Prepare,
             50 => DeviceState::Config,
             100 => DeviceState::Activated,
+            110 => DeviceState::Deactivating,
+            120 => DeviceState::Failed,
             v => DeviceState::Other(v),
         }
     }
@@ -140,6 +145,8 @@ impl Display for DeviceState {
             DeviceState::Prepare => write!(f, "Preparing"),
             DeviceState::Config => write!(f, "Configuring"),
             DeviceState::Activated => write!(f, "Activated"),
+            DeviceState::Deactivating => write!(f, "Deactivating"),
+            DeviceState::Failed => write!(f, "Failed"),
             DeviceState::Other(v) => write!(f, "Other({v})"),
         }
     }

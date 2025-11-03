@@ -74,7 +74,7 @@ pub fn networks_view(
                     if let Ok(nm) = NetworkManager::new().await
                         && let Ok(details) = nm.show_details(&net_data).await
                     {
-                        let container = network_page(&details, &stack);
+                        let container = network_page(details, &stack);
 
                         if let Some(old) = stack.child_by_name("details") {
                             stack.remove(&old);
