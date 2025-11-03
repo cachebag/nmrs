@@ -1,4 +1,3 @@
-pub mod config;
 pub mod dbus;
 pub mod models;
 pub mod wifi_builders;
