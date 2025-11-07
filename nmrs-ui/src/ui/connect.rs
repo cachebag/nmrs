@@ -68,17 +68,29 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
     let ssid_owned = ssid.to_string();
     let user_entry_clone = user_entry.clone();
 
+    let status_label = Label::new(Some(""));
+    status_label.add_css_class("status-label");
+    vbox.append(&status_label);
+
     {
         let dialog_rc = dialog_rc.clone();
+        let status_label = status_label.clone();
+
         entry.connect_activate(move |entry| {
             let pwd = entry.text().to_string();
+
             let username = user_entry_clone
                 .as_ref()
                 .map(|e| e.text().to_string())
                 .unwrap_or_default();
             let ssid = ssid_owned.clone();
+            let dialog = dialog_rc.clone();
+            let status = status_label.clone();
+            let entry_clone = entry.clone();
 
-            eprintln!("User entered username={username}, password={pwd}");
+            // Prevent double submission
+            entry.set_sensitive(false);
+            status.set_text("Connecting...");
 
             glib::MainContext::default().spawn_local(async move {
                 eprintln!("---in spawned task here--");
@@ -107,17 +119,28 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
 
                         println!("Calling nm.connect() for '{ssid}'");
                         match nm.connect(&ssid, creds).await {
-                            Ok(_) => println!("nm.connect() succeeded!"),
-                            Err(err) => eprintln!("nm.connect() failed: {err}"),
+                            Ok(_) => {
+                                println!("nm.connect() succeeded!");
+                                status.set_text("✓ Connected!");
+                                glib::timeout_future_seconds(1).await;
+                                dialog.close();
+                            }
+                            Err(err) => {
+                                eprintln!("nm.connect() failed: {err}");
+                                status.set_text(&format!("✗ Failed: {err}"));
+                                entry_clone.set_sensitive(true);
+                            }
                         }
                     }
-                    Err(err) => eprintln!("Failed to create NetworkManager: {err}"),
+                    Err(err) => {
+                        eprintln!("Failed to create NetworkManager: {err}");
+                        status.set_text(&format!("✗ Error: {err}"));
+                        entry_clone.set_sensitive(true);
+                    }
                 }
 
-                println!("---finsihed spawned task---");
+                println!("---finished spawned task---");
             });
-
-            dialog_rc.close();
         });
     }
 

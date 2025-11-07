@@ -17,13 +17,34 @@ pub fn networks_view(
     let conn_threshold = 75;
     let list = ListBox::new();
 
-    for net in networks {
+    // Sort networks by signal strength (descending)
+    let mut sorted_networks = networks.to_vec();
+    sorted_networks.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
+
+    for net in sorted_networks {
         let row = ListBoxRow::new();
         let hbox = Box::new(Orientation::Horizontal, 6);
         let gesture = GestureClick::new();
 
         row.add_css_class("network-selection");
-        let ssid = Label::new(Some(&net.ssid));
+
+        // Add band suffix for display only
+        let display_name = if let Some(freq) = net.frequency {
+            let band = if (2400..=2500).contains(&freq) {
+                " (2.4GHz)"
+            } else if (5000..=6000).contains(&freq) {
+                " (5GHz)"
+            } else if (5925..=7125).contains(&freq) {
+                " (6GHz)"
+            } else {
+                ""
+            };
+            format!("{}{}", net.ssid, band)
+        } else {
+            net.ssid.clone()
+        };
+
+        let ssid = Label::new(Some(&display_name));
         hbox.append(&ssid);
 
         let spacer = Box::new(Orientation::Horizontal, 0);
@@ -97,21 +118,37 @@ pub fn networks_view(
             #[weak]
             parent_window,
             move |_, n_press, _x, _y| {
-                if n_press == 2 && secured {
-                    connect::connect_modal(&parent_window, &ssid_str, is_eap);
-                } else if n_press == 2 {
-                    glib::MainContext::default().spawn_local({
-                        let ssid = ssid_str.clone();
-                        async move {
-                            match NetworkManager::new().await {
-                                Ok(nm) => {
+                if n_press == 2 {
+                    let ssid2 = ssid_str.clone();
+                    let window = parent_window.clone();
+
+                    glib::MainContext::default().spawn_local(async move {
+                        match NetworkManager::new().await {
+                            Ok(nm) => {
+                                if secured {
+                                    let have =
+                                        nm.has_saved_connection(&ssid2).await.unwrap_or(false);
+
+                                    if have {
+                                        let creds = WifiSecurity::WpaPsk {
+                                            psk: "".into(), // TODO: NM will use saved secrets
+                                        };
+                                        let _ = nm.connect(&ssid2, creds).await;
+                                    } else {
+                                        connect::connect_modal(&window, &ssid2, is_eap);
+                                    }
+                                } else {
+                                    eprintln!("Connecting to open network: {ssid2}");
                                     let creds = WifiSecurity::Open;
-                                    if let Err(err) = nm.connect(&ssid, creds).await {
-                                        eprintln!("Failed to connect network: {err}");
+                                    match nm.connect(&ssid2, creds).await {
+                                        Ok(_) => eprintln!("Successfully connected to {ssid2}"),
+                                        Err(e) => {
+                                            eprintln!("Failed to connect to {ssid2}: {e}")
+                                        }
                                     }
                                 }
-                                Err(err) => eprintln!("Failed to init NetworkManager: {err}"),
                             }
+                            Err(e) => eprintln!("nm init fail: {e}"),
                         }
                     });
                 }

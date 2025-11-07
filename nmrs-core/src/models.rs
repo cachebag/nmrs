@@ -8,6 +8,7 @@ pub struct Network {
     pub ssid: String,
     pub bssid: Option<String>,
     pub strength: Option<u8>,
+    pub frequency: Option<u32>,
     pub secured: bool,
     pub is_psk: bool,
     pub is_eap: bool,
@@ -56,6 +57,12 @@ pub struct EapOptions {
     pub system_ca_certs: bool,
     pub method: EapMethod,
     pub phase2: Phase2,
+}
+
+pub struct ConnectionOptions {
+    pub autoconnect: bool,
+    pub autoconnect_priority: Option<i32>,
+    pub autoconnect_retries: Option<i32>,
 }
 
 pub enum WifiSecurity {

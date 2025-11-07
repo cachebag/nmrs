@@ -1,10 +1,18 @@
-use nmrs_core::models::WifiSecurity;
+use nmrs_core::models::{ConnectionOptions, WifiSecurity};
 use nmrs_core::wifi_builders::build_wifi_connection;
 use zvariant::Value;
 
+fn opts() -> ConnectionOptions {
+    ConnectionOptions {
+        autoconnect: true,
+        autoconnect_priority: None,
+        autoconnect_retries: None,
+    }
+}
+
 #[test]
 fn builds_open_wifi_connection() {
-    let conn = build_wifi_connection("testnet", &WifiSecurity::Open);
+    let conn = build_wifi_connection("testnet", &WifiSecurity::Open, &opts());
     assert!(conn.contains_key("connection"));
     assert!(conn.contains_key("802-11-wireless"));
     assert!(conn.contains_key("ipv4"));
@@ -18,6 +26,7 @@ fn builds_psk_wifi_connection_with_security_section() {
         &WifiSecurity::WpaPsk {
             psk: "pw123".into(),
         },
+        &opts(),
     );
     let has_sec = conn.contains_key("802-11-wireless-security");
     assert!(has_sec, "security section missing");
