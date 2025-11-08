@@ -1,10 +1,16 @@
+use models::ConnectionOptions;
 use std::collections::HashMap;
 use zvariant::Value;
 
-use crate::models;
+use crate::models::{self, EapMethod};
 
-/*fn bytes(val: &str) -> Vec<u8> {
+fn bytes(val: &str) -> Vec<u8> {
     val.as_bytes().to_vec()
+}
+
+fn string_array(xs: &[&str]) -> Value<'static> {
+    let vals: Vec<String> = xs.iter().map(|s| s.to_string()).collect();
+    Value::from(vals)
 }
 
 fn base_wifi_section(ssid: &str) -> HashMap<&'static str, Value<'static>> {
@@ -14,23 +20,39 @@ fn base_wifi_section(ssid: &str) -> HashMap<&'static str, Value<'static>> {
     s
 }
 
-fn base_connection_section(ssid: &str) -> HashMap<&'static str, Value<'static>> {
+fn base_connection_section(
+    ssid: &str,
+    opts: &ConnectionOptions,
+) -> HashMap<&'static str, Value<'static>> {
     let mut s = HashMap::new();
     s.insert("type", Value::from("802-11-wireless"));
     s.insert("id", Value::from(ssid.to_string()));
     s.insert("uuid", Value::from(uuid::Uuid::new_v4().to_string()));
-    s.insert("autoconnect", Value::from(true));
+    s.insert("autoconnect", Value::from(opts.autoconnect));
+
+    if let Some(p) = opts.autoconnect_priority {
+        s.insert("autoconnect-priority", Value::from(p));
+    }
+
+    if let Some(r) = opts.autoconnect_retries {
+        s.insert("autoconnect-retries", Value::from(r));
+    }
+
     s
 }
 
 fn build_psk_security(psk: &str) -> HashMap<&'static str, Value<'static>> {
     let mut sec = HashMap::new();
+
     sec.insert("key-mgmt", Value::from("wpa-psk"));
     sec.insert("psk", Value::from(psk.to_string()));
-    // hardening maybe
-    // sec.insert("proto", Value::from(vec!["rsn"]));
-    // pairwise
-    // etc...
+    sec.insert("psk-flags", Value::from(0u32)); // 0 = agent-owned, provided during activation
+    sec.insert("auth-alg", Value::from("open"));
+
+    sec.insert("proto", string_array(&["rsn"]));
+    sec.insert("pairwise", string_array(&["ccmp"]));
+    sec.insert("group", string_array(&["ccmp"]));
+
     sec
 }
 
@@ -42,17 +64,18 @@ fn build_eap_security(
 ) {
     let mut sec = HashMap::new();
     sec.insert("key-mgmt", Value::from("wpa-eap"));
-    sec.insert("auth-alg", Value::from("OPEN"));
+    sec.insert("auth-alg", Value::from("open"));
     // same hardening tips as psk
     // proto, pairwise, group, etc.
 
     // 802-1x
     let mut e1x = HashMap::new();
-    let eap_vec = match opts.method {
-        models::EapMethod::Peap => vec!["peap"],
-        models::EapMethod::Ttls => vec!["ttls"],
+
+    let eap_str = match opts.method {
+        EapMethod::Peap => "peap",
+        EapMethod::Ttls => "ttls",
     };
-    e1x.insert("eap", Value::from(eap_vec));
+    e1x.insert("eap", string_array(&[eap_str]));
     e1x.insert("identity", Value::from(opts.identity.clone()));
     e1x.insert("password", Value::from(opts.password.clone()));
 
@@ -86,60 +109,16 @@ fn build_eap_security(
 pub fn build_wifi_connection(
     ssid: &str,
     security: &models::WifiSecurity,
+    opts: &ConnectionOptions,
 ) -> HashMap<&'static str, HashMap<&'static str, Value<'static>>> {
     let mut conn: HashMap<&'static str, HashMap<&'static str, Value<'static>>> = HashMap::new();
-    conn.insert("connection", base_connection_section(ssid));
+
+    // base connections
+    conn.insert("connection", base_connection_section(ssid, opts));
     conn.insert("802-11-wireless", base_wifi_section(ssid));
 
-    match security {
-        models::WifiSecurity::Open => {}
-
-        models::WifiSecurity::WpaPsk { psk } => {
-            conn.insert("802-11-wireless-security", build_psk_security(psk.as_str()));
-        }
-
-        models::WifiSecurity::WpaEap { opts } => {
-            let (sec, e1x) = build_eap_security(&opts);
-            conn.insert("802-11-wireless-security", sec);
-            conn.insert("802-1x", e1x);
-        }
-    }
-    conn
-}*/
-
-pub fn build_wifi_connection(
-    ssid: &str,
-    security: &models::WifiSecurity,
-) -> HashMap<&'static str, HashMap<&'static str, zvariant::Value<'static>>> {
-    let mut conn = HashMap::new();
-
-    let mut s_conn = HashMap::new();
-    s_conn.insert("type", Value::from("802-11-wireless"));
-    s_conn.insert("id", Value::from(ssid.to_string()));
-    s_conn.insert("uuid", Value::from(uuid::Uuid::new_v4().to_string()));
-    s_conn.insert("autoconnect", Value::from(true));
-    s_conn.insert("interface-name", Value::from("wlan0"));
-    conn.insert("connection", s_conn);
-
-    let mut s_wifi = HashMap::new();
-    s_wifi.insert("ssid", Value::from(ssid.as_bytes().to_vec()));
-    s_wifi.insert("mode", Value::from("infrastructure"));
-
-    match security {
-        models::WifiSecurity::Open => {}
-        models::WifiSecurity::WpaPsk { psk } => {
-            s_wifi.insert("security", Value::from("802-11-wireless-security"));
-            let mut s_sec = HashMap::new();
-            s_sec.insert("key-mgmt", Value::from("wpa-psk"));
-            s_sec.insert("auth-alg", Value::from("open"));
-            s_sec.insert("psk", Value::from(psk.to_string()));
-            conn.insert("802-11-wireless-security", s_sec);
-        }
-        _ => {}
-    }
-
-    conn.insert("802-11-wireless", s_wifi);
-
+    // Add IPv4 and IPv6 configuration to prevent state 60 stall
+    // TODO: Expand upon auto/manual configuration options
     let mut ipv4 = HashMap::new();
     ipv4.insert("method", Value::from("auto"));
     conn.insert("ipv4", ipv4);
@@ -147,6 +126,31 @@ pub fn build_wifi_connection(
     let mut ipv6 = HashMap::new();
     ipv6.insert("method", Value::from("auto"));
     conn.insert("ipv6", ipv6);
+
+    match security {
+        models::WifiSecurity::Open => {}
+
+        models::WifiSecurity::WpaPsk { psk } => {
+            // point wireless at security section
+            if let Some(w) = conn.get_mut("802-11-wireless") {
+                w.insert("security", Value::from("802-11-wireless-security"));
+            }
+
+            let sec = build_psk_security(psk);
+            conn.insert("802-11-wireless-security", sec);
+        }
+
+        models::WifiSecurity::WpaEap { opts } => {
+            if let Some(w) = conn.get_mut("802-11-wireless") {
+                w.insert("security", Value::from("802-11-wireless-security"));
+            }
+
+            let (mut sec, e1x) = build_eap_security(opts);
+            sec.insert("auth-alg", Value::from("open"));
+            conn.insert("802-11-wireless-security", sec);
+            conn.insert("802-1x", e1x);
+        }
+    }
 
     conn
 }

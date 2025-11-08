@@ -38,21 +38,29 @@ pub fn network_page(info: NetworkInfo, stack: &gtk::Stack) -> Box {
     forget_btn.set_valign(Align::Center);
     forget_btn.set_cursor_from_name(Some("pointer"));
 
-    forget_btn.connect_clicked(clone!(
-        #[strong]
-        info,
-        #[weak]
-        stack,
-        move |_| {
-            let ssid = info.ssid.clone();
+    {
+        let info_clone = info.clone();
+        let stack_clone = stack.clone();
+
+        forget_btn.connect_clicked(move |_| {
+            let ssid = info_clone.ssid.clone();
+            let stack = stack_clone.clone();
+
             glib::MainContext::default().spawn_local(async move {
                 if let Ok(nm) = NetworkManager::new().await {
-                    let _ = nm.forget(&ssid).await;
-                    stack.set_visible_child_name("networks");
+                    match nm.forget(&ssid).await {
+                        Ok(_) => {
+                            eprintln!("Successfully forgot network: {ssid}");
+                            stack.set_visible_child_name("networks");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to forget network {ssid}: {e}");
+                        }
+                    }
                 }
             });
-        }
-    ));
+        });
+    }
 
     header.append(&icon);
     header.append(&title);

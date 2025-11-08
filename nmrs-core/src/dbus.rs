@@ -1,4 +1,6 @@
-use crate::models::{Device, DeviceState, DeviceType, Network, NetworkInfo};
+use crate::models::{
+    ConnectionOptions, Device, DeviceState, DeviceType, Network, NetworkInfo, WifiSecurity,
+};
 use crate::wifi_builders::build_wifi_connection;
 use futures_timer::Delay;
 use std::collections::HashMap;
@@ -10,7 +12,6 @@ use zvariant::{ObjectPath, OwnedObjectPath};
 
 pub struct NetworkManager {
     conn: Connection,
-    cache: tokio::sync::RwLock<Vec<Network>>,
 }
 
 // Proxies for D-Bus interfaces
@@ -33,6 +34,9 @@ trait NMDevice {
 
     #[zbus(property)]
     fn driver(&self) -> Result<String>;
+
+    #[zbus(property)]
+    fn state_reason(&self) -> Result<(u32, u32)>;
 }
 
 #[proxy(
@@ -58,6 +62,13 @@ pub trait NM {
         device: OwnedObjectPath,
         specific_object: OwnedObjectPath,
     ) -> zbus::Result<(OwnedObjectPath, OwnedObjectPath)>;
+
+    fn activate_connection(
+        &self,
+        connection: OwnedObjectPath,
+        device: OwnedObjectPath,
+        specific_object: OwnedObjectPath,
+    ) -> zbus::Result<OwnedObjectPath>;
 
     fn deactivate_connection(&self, active_connection: OwnedObjectPath) -> zbus::Result<()>;
 }
@@ -116,10 +127,7 @@ trait NMAccessPoint {
 impl NetworkManager {
     pub async fn new() -> zbus::Result<Self> {
         let conn = Connection::system().await?;
-        Ok(Self {
-            conn,
-            cache: tokio::sync::RwLock::new(Vec::new()),
-        })
+        Ok(Self { conn })
     }
 
     pub async fn list_devices(&self) -> Result<Vec<Device>> {
@@ -155,12 +163,9 @@ impl NetworkManager {
 
     pub async fn list_networks(&self) -> Result<Vec<Network>> {
         let nm = NMProxy::new(&self.conn).await?;
-        if self.cache.read().await.is_empty() {
-            Delay::new(Duration::from_millis(800)).await;
-        }
         let devices = nm.get_devices().await?;
 
-        let mut networks: HashMap<String, Network> = HashMap::new();
+        let mut networks: HashMap<(String, u32), Network> = HashMap::new();
 
         for dp in devices {
             let d_proxy = NMDeviceProxy::builder(&self.conn)
@@ -193,25 +198,26 @@ impl NetworkManager {
                 let flags = ap.flags().await?;
                 let wpa = ap.wpa_flags().await?;
                 let rsn = ap.rsn_flags().await?;
+                let frequency = ap.frequency().await?;
 
                 let secured = (flags & 0x1) != 0 || wpa != 0 || rsn != 0;
                 let is_psk = (wpa & 0x0100) != 0 || (rsn & 0x0100) != 0;
                 let is_eap = (wpa & 0x0200) != 0 || (rsn & 0x0200) != 0;
-
-                // println!("{} → WPA={wpa:#06x} RSN={rsn:#06x} → EAP={is_eap}", ssid);
 
                 let new_net = Network {
                     device: dp.to_string(),
                     ssid: ssid.clone(),
                     bssid: Some(bssid),
                     strength: Some(strength),
+                    frequency: Some(frequency),
                     secured,
                     is_psk,
                     is_eap,
                 };
 
+                // Use (SSID, frequency) as key to separate 2.4GHz and 5GHz
                 networks
-                    .entry(ssid)
+                    .entry((ssid.clone(), frequency))
                     .and_modify(|n| {
                         if strength > n.strength.unwrap_or(0) {
                             *n = new_net.clone();
@@ -225,18 +231,7 @@ impl NetworkManager {
         }
 
         let result: Vec<Network> = networks.into_values().collect();
-
-        if !result.is_empty() {
-            println!("cache updates with {} networks", result.len());
-            *self.cache.write().await = result.clone();
-        }
-
-        if result.is_empty() {
-            println!("using cached results here");
-            Ok(self.cache.read().await.clone())
-        } else {
-            Ok(result)
-        }
+        Ok(result)
     }
 
     pub async fn connect(&self, ssid: &str, creds: crate::models::WifiSecurity) -> Result<()> {
@@ -249,6 +244,44 @@ impl NetworkManager {
         );
 
         let nm = NMProxy::new(&self.conn).await?;
+
+        let saved_conn_path = self.get_saved_connection_path(ssid).await?;
+
+        let use_saved_connection = if let Some(conn_path) = &saved_conn_path {
+            // If PSK is empty, we're trying to use saved credentials
+            if creds.is_psk() {
+                if let WifiSecurity::WpaPsk { psk } = &creds {
+                    if psk.trim().is_empty() {
+                        eprintln!("Using saved connection at: {}", conn_path.as_str());
+                        true
+                    } else {
+                        eprintln!(
+                            "Have saved connection but new password provided, deleting old and creating new"
+                        );
+                        let _ = self.delete_connection(conn_path.clone()).await;
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                // For open or EAP, use saved if available
+                eprintln!("Using saved connection at: {}", conn_path.as_str());
+                true
+            }
+        } else {
+            // No saved connection
+            if creds.is_psk()
+                && let WifiSecurity::WpaPsk { psk } = &creds
+                && psk.trim().is_empty()
+            {
+                return Err(zbus::Error::Failure(
+                    "No saved connection and PSK is empty".into(),
+                ));
+            }
+
+            false
+        };
 
         let devices = nm.get_devices().await?;
         let mut wifi_device: Option<OwnedObjectPath> = None;
@@ -295,17 +328,15 @@ impl NetworkManager {
                     let state = DeviceState::from(d.state().await?);
                     eprintln!("Loop {i}: Device state = {state:?}");
 
-                    if state == DeviceState::Disconnected
-                        || state == DeviceState::Unavailable
-                        || state == DeviceState::Deactivating
-                    {
-                        eprintln!("Device disconneced or deactivating");
+                    if state == DeviceState::Disconnected || state == DeviceState::Unavailable {
+                        eprintln!("Device disconnected");
                         break;
                     }
 
                     Delay::new(Duration::from_millis(300)).await;
                 }
 
+                Delay::new(Duration::from_millis(500)).await;
                 eprintln!("Disconnect complete");
             }
         } else {
@@ -339,26 +370,228 @@ impl NetworkManager {
             eprintln!("Could not find AP for '{ssid}'");
         }
 
-        let settings = build_wifi_connection(ssid, &creds);
-
         let specific_object = ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
 
-        match nm
-            .add_and_activate_connection(settings, wifi_device.clone(), specific_object)
-            .await
-        {
-            Ok(_) => eprintln!("add_and_activate_connection() succeeded"),
-            Err(e) => {
-                eprintln!("add_and_activate_connection() failed: {e}");
-                return Err(e);
+        if use_saved_connection {
+            let conn_path = saved_conn_path.unwrap();
+            eprintln!("Activating saved connection: {}", conn_path.as_str());
+
+            match nm
+                .activate_connection(
+                    conn_path.clone(),
+                    wifi_device.clone(),
+                    specific_object.clone(),
+                )
+                .await
+            {
+                Ok(active_conn) => {
+                    eprintln!(
+                        "activate_connection() succeeded, active connection: {}",
+                        active_conn.as_str()
+                    );
+
+                    Delay::new(Duration::from_millis(500)).await;
+
+                    let dev_check = NMDeviceProxy::builder(&self.conn)
+                        .path(wifi_device.clone())?
+                        .build()
+                        .await?;
+
+                    let check_state = dev_check.state().await?;
+
+                    if check_state == 30 {
+                        eprintln!("Connection activated but device stuck in Disconnected state");
+                        eprintln!("Saved connection has invalid settings, deleting and retrying");
+
+                        let _ = nm.deactivate_connection(active_conn).await;
+
+                        let _ = self.delete_connection(conn_path).await;
+
+                        let opts = ConnectionOptions {
+                            autoconnect: true,
+                            autoconnect_priority: None,
+                            autoconnect_retries: None,
+                        };
+
+                        let settings = build_wifi_connection(ssid, &creds, &opts);
+
+                        eprintln!("Creating fresh connection with corrected settings");
+                        match nm
+                            .add_and_activate_connection(
+                                settings,
+                                wifi_device.clone(),
+                                specific_object,
+                            )
+                            .await
+                        {
+                            Ok(_) => eprintln!("Fresh connection created successfully"),
+                            Err(e) => {
+                                eprintln!("Fresh connection also failed: {e}");
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("activate_connection() failed: {e}");
+                    eprintln!(
+                        "Saved connection may be corrupted, deleting and retrying with fresh connection"
+                    );
+
+                    let _ = self.delete_connection(conn_path).await;
+
+                    let opts = ConnectionOptions {
+                        autoconnect: true,
+                        autoconnect_priority: None,
+                        autoconnect_retries: None,
+                    };
+
+                    let settings = build_wifi_connection(ssid, &creds, &opts);
+
+                    eprintln!("Creating fresh connection after saved connection failed");
+                    return match nm
+                        .add_and_activate_connection(settings, wifi_device.clone(), specific_object)
+                        .await
+                    {
+                        Ok(_) => {
+                            eprintln!("Successfully created fresh connection");
+                            Ok(())
+                        }
+                        Err(e) => {
+                            eprintln!("Fresh connection also failed: {e}");
+                            Err(e)
+                        }
+                    };
+                }
+            }
+        } else {
+            let opts = ConnectionOptions {
+                autoconnect: true,
+                autoconnect_priority: None,
+                autoconnect_retries: None,
+            };
+
+            let settings = build_wifi_connection(ssid, &creds, &opts);
+
+            println!("Creating new connection, settings: \n{settings:#?}");
+            match nm
+                .add_and_activate_connection(settings, wifi_device.clone(), specific_object)
+                .await
+            {
+                Ok(_) => eprintln!("add_and_activate_connection() succeeded"),
+                Err(e) => {
+                    eprintln!("add_and_activate_connection() failed: {e}");
+                    return Err(e);
+                }
             }
         }
+
+        Delay::new(Duration::from_millis(300)).await;
 
         let dev_proxy = NMDeviceProxy::builder(&self.conn)
             .path(wifi_device.clone())?
             .build()
             .await?;
-        eprintln!("Dev state after connect(): {:?}", dev_proxy.state().await?);
+
+        let initial_state = dev_proxy.state().await?;
+        eprintln!("Dev state after connect(): {initial_state:?}");
+
+        // Wait to reach state 100 - This brings us to `Activated`
+        // States: 30=Disconnected, 40=Prepare, 50=Config, 60=IP Config, 70=IP Check, 100=Activated, 120=Failed
+        eprintln!("Waiting for connection to complete...");
+        for i in 0..40 {
+            Delay::new(Duration::from_millis(500)).await;
+            match dev_proxy.state().await {
+                Ok(state) => {
+                    let device_state = DeviceState::from(state);
+                    eprintln!("Connection progress {i}: state = {device_state:?} ({state})");
+
+                    if state == 100 {
+                        eprintln!("✓ Connection activated successfully!");
+                        break;
+                    } else if state == 120 {
+                        eprintln!("✗ Connection failed!");
+
+                        // Try to get the failure reason
+                        if let Ok(reason) = dev_proxy.state_reason().await {
+                            eprintln!("Failure reason code: {reason:?}");
+                            let reason_str = match reason.1 {
+                                0 => "Unknown",
+                                1 => "None",
+                                2 => "User disconnected",
+                                3 => "Device disconnected",
+                                4 => "Carrier changed",
+                                7 => "Supplicant disconnected",
+                                8 => "Supplicant config failed",
+                                9 => "Supplicant failed",
+                                10 => "Supplicant timeout",
+                                11 => "PPP start failed",
+                                15 => "DHCP start failed",
+                                16 => "DHCP error",
+                                17 => "DHCP failed",
+                                24 => "Modem connection failed",
+                                25 => "Modem init failed",
+                                42 => "Infiniband mode",
+                                43 => "Dependency failed",
+                                44 => "BR2684 failed",
+                                45 => "Mode set failed",
+                                46 => "GSM APN select failed",
+                                47 => "GSM not searching",
+                                48 => "GSM registration denied",
+                                49 => "GSM registration timeout",
+                                50 => "GSM registration failed",
+                                51 => "GSM PIN check failed",
+                                52 => "Firmware missing",
+                                53 => "Device removed",
+                                54 => "Sleeping",
+                                55 => "Connection removed",
+                                56 => "User requested",
+                                57 => "Carrier",
+                                58 => "Connection assumed",
+                                59 => "Supplicant available",
+                                60 => "Modem not found",
+                                61 => "Bluetooth failed",
+                                62 => "GSM SIM not inserted",
+                                63 => "GSM SIM PIN required",
+                                64 => "GSM SIM PUK required",
+                                65 => "GSM SIM wrong",
+                                66 => "InfiniBand mode",
+                                67 => "Dependency failed",
+                                68 => "BR2684 failed",
+                                69 => "Modem manager unavailable",
+                                70 => "SSID not found",
+                                71 => "Secondary connection failed",
+                                72 => "DCB or FCoE setup failed",
+                                73 => "Teamd control failed",
+                                74 => "Modem failed or no longer available",
+                                75 => "Modem now ready and available",
+                                76 => "SIM PIN was incorrect",
+                                77 => "New connection activation enqueued",
+                                78 => "Parent device unreachable",
+                                79 => "Parent device changed",
+                                _ => "Unknown reason",
+                            };
+                            eprintln!("Failure details: {reason_str}");
+                        }
+
+                        return Err(zbus::Error::Failure(
+                            "Connection failed - authentication or network issue".into(),
+                        ));
+                    } else if i > 10 && state == 30 {
+                        // If we're still disconnected after 5 seconds, something's wrong
+                        eprintln!("✗ Connection stuck in disconnected state");
+                        return Err(zbus::Error::Failure(
+                            "Connection failed - stuck in disconnected state".into(),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to check device state: {e}");
+                    break;
+                }
+            }
+        }
+
         eprintln!("---Connection request for '{ssid}' submitted successfully---");
 
         Ok(())
@@ -579,9 +812,101 @@ impl NetworkManager {
         }
     }
 
+    pub async fn has_saved_connection(&self, ssid: &str) -> zbus::Result<bool> {
+        self.get_saved_connection_path(ssid)
+            .await
+            .map(|p| p.is_some())
+    }
+
+    pub async fn get_saved_connection_path(
+        &self,
+        ssid: &str,
+    ) -> zbus::Result<Option<OwnedObjectPath>> {
+        use std::collections::HashMap;
+        use zvariant::{OwnedObjectPath, Value};
+
+        let settings = zbus::proxy::Proxy::new(
+            &self.conn,
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager/Settings",
+            "org.freedesktop.NetworkManager.Settings",
+        )
+        .await?;
+
+        let reply = settings.call_method("ListConnections", &()).await?;
+        let conns: Vec<OwnedObjectPath> = reply.body().deserialize()?;
+
+        for cpath in conns {
+            let cproxy = zbus::proxy::Proxy::new(
+                &self.conn,
+                "org.freedesktop.NetworkManager",
+                cpath.as_str(),
+                "org.freedesktop.NetworkManager.Settings.Connection",
+            )
+            .await?;
+
+            let msg = cproxy.call_method("GetSettings", &()).await?;
+            let body = msg.body();
+            let all: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
+
+            if let Some(conn_section) = all.get("connection")
+                && let Some(Value::Str(id)) = conn_section.get("id")
+                && id == ssid
+            {
+                return Ok(Some(cpath));
+            }
+        }
+
+        Ok(None)
+    }
+
+    #[deprecated(note = "Use get_saved_connection_path instead")]
+    async fn _old_has_saved_connection(&self, ssid: &str) -> zbus::Result<bool> {
+        use std::collections::HashMap;
+        use zvariant::{OwnedObjectPath, Value};
+
+        let settings = zbus::proxy::Proxy::new(
+            &self.conn,
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager/Settings",
+            "org.freedesktop.NetworkManager.Settings",
+        )
+        .await?;
+
+        let reply = settings.call_method("ListConnections", &()).await?;
+        let conns: Vec<OwnedObjectPath> = reply.body().deserialize()?;
+
+        for cpath in conns {
+            let cproxy = zbus::proxy::Proxy::new(
+                &self.conn,
+                "org.freedesktop.NetworkManager",
+                cpath.as_str(),
+                "org.freedesktop.NetworkManager.Settings.Connection",
+            )
+            .await?;
+
+            let msg = cproxy.call_method("GetSettings", &()).await?;
+            let body = msg.body();
+            let all: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
+
+            if let Some(conn_section) = all.get("connection")
+                && let Some(Value::Str(id)) = conn_section.get("id")
+                && id == ssid
+                && let Some(Value::Bool(ac)) = conn_section.get("autoconnect")
+            {
+                eprintln!("autoconnect: {ac}");
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     pub async fn forget(&self, ssid: &str) -> zbus::Result<()> {
         use std::collections::HashMap;
         use zvariant::{OwnedObjectPath, Value};
+
+        eprintln!("Starting forget operation for: {ssid}");
 
         let nm = NMProxy::new(&self.conn).await?;
 
@@ -609,23 +934,42 @@ impl NetworkManager {
                 if let Ok(bytes) = ap.ssid().await
                     && std::str::from_utf8(&bytes).ok() == Some(ssid)
                 {
+                    eprintln!("Disconnecting from active network: {ssid}");
                     let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
                         .destination("org.freedesktop.NetworkManager")?
                         .path(dev_path.clone())?
                         .interface("org.freedesktop.NetworkManager.Device")?
                         .build()
                         .await?;
-                    let _ = dev_proxy.call_method("Disconnect", &()).await;
 
-                    for _ in 0..10 {
-                        if dev.state().await? == 30 {
-                            break;
-                        }
-                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    match dev_proxy.call_method("Disconnect", &()).await {
+                        Ok(_) => eprintln!("Disconnect call succeeded"),
+                        Err(e) => eprintln!("Disconnect call failed: {e}"),
                     }
+
+                    eprintln!("About to enter wait loop...");
+                    for i in 0..20 {
+                        Delay::new(Duration::from_millis(200)).await;
+                        match dev.state().await {
+                            Ok(current_state) => {
+                                eprintln!("Wait loop {i}: device state = {current_state}");
+                                if current_state == 30 || current_state == 20 {
+                                    eprintln!("Device reached disconnected state");
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to get device state in wait loop {i}: {e}");
+                                break;
+                            }
+                        }
+                    }
+                    eprintln!("Wait loop completed");
                 }
             }
         }
+
+        eprintln!("Starting connection deletion phase...");
 
         let settings: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
             .destination("org.freedesktop.NetworkManager")?
@@ -637,7 +981,7 @@ impl NetworkManager {
         let list_reply = settings.call_method("ListConnections", &()).await?;
         let conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
 
-        let mut deleted_any = false;
+        let mut deleted_count = 0;
 
         for cpath in conns {
             let cproxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
@@ -647,25 +991,18 @@ impl NetworkManager {
                 .build()
                 .await?;
 
-            if let Ok(id) = cproxy.get_property::<String>("Id").await
-                && id == ssid
-            {
-                let _ = cproxy.call_method("Delete", &()).await;
-                deleted_any = true;
-                continue;
-            }
-
             if let Ok(msg) = cproxy.call_method("GetSettings", &()).await {
                 let body = msg.body();
                 let settings_map: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
+
+                let mut should_delete = false;
 
                 if let Some(conn_sec) = settings_map.get("connection")
                     && let Some(Value::Str(id)) = conn_sec.get("id")
                     && id.as_str() == ssid
                 {
-                    let _ = cproxy.call_method("Delete", &()).await;
-                    deleted_any = true;
-                    continue;
+                    should_delete = true;
+                    eprintln!("Found connection by ID: {id}");
                 }
 
                 if let Some(wifi_sec) = settings_map.get("802-11-wireless")
@@ -678,21 +1015,55 @@ impl NetworkManager {
                         }
                     }
                     if std::str::from_utf8(&raw).ok() == Some(ssid) {
-                        let _ = cproxy.call_method("Delete", &()).await;
-                        deleted_any = true;
-                        continue;
+                        should_delete = true;
+                        eprintln!("Found connection by SSID match");
+                    }
+                }
+
+                if let Some(wsec) = settings_map.get("802-11-wireless-security") {
+                    let missing_psk = !wsec.contains_key("psk");
+                    let empty_psk = matches!(wsec.get("psk"), Some(Value::Str(s)) if s.is_empty());
+
+                    if (missing_psk || empty_psk) && should_delete {
+                        eprintln!("Connection has missing/empty PSK, will delete");
+                    }
+                }
+
+                if should_delete {
+                    match cproxy.call_method("Delete", &()).await {
+                        Ok(_) => {
+                            deleted_count += 1;
+                            eprintln!("Deleted connection: {}", cpath.as_str());
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to delete connection {}: {}", cpath.as_str(), e);
+                        }
                     }
                 }
             }
         }
 
-        if deleted_any {
-            eprintln!("Forgot and disconnected '{ssid}'");
+        if deleted_count > 0 {
+            eprintln!("Successfully deleted {deleted_count} connection(s) for '{ssid}'");
             Ok(())
         } else {
+            eprintln!("No saved connections found for '{ssid}'");
             Err(zbus::Error::Failure(format!(
                 "No saved connection for {ssid}"
             )))
         }
+    }
+
+    async fn delete_connection(&self, conn_path: OwnedObjectPath) -> zbus::Result<()> {
+        let cproxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(&self.conn)
+            .destination("org.freedesktop.NetworkManager")?
+            .path(conn_path.clone())?
+            .interface("org.freedesktop.NetworkManager.Settings.Connection")?
+            .build()
+            .await?;
+
+        cproxy.call_method("Delete", &()).await?;
+        eprintln!("Deleted connection: {}", conn_path.as_str());
+        Ok(())
     }
 }
