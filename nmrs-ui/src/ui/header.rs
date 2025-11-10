@@ -1,6 +1,8 @@
 use gtk::prelude::*;
 use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
 use nmrs_core::NetworkManager;
+use std::cell::Cell;
+use std::rc::Rc;
 
 use crate::ui::networks;
 
@@ -9,6 +11,7 @@ pub fn build_header(
     list_container: &GtkBox,
     parent_window: &gtk::ApplicationWindow,
     stack: &gtk::Stack,
+    is_scanning: Rc<Cell<bool>>,
 ) -> HeaderBar {
     let header = HeaderBar::new();
     header.set_show_title_buttons(false);
@@ -38,6 +41,7 @@ pub fn build_header(
         let wifi_switch_clone = wifi_switch.clone();
         let pw = parent_window.clone();
         let stack_clone = stack.clone();
+        let is_scanning_clone = is_scanning.clone();
 
         glib::MainContext::default().spawn_local(async move {
             stack_clone.set_visible_child_name("loading");
@@ -47,32 +51,26 @@ pub fn build_header(
                 Ok(nm) => match nm.wifi_enabled().await {
                     Ok(enabled) => {
                         wifi_switch_clone.set_active(enabled);
-
                         if enabled {
-                            status_clone.set_text("Scanning...");
-                            let _ = nm.scan_networks().await;
-                            glib::timeout_future_seconds(2).await;
-                            match nm.list_networks().await {
-                                Ok(nets) => {
-                                    status_clone.set_text("");
-                                    let list: ListBox =
-                                        networks::networks_view(&nets, &pw, &stack_clone);
-                                    list_container_clone.append(&list);
-                                    stack_clone.set_visible_child_name("networks");
-                                }
-                                Err(err) => {
-                                    status_clone
-                                        .set_text(&format!("Error fetching networks: {err}"));
-                                }
-                            }
+                            refresh_networks(
+                                &nm,
+                                &list_container_clone,
+                                &status_clone,
+                                &pw,
+                                &stack_clone,
+                                &is_scanning_clone,
+                            )
+                            .await;
                         }
                     }
-                    Err(err) => status_clone.set_text(&format!("Error: {err}")),
+                    Err(err) => {
+                        status_clone.set_text(&format!("Error fetching networks: {err}"));
+                    }
                 },
                 Err(err) => status_clone.set_text(&format!("Error: {err}")),
             }
-        });
-    }
+        })
+    };
 
     {
         let pw2 = parent_window.clone();
@@ -84,6 +82,7 @@ pub fn build_header(
             let status_clone = status.clone();
             let sw = sw.clone();
             let stack_inner = stack_clone.clone();
+            let is_scanning_clone = is_scanning.clone();
 
             glib::MainContext::default().spawn_local(async move {
                 clear_children(&list_container_clone);
@@ -97,23 +96,15 @@ pub fn build_header(
 
                         if sw.is_active() {
                             if nm.wait_for_wifi_ready().await.is_ok() {
-                                let _ = nm.scan_networks().await;
-                                status_clone.set_text("Scanning...");
-                                glib::timeout_future_seconds(2).await;
-
-                                match nm.list_networks().await {
-                                    Ok(nets) => {
-                                        status_clone.set_text("");
-                                        let list: ListBox =
-                                            networks::networks_view(&nets, &pw, &stack_inner);
-                                        list_container_clone.append(&list);
-                                        stack_inner.set_visible_child_name("networks");
-                                    }
-                                    Err(err) => {
-                                        status_clone
-                                            .set_text(&format!("Error fetching networks: {err}"));
-                                    }
-                                }
+                                refresh_networks(
+                                    &nm,
+                                    &list_container_clone,
+                                    &status_clone,
+                                    &pw,
+                                    &stack_inner,
+                                    &is_scanning_clone,
+                                )
+                                .await;
                             } else {
                                 status_clone.set_text("Wi-Fi failed to initialize");
                             }
@@ -126,6 +117,56 @@ pub fn build_header(
     }
 
     header
+}
+
+async fn refresh_networks(
+    nm: &NetworkManager,
+    list_container: &GtkBox,
+    status: &Label,
+    pw: &gtk::ApplicationWindow,
+    stack: &gtk::Stack,
+    is_scanning: &Rc<Cell<bool>>,
+) {
+    if is_scanning.get() {
+        status.set_text("Scan already in progress");
+        return;
+    }
+    is_scanning.set(true);
+
+    clear_children(list_container);
+    status.set_text("Scanning...");
+
+    if let Err(err) = nm.scan_networks().await {
+        status.set_text(&format!("Scan failed: {err}"));
+        is_scanning.set(false);
+        return;
+    }
+
+    let mut last_len = 0;
+    for _ in 0..5 {
+        let nets = nm.list_networks().await.unwrap_or_default();
+        if nets.len() == last_len && last_len > 0 {
+            break;
+        }
+        last_len = nets.len();
+        glib::timeout_future_seconds(1).await;
+    }
+
+    match nm.list_networks().await {
+        Ok(mut nets) => {
+            // deduplicate by BSSID
+            // (doing by SSID hides dual-band entries)
+            nets.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
+
+            status.set_text("");
+            let list: ListBox = networks::networks_view(&nets, pw, stack);
+            list_container.append(&list);
+            stack.set_visible_child_name("networks");
+        }
+        Err(err) => status.set_text(&format!("Error fetching networks: {err}")),
+    }
+
+    is_scanning.set(false);
 }
 
 fn clear_children(container: &gtk::Box) {

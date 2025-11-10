@@ -8,6 +8,8 @@ use gtk::{
     Application, ApplicationWindow, Box as GtkBox, Label, Orientation, ScrolledWindow, Spinner,
     Stack,
 };
+use std::cell::Cell;
+use std::rc::Rc;
 
 pub fn build_ui(app: &Application) {
     let win = ApplicationWindow::new(app);
@@ -17,8 +19,8 @@ pub fn build_ui(app: &Application) {
     let vbox = GtkBox::new(Orientation::Vertical, 0);
     let status = Label::new(None);
     let list_container = GtkBox::new(Orientation::Vertical, 0);
-
     let stack = Stack::new();
+    let is_scanning = Rc::new(Cell::new(false));
 
     let spinner = Spinner::new();
     spinner.set_halign(gtk::Align::Center);
@@ -33,7 +35,7 @@ pub fn build_ui(app: &Application) {
 
     stack.add_named(&list_container, Some("networks"));
 
-    let header = header::build_header(&status, &list_container, &win, &stack);
+    let header = header::build_header(&status, &list_container, &win, &stack, is_scanning);
     vbox.append(&header);
 
     let scroller = ScrolledWindow::new();
