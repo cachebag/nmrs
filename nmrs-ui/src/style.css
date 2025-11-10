@@ -184,3 +184,14 @@ label.network-poor { color: #ef4444; }
 .forget-button:hover {
     opacity: 1;
 }
+
+.refresh-btn {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-weight: 500;
+    font-size: 13px;
+    padding: 4px 0;
+}
+
+.refresh-btn:hover { color: #ffffff; }

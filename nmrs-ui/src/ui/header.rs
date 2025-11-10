@@ -1,3 +1,4 @@
+use glib::clone;
 use gtk::prelude::*;
 use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
 use nmrs_core::NetworkManager;
@@ -28,6 +29,53 @@ pub fn build_header(
     wifi_box.append(&wifi_label);
     header.pack_start(&wifi_box);
 
+    let refresh_btn = gtk::Button::from_icon_name("view-refresh-symbolic");
+    refresh_btn.add_css_class("refresh-btn");
+    refresh_btn.set_valign(gtk::Align::Start);
+    header.pack_end(&refresh_btn);
+    refresh_btn.connect_clicked(clone!(
+        #[weak]
+        list_container,
+        #[weak]
+        status,
+        #[weak]
+        parent_window,
+        #[weak]
+        stack,
+        #[strong]
+        is_scanning,
+        move |_| {
+            glib::MainContext::default().spawn_local(clone!(
+                #[strong]
+                list_container,
+                #[strong]
+                status,
+                #[strong]
+                parent_window,
+                #[strong]
+                stack,
+                #[strong]
+                is_scanning,
+                async move {
+                    match NetworkManager::new().await {
+                        Ok(nm) => {
+                            refresh_networks(
+                                &nm,
+                                &list_container,
+                                &status,
+                                &parent_window,
+                                &stack,
+                                &is_scanning,
+                            )
+                            .await;
+                        }
+                        Err(err) => status.set_text(&format!("Error: {err}")),
+                    }
+                }
+            ));
+        }
+    ));
+
     let wifi_switch = Switch::new();
     wifi_switch.set_valign(gtk::Align::Center);
     header.pack_end(&wifi_switch);
@@ -35,6 +83,8 @@ pub fn build_header(
 
     header.pack_end(&status);
 
+    // Initialize Wi-Fi state
+    // This runs once on startup
     {
         let list_container_clone = list_container.clone();
         let status_clone = status.clone();
@@ -72,6 +122,8 @@ pub fn build_header(
         })
     };
 
+    // Handle Wi-Fi toggle changes
+    // This runs whenever the user toggles the switch
     {
         let pw2 = parent_window.clone();
         let stack_clone = stack.clone();
