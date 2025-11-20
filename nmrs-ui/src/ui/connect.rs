@@ -87,9 +87,12 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
             let dialog = dialog_rc.clone();
             let status = status_label.clone();
             let entry_clone = entry.clone();
+            let user_entry_clone2 = user_entry_clone.clone();
 
-            // Prevent double submission
             entry.set_sensitive(false);
+            if let Some(ref user_entry) = user_entry_clone2 {
+                user_entry.set_sensitive(false);
+            }
             status.set_text("Connecting...");
 
             glib::MainContext::default().spawn_local(async move {
@@ -127,8 +130,23 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
                             }
                             Err(err) => {
                                 eprintln!("nm.connect() failed: {err}");
-                                status.set_text(&format!("✗ Failed: {err}"));
+                                let err_str = err.to_string().to_lowercase();
+                                if err_str.contains("authentication")
+                                    || err_str.contains("supplicant")
+                                    || err_str.contains("password")
+                                    || err_str.contains("psk")
+                                    || err_str.contains("wrong")
+                                {
+                                    status.set_text("Wrong password, try again");
+                                    entry_clone.set_text("");
+                                    entry_clone.grab_focus();
+                                } else {
+                                    status.set_text(&format!("✗ Failed: {err}"));
+                                }
                                 entry_clone.set_sensitive(true);
+                                if let Some(ref user_entry) = user_entry_clone2 {
+                                    user_entry.set_sensitive(true);
+                                }
                             }
                         }
                     }
@@ -136,6 +154,9 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
                         eprintln!("Failed to create NetworkManager: {err}");
                         status.set_text(&format!("✗ Error: {err}"));
                         entry_clone.set_sensitive(true);
+                        if let Some(ref user_entry) = user_entry_clone2 {
+                            user_entry.set_sensitive(true);
+                        }
                     }
                 }
 

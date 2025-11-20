@@ -13,13 +13,52 @@ pub fn networks_view(
     networks: &[models::Network],
     parent_window: &gtk::ApplicationWindow,
     stack: &gtk::Stack,
+    current_ssid: Option<&str>,
+    current_band: Option<&str>,
 ) -> ListBox {
     let conn_threshold = 75;
     let list = ListBox::new();
 
-    // Sort networks by signal strength (descending)
+    // Helper function to check if a network is connected (matches both SSID and band)
+    let is_connected = |net: &models::Network| -> bool {
+        if let Some(ssid) = current_ssid {
+            if ssid != net.ssid {
+                return false;
+            }
+            // If we have band info, check it matches
+            if let Some(band) = current_band {
+                let net_band = net.frequency.map(|freq| {
+                    if (2400..=2500).contains(&freq) {
+                        "2.4GHz"
+                    } else if (5000..=6000).contains(&freq) {
+                        "5GHz"
+                    } else if (5925..=7125).contains(&freq) {
+                        "6GHz"
+                    } else {
+                        "unknown"
+                    }
+                });
+                return net_band == Some(band);
+            }
+            // If no band info, just match SSID (fallback)
+            true
+        } else {
+            false
+        }
+    };
+
+    // Sort networks: connected network first, then by signal strength (descending)
     let mut sorted_networks = networks.to_vec();
-    sorted_networks.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
+    sorted_networks.sort_by(|a, b| {
+        let a_connected = is_connected(a);
+        let b_connected = is_connected(b);
+
+        match (a_connected, b_connected) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)),
+        }
+    });
 
     for net in sorted_networks {
         let row = ListBoxRow::new();
@@ -27,6 +66,11 @@ pub fn networks_view(
         let gesture = GestureClick::new();
 
         row.add_css_class("network-selection");
+
+        let connected = is_connected(&net);
+        if connected {
+            row.add_css_class("connected");
+        }
 
         // Add band suffix for display only
         let display_name = if let Some(freq) = net.frequency {
@@ -46,6 +90,12 @@ pub fn networks_view(
 
         let ssid = Label::new(Some(&display_name));
         hbox.append(&ssid);
+
+        if connected {
+            let connected_label = Label::new(Some("Connected"));
+            connected_label.add_css_class("connected-label");
+            hbox.append(&connected_label);
+        }
 
         let spacer = Box::new(Orientation::Horizontal, 0);
         spacer.set_hexpand(true);
