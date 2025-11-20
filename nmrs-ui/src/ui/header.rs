@@ -3,6 +3,7 @@ use gtk::prelude::*;
 use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
 use nmrs_core::NetworkManager;
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::ui::networks;
@@ -206,12 +207,56 @@ async fn refresh_networks(
 
     match nm.list_networks().await {
         Ok(mut nets) => {
-            // deduplicate by BSSID
-            // (doing by SSID hides dual-band entries)
+            let current_conn = nm.current_connection_info().await;
+            let (current_ssid, current_band) = if let Some((ssid, freq)) = current_conn {
+                let ssid_str = ssid.clone();
+                let band: Option<String> = freq.map(|f| {
+                    if (2400..=2500).contains(&f) {
+                        "2.4GHz".to_string()
+                    } else if (5000..=6000).contains(&f) {
+                        "5GHz".to_string()
+                    } else if (5925..=7125).contains(&f) {
+                        "6GHz".to_string()
+                    } else {
+                        "unknown".to_string()
+                    }
+                });
+                (Some(ssid_str), band)
+            } else {
+                (None, None)
+            };
+
+            // Sort by signal strength (descending)
             nets.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
 
+            // Deduplicate by SSID + frequency band (not exact frequency)
+            // This matches how networks are displayed (2.4GHz, 5GHz, 6GHz)
+            let mut seen_combinations = HashSet::new();
+            nets.retain(|net| {
+                // Normalize frequency to band, matching the display logic
+                let band = net.frequency.map(|freq| {
+                    if (2400..=2500).contains(&freq) {
+                        "2.4GHz"
+                    } else if (5000..=6000).contains(&freq) {
+                        "5GHz"
+                    } else if (5925..=7125).contains(&freq) {
+                        "6GHz"
+                    } else {
+                        "unknown"
+                    }
+                });
+                let key = (net.ssid.clone(), band);
+                seen_combinations.insert(key)
+            });
+
             status.set_text("");
-            let list: ListBox = networks::networks_view(&nets, pw, stack);
+            let list: ListBox = networks::networks_view(
+                &nets,
+                pw,
+                stack,
+                current_ssid.as_deref(),
+                current_band.as_deref(),
+            );
             list_container.append(&list);
             stack.set_visible_child_name("networks");
         }

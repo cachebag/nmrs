@@ -8,7 +8,7 @@ use std::time::Duration;
 use zbus::Connection;
 use zbus::Result;
 use zbus::proxy;
-use zvariant::{ObjectPath, OwnedObjectPath};
+use zvariant::OwnedObjectPath;
 
 pub struct NetworkManager {
     conn: Connection,
@@ -311,33 +311,6 @@ impl NetworkManager {
             if active == ssid {
                 eprintln!("Already connected to {active}, skipping connect()");
                 return Ok(());
-            } else {
-                eprintln!("Disconnecting from {active}.");
-                if let Ok(conns) = nm.active_connections().await {
-                    for conn_path in conns {
-                        eprintln!("Deactivating connection: {conn_path}");
-                        let _ = nm.deactivate_connection(conn_path).await;
-                    }
-                }
-
-                for i in 0..10 {
-                    let d = NMDeviceProxy::builder(&self.conn)
-                        .path(wifi_device.clone())?
-                        .build()
-                        .await?;
-                    let state = DeviceState::from(d.state().await?);
-                    eprintln!("Loop {i}: Device state = {state:?}");
-
-                    if state == DeviceState::Disconnected || state == DeviceState::Unavailable {
-                        eprintln!("Device disconnected");
-                        break;
-                    }
-
-                    Delay::new(Duration::from_millis(300)).await;
-                }
-
-                Delay::new(Duration::from_millis(500)).await;
-                eprintln!("Disconnect complete");
             }
         } else {
             eprintln!("Not currently connected to any network");
@@ -367,12 +340,41 @@ impl NetworkManager {
         }
 
         if ap_path.is_none() {
-            eprintln!("Could not find AP for '{ssid}'");
+            return Err(zbus::Error::Failure(format!("Network '{ssid}' not found")));
         }
 
-        let specific_object = ap_path.unwrap_or_else(|| ObjectPath::from_str_unchecked("/").into());
+        let specific_object = ap_path.unwrap();
 
         if use_saved_connection {
+            if let Some(active) = self.current_ssid().await {
+                eprintln!("Disconnecting from {active}.");
+                if let Ok(conns) = nm.active_connections().await {
+                    for conn_path in conns {
+                        eprintln!("Deactivating connection: {conn_path}");
+                        let _ = nm.deactivate_connection(conn_path).await;
+                    }
+                }
+
+                for i in 0..10 {
+                    let d = NMDeviceProxy::builder(&self.conn)
+                        .path(wifi_device.clone())?
+                        .build()
+                        .await?;
+                    let state = DeviceState::from(d.state().await?);
+                    eprintln!("Loop {i}: Device state = {state:?}");
+
+                    if state == DeviceState::Disconnected || state == DeviceState::Unavailable {
+                        eprintln!("Device disconnected");
+                        break;
+                    }
+
+                    Delay::new(Duration::from_millis(300)).await;
+                }
+
+                Delay::new(Duration::from_millis(500)).await;
+                eprintln!("Disconnect complete");
+            }
+
             let conn_path = saved_conn_path.unwrap();
             eprintln!("Activating saved connection: {}", conn_path.as_str());
 
@@ -474,6 +476,36 @@ impl NetworkManager {
             let settings = build_wifi_connection(ssid, &creds, &opts);
 
             println!("Creating new connection, settings: \n{settings:#?}");
+
+            if let Some(active) = self.current_ssid().await {
+                eprintln!("Disconnecting from {active}.");
+                if let Ok(conns) = nm.active_connections().await {
+                    for conn_path in conns {
+                        eprintln!("Deactivating connection: {conn_path}");
+                        let _ = nm.deactivate_connection(conn_path).await;
+                    }
+                }
+
+                for i in 0..10 {
+                    let d = NMDeviceProxy::builder(&self.conn)
+                        .path(wifi_device.clone())?
+                        .build()
+                        .await?;
+                    let state = DeviceState::from(d.state().await?);
+                    eprintln!("Loop {i}: Device state = {state:?}");
+
+                    if state == DeviceState::Disconnected || state == DeviceState::Unavailable {
+                        eprintln!("Device disconnected");
+                        break;
+                    }
+
+                    Delay::new(Duration::from_millis(300)).await;
+                }
+
+                Delay::new(Duration::from_millis(500)).await;
+                eprintln!("Disconnect complete");
+            }
+
             match nm
                 .add_and_activate_connection(settings, wifi_device.clone(), specific_object)
                 .await
@@ -496,9 +528,9 @@ impl NetworkManager {
         let initial_state = dev_proxy.state().await?;
         eprintln!("Dev state after connect(): {initial_state:?}");
 
-        // Wait to reach state 100 - This brings us to `Activated`
-        // States: 30=Disconnected, 40=Prepare, 50=Config, 60=IP Config, 70=IP Check, 100=Activated, 120=Failed
         eprintln!("Waiting for connection to complete...");
+        let mut connected = false;
+        let mut config_state_count = 0;
         for i in 0..40 {
             Delay::new(Duration::from_millis(500)).await;
             match dev_proxy.state().await {
@@ -508,11 +540,11 @@ impl NetworkManager {
 
                     if state == 100 {
                         eprintln!("✓ Connection activated successfully!");
+                        connected = true;
                         break;
                     } else if state == 120 {
                         eprintln!("✗ Connection failed!");
 
-                        // Try to get the failure reason
                         if let Ok(reason) = dev_proxy.state_reason().await {
                             eprintln!("Failure reason code: {reason:?}");
                             let reason_str = match reason.1 {
@@ -577,8 +609,21 @@ impl NetworkManager {
                         return Err(zbus::Error::Failure(
                             "Connection failed - authentication or network issue".into(),
                         ));
-                    } else if i > 10 && state == 30 {
-                        // If we're still disconnected after 5 seconds, something's wrong
+                    } else if state == 50 {
+                        config_state_count += 1;
+                        if config_state_count > 15 {
+                            eprintln!(
+                                "✗ Connection stuck in Config state - likely authentication failure"
+                            );
+                            return Err(zbus::Error::Failure(
+                                "Connection failed - authentication failed".into(),
+                            ));
+                        }
+                    } else {
+                        config_state_count = 0;
+                    }
+
+                    if i > 10 && state == 30 {
                         eprintln!("✗ Connection stuck in disconnected state");
                         return Err(zbus::Error::Failure(
                             "Connection failed - stuck in disconnected state".into(),
@@ -590,6 +635,19 @@ impl NetworkManager {
                     break;
                 }
             }
+        }
+
+        if !connected {
+            let final_state = dev_proxy.state().await.unwrap_or(0);
+            eprintln!("✗ Connection did not complete. Final state: {final_state}");
+            if final_state == 50 {
+                return Err(zbus::Error::Failure(
+                    "Connection failed - authentication failed".into(),
+                ));
+            }
+            return Err(zbus::Error::Failure(
+                "Connection failed - timeout waiting for activation".into(),
+            ));
         }
 
         eprintln!("---Connection request for '{ssid}' submitted successfully---");
@@ -684,6 +742,43 @@ impl NetworkManager {
                 let ssid_bytes = ap.ssid().await.ok()?;
                 let ssid = std::str::from_utf8(&ssid_bytes).ok()?;
                 return Some(ssid.to_string());
+            }
+        }
+        None
+    }
+
+    pub async fn current_connection_info(&self) -> Option<(String, Option<u32>)> {
+        let nm = NMProxy::new(&self.conn).await.ok()?;
+        let devices = nm.get_devices().await.ok()?;
+
+        for dp in devices {
+            let dev = NMDeviceProxy::builder(&self.conn)
+                .path(dp.clone())
+                .ok()?
+                .build()
+                .await
+                .ok()?;
+            if dev.device_type().await.ok()? != 2 {
+                continue;
+            }
+
+            let wifi = NMWirelessProxy::builder(&self.conn)
+                .path(dp.clone())
+                .ok()?
+                .build()
+                .await
+                .ok()?;
+            if let Ok(active_ap) = wifi.active_access_point().await
+                && active_ap.as_str() != "/"
+            {
+                let builder = NMAccessPointProxy::builder(&self.conn)
+                    .path(active_ap)
+                    .ok()?;
+                let ap = builder.build().await.ok()?;
+                let ssid_bytes = ap.ssid().await.ok()?;
+                let ssid = std::str::from_utf8(&ssid_bytes).ok()?;
+                let frequency = ap.frequency().await.ok();
+                return Some((ssid.to_string(), frequency));
             }
         }
         None
