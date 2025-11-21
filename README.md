@@ -49,7 +49,7 @@ On **Arch Linux**:
 sudo pacman -S gtk4 libadwaita base-devel
 ```
 
-On Debian/Ubuntu (can't speak to how well this works):
+On Debian/Ubuntu:
 ```bash
 sudo apt install pkg-config libglib2.0-dev libgirepository1.0-dev \
 libgdk-pixbuf2.0-dev libpango1.0-dev libcairo2-dev \
