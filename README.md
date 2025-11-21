@@ -4,12 +4,32 @@
   <h3>Wayland-native frontend for NetworkManager. Provides a GTK4 UI and a D-Bus proxy core, built in Rust.</h3>
 </div>
 <p align="center">
-  <img width="472" height="598" alt="image" src="https://github.com/user-attachments/assets/c2a46227-df88-4e9e-b3c9-f4c259399785" />
+  <img width="1080" height="606" alt="image" src="https://github.com/user-attachments/assets/8e76a3ca-bdfc-4e7d-99ce-c7309e5f7600" />
 </p>
 
 # 
 
-**For tiling window managers (Hyprland, Sway, i3, etc.)**
+## Install
+Via `yay`
+```bash
+yay -S nmrs
+```
+or `paru`
+```bash
+paru -S nmrs
+```
+
+**Wire into `waybar`**
+```config
+"network": {
+    "tooltip": false,
+    "format-wifi": "  {essid}",
+    "format-ethernet": "",
+    "on-click": "nmrs"
+  },
+```
+
+**For tiling window managers to avoid automatic tiling (Hyprland, Sway, i3, etc.)**
 
  ```
  windowrulev2 = float, class:^(org\.netrs\.ui)$
@@ -29,7 +49,7 @@ On **Arch Linux**:
 sudo pacman -S gtk4 libadwaita base-devel
 ```
 
-On Debian/Ubuntu:
+On Debian/Ubuntu (can't speak to how well this works):
 ```bash
 sudo apt install pkg-config libglib2.0-dev libgirepository1.0-dev \
 libgdk-pixbuf2.0-dev libpango1.0-dev libcairo2-dev \
