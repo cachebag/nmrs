@@ -36,7 +36,32 @@ paru -S nmrs
  ```
  Adjust class if your compositor reports a different one via `hyprctl clients`.
 
- #
+#
+
+## Styling
+Expose your own styles by placing `style.css` in `~/.config/nmrs/`
+
+Example:
+```css
+/* Global overrides */
+* {
+    font-family: "Inter", "Sans";
+    color: #073642; /* Solarized dark teal */
+}
+
+window, .network-page {
+    background: #fdf6e3; /* Solarized base3 */
+}
+
+/* Replace all labels with a distinct color */
+label {
+    color: #586e75 !important;
+}
+```
+
+See `nmrs-ui/src/style.css` for any custom widget labels I currently use.
+
+#
 
 This project is still in development. If you would like to contribute, please read the [contribution guide](./CONTRIBUTING.md). Here's a quick list of setup steps to get you started:
 
