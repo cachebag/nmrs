@@ -1,8 +1,10 @@
 use gtk::gdk::Display;
 use gtk::gio::File;
 use gtk::{CssProvider, STYLE_PROVIDER_PRIORITY_APPLICATION, STYLE_PROVIDER_PRIORITY_USER};
+use std::fs;
+use std::io::Write;
 
-fn load_user_css_if_exists(display: &Display) {
+fn load_user_css_if_exists(display: &Display, default: &str) {
     let path = dirs::config_dir()
         .unwrap_or_default()
         .join("nmrs/style.css");
@@ -18,6 +20,14 @@ fn load_user_css_if_exists(display: &Display) {
             &provider,
             STYLE_PROVIDER_PRIORITY_USER,
         );
+    } else {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+
+        let mut f = fs::File::create(&path).expect("Failed to create CSS file");
+        f.write_all(default.as_bytes())
+            .expect("Failed to write default CSS");
     }
 }
 
@@ -35,5 +45,5 @@ pub fn load_css() {
         STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
 
-    load_user_css_if_exists(&display);
+    load_user_css_if_exists(&display, css);
 }
