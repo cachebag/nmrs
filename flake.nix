@@ -48,6 +48,13 @@
               fd
               fzf
               bat
+
+              pkg-config
+              libxkbcommon
+              glib
+              gobject-introspection
+              gtk4
+              libadwaita
             ];
             RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
 
