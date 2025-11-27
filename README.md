@@ -4,7 +4,7 @@
   <h3>Wayland-native frontend for NetworkManager. Provides a GTK4 UI and a D-Bus proxy core, built in Rust.</h3>
 </div>
 <p align="center">
-  <img width="1080" height="606" alt="image" src="https://github.com/user-attachments/assets/8e76a3ca-bdfc-4e7d-99ce-c7309e5f7600" />
+  <img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/276b448d-8a7d-4b66-9318-160b2c966571" />
 </p>
 
 # 
