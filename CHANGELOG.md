@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Write `.css` file for user by default ([#58](https://github.com/cachebag/nmrs/pull/58))
 - CI: Nix derivation test ([#57](https://github.com/cachebag/nmrs/pull/57))
+- Config: Nix installation deps ([#60](https://github.com/cachebag/nmrs/pull/60))
 
 ## [0.1.1-beta] - 2025-11-21
 
