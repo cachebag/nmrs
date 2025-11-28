@@ -250,12 +250,50 @@ async fn refresh_networks(
             });
 
             status.set_text("");
+
+            let refresh_callback = {
+                let list_container_clone = list_container.clone();
+                let status_clone = status.clone();
+                let pw_clone = pw.clone();
+                let stack_clone = stack.clone();
+                let is_scanning_clone = is_scanning.clone();
+
+                std::rc::Rc::new(move || {
+                    let list_container = list_container_clone.clone();
+                    let status = status_clone.clone();
+                    let pw = pw_clone.clone();
+                    let stack = stack_clone.clone();
+                    let is_scanning = is_scanning_clone.clone();
+
+                    glib::MainContext::default().spawn_local(async move {
+                        match NetworkManager::new().await {
+                            Ok(nm) => {
+                                refresh_networks(
+                                    &nm,
+                                    &list_container,
+                                    &status,
+                                    &pw,
+                                    &stack,
+                                    &is_scanning,
+                                )
+                                .await;
+                            }
+                            Err(e) => {
+                                status.set_text(&format!("Error: {e}"));
+                            }
+                        }
+                    });
+                })
+            };
+
             let list: ListBox = networks::networks_view(
                 &nets,
                 pw,
                 stack,
                 current_ssid.as_deref(),
                 current_band.as_deref(),
+                refresh_callback,
+                status,
             );
             list_container.append(&list);
             stack.set_visible_child_name("networks");

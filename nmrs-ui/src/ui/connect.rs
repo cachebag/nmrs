@@ -9,7 +9,12 @@ use nmrs_core::{
 };
 use std::rc::Rc;
 
-pub fn connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
+pub fn connect_modal(
+    parent: &ApplicationWindow,
+    ssid: &str,
+    is_eap: bool,
+    on_connection_success: Rc<dyn Fn()>,
+) {
     let ssid_owned = ssid.to_string();
     let parent_weak = parent.downgrade();
 
@@ -23,12 +28,17 @@ pub fn connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
         }
 
         if let Some(parent) = parent_weak.upgrade() {
-            draw_connect_modal(&parent, &ssid_owned, is_eap);
+            draw_connect_modal(&parent, &ssid_owned, is_eap, on_connection_success);
         }
     });
 }
 
-fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
+fn draw_connect_modal(
+    parent: &ApplicationWindow,
+    ssid: &str,
+    is_eap: bool,
+    on_connection_success: Rc<dyn Fn()>,
+) {
     let dialog = Dialog::new();
     dialog.set_title(Some("Connect to Network"));
     dialog.set_transient_for(Some(parent));
@@ -75,6 +85,7 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
     {
         let dialog_rc = dialog_rc.clone();
         let status_label = status_label.clone();
+        let refresh_callback = on_connection_success.clone();
 
         entry.connect_activate(move |entry| {
             let pwd = entry.text().to_string();
@@ -88,6 +99,7 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
             let status = status_label.clone();
             let entry_clone = entry.clone();
             let user_entry_clone2 = user_entry_clone.clone();
+            let on_success = refresh_callback.clone();
 
             entry.set_sensitive(false);
             if let Some(ref user_entry) = user_entry_clone2 {
@@ -125,6 +137,7 @@ fn draw_connect_modal(parent: &ApplicationWindow, ssid: &str, is_eap: bool) {
                             Ok(_) => {
                                 println!("nm.connect() succeeded!");
                                 status.set_text("✓ Connected!");
+                                on_success();
                                 glib::timeout_future_seconds(1).await;
                                 dialog.close();
                             }

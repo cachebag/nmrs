@@ -5,6 +5,7 @@ use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
 use nmrs_core::models::WifiSecurity;
 use nmrs_core::{NetworkManager, models};
+use std::rc::Rc;
 
 use crate::ui::connect;
 use crate::ui::network_page::network_page;
@@ -15,6 +16,8 @@ pub fn networks_view(
     stack: &gtk::Stack,
     current_ssid: Option<&str>,
     current_band: Option<&str>,
+    on_connection_success: Rc<dyn Fn()>,
+    status: &Label,
 ) -> ListBox {
     let conn_threshold = 75;
     let list = ListBox::new();
@@ -64,6 +67,8 @@ pub fn networks_view(
         let row = ListBoxRow::new();
         let hbox = Box::new(Orientation::Horizontal, 6);
         let gesture = GestureClick::new();
+        let on_success = on_connection_success.clone();
+        let status_label = status.clone();
 
         row.add_css_class("network-selection");
 
@@ -167,10 +172,22 @@ pub fn networks_view(
         gesture.connect_pressed(clone!(
             #[weak]
             parent_window,
+            #[weak]
+            list,
+            #[strong]
+            on_success,
+            #[strong]
+            status_label,
             move |_, n_press, _x, _y| {
                 if n_press == 2 {
                     let ssid2 = ssid_str.clone();
                     let window = parent_window.clone();
+                    let refresh_callback = on_success.clone();
+                    let status = status_label.clone();
+                    let list_ref = list.clone();
+
+                    status.set_text(&format!("Connecting to {ssid2}..."));
+                    list_ref.set_sensitive(false);
 
                     glib::MainContext::default().spawn_local(async move {
                         match NetworkManager::new().await {
@@ -180,25 +197,53 @@ pub fn networks_view(
                                         nm.has_saved_connection(&ssid2).await.unwrap_or(false);
 
                                     if have {
-                                        let creds = WifiSecurity::WpaPsk {
-                                            psk: "".into(), // TODO: NM will use saved secrets
-                                        };
-                                        let _ = nm.connect(&ssid2, creds).await;
+                                        let creds = WifiSecurity::WpaPsk { psk: "".into() };
+                                        match nm.connect(&ssid2, creds).await {
+                                            Ok(_) => {
+                                                eprintln!("Successfully connected to {ssid2}");
+                                                status.set_text("");
+                                                list_ref.set_sensitive(true);
+                                                refresh_callback();
+                                            }
+                                            Err(e) => {
+                                                eprintln!("Failed to connect to {ssid2}: {e}");
+                                                status.set_text(&format!("Failed to connect: {e}"));
+                                                list_ref.set_sensitive(true);
+                                            }
+                                        }
                                     } else {
-                                        connect::connect_modal(&window, &ssid2, is_eap);
+                                        status.set_text("");
+                                        list_ref.set_sensitive(true);
+                                        connect::connect_modal(
+                                            &window,
+                                            &ssid2,
+                                            is_eap,
+                                            refresh_callback,
+                                        );
                                     }
                                 } else {
                                     eprintln!("Connecting to open network: {ssid2}");
                                     let creds = WifiSecurity::Open;
                                     match nm.connect(&ssid2, creds).await {
-                                        Ok(_) => eprintln!("Successfully connected to {ssid2}"),
+                                        Ok(_) => {
+                                            eprintln!("Successfully connected to {ssid2}");
+                                            status.set_text("");
+                                            list_ref.set_sensitive(true);
+                                            refresh_callback();
+                                        }
                                         Err(e) => {
-                                            eprintln!("Failed to connect to {ssid2}: {e}")
+                                            eprintln!("Failed to connect to {ssid2}: {e}");
+                                            status.set_text(&format!("Failed to connect: {e}"));
+                                            list_ref.set_sensitive(true);
                                         }
                                     }
                                 }
                             }
-                            Err(e) => eprintln!("nm init fail: {e}"),
+                            Err(e) => {
+                                eprintln!("nm init fail: {e}");
+                                status.set_text(&format!("Error: {e}"));
+                                list_ref.set_sensitive(true);
+                            }
                         }
                     });
                 }
