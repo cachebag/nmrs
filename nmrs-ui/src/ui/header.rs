@@ -258,7 +258,7 @@ async fn refresh_networks(
                 let stack_clone = stack.clone();
                 let is_scanning_clone = is_scanning.clone();
 
-                std::rc::Rc::new(move || {
+                Rc::new(move || {
                     let list_container = list_container_clone.clone();
                     let status = status_clone.clone();
                     let pw = pw_clone.clone();
