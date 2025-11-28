@@ -64,7 +64,19 @@
             '';
           };
 
-        packages.default = naersk-package.buildPackage ./.;
+        packages.default = naersk-package.buildPackage {
+          pname = "nmrs";
+          src = ./.;
+
+          buildInputs = with pkgs; [
+            pkg-config
+            wrapGAppsHook4
+            libxkbcommon
+            glib
+          ];
+
+          meta.mainProgram = "nmrs-ui";
+        };
       }
     );
 }
