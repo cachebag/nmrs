@@ -1,4 +1,4 @@
-name: Nix Derivation Test
+name: Nix Derivation
 on:
   pull_request:
   push:

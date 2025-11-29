@@ -10,6 +10,7 @@ use nmrs_core::{
 use std::rc::Rc;
 
 pub fn connect_modal(
+    nm: Rc<NetworkManager>,
     parent: &ApplicationWindow,
     ssid: &str,
     is_eap: bool,
@@ -19,8 +20,7 @@ pub fn connect_modal(
     let parent_weak = parent.downgrade();
 
     glib::MainContext::default().spawn_local(async move {
-        if let Ok(nm) = NetworkManager::new().await
-            && let Some(current) = nm.current_ssid().await
+        if let Some(current) = nm.current_ssid().await
             && current == ssid_owned
         {
             println!("Already connected to {current}, skipping modal");
@@ -28,12 +28,13 @@ pub fn connect_modal(
         }
 
         if let Some(parent) = parent_weak.upgrade() {
-            draw_connect_modal(&parent, &ssid_owned, is_eap, on_connection_success);
+            draw_connect_modal(nm, &parent, &ssid_owned, is_eap, on_connection_success);
         }
     });
 }
 
 fn draw_connect_modal(
+    nm: Rc<NetworkManager>,
     parent: &ApplicationWindow,
     ssid: &str,
     is_eap: bool,
@@ -86,6 +87,7 @@ fn draw_connect_modal(
         let dialog_rc = dialog_rc.clone();
         let status_label = status_label.clone();
         let refresh_callback = on_connection_success.clone();
+        let nm = nm.clone();
 
         entry.connect_activate(move |entry| {
             let pwd = entry.text().to_string();
@@ -97,83 +99,65 @@ fn draw_connect_modal(
             let ssid = ssid_owned.clone();
             let dialog = dialog_rc.clone();
             let status = status_label.clone();
-            let entry_clone = entry.clone();
-            let user_entry_clone2 = user_entry_clone.clone();
+            let entry = entry.clone();
+            let user_entry = user_entry_clone.clone();
             let on_success = refresh_callback.clone();
+            let nm = nm.clone();
 
             entry.set_sensitive(false);
-            if let Some(ref user_entry) = user_entry_clone2 {
+            if let Some(ref user_entry) = user_entry {
                 user_entry.set_sensitive(false);
             }
             status.set_text("Connecting...");
 
             glib::MainContext::default().spawn_local(async move {
-                eprintln!("---in spawned task here--");
-                eprintln!("Creating NetworkManager");
+                let creds = if is_eap {
+                    WifiSecurity::WpaEap {
+                        opts: EapOptions {
+                            identity: username,
+                            password: pwd,
+                            anonymous_identity: None,
+                            domain_suffix_match: None,
+                            ca_cert_path: None,
+                            system_ca_certs: true,
+                            method: EapMethod::Peap,
+                            phase2: Phase2::Mschapv2,
+                        },
+                    }
+                } else {
+                    WifiSecurity::WpaPsk { psk: pwd }
+                };
 
-                match NetworkManager::new().await {
-                    Ok(nm) => {
-                        println!("NetworkManager created successfully");
-
-                        let creds = if is_eap {
-                            WifiSecurity::WpaEap {
-                                opts: EapOptions {
-                                    identity: username,
-                                    password: pwd,
-                                    anonymous_identity: None,
-                                    domain_suffix_match: None,
-                                    ca_cert_path: None,
-                                    system_ca_certs: true,
-                                    method: EapMethod::Peap,
-                                    phase2: Phase2::Mschapv2,
-                                },
-                            }
-                        } else {
-                            WifiSecurity::WpaPsk { psk: pwd }
-                        };
-
-                        println!("Calling nm.connect() for '{ssid}'");
-                        match nm.connect(&ssid, creds).await {
-                            Ok(_) => {
-                                println!("nm.connect() succeeded!");
-                                status.set_text("✓ Connected!");
-                                on_success();
-                                glib::timeout_future_seconds(1).await;
-                                dialog.close();
-                            }
-                            Err(err) => {
-                                eprintln!("nm.connect() failed: {err}");
-                                let err_str = err.to_string().to_lowercase();
-                                if err_str.contains("authentication")
-                                    || err_str.contains("supplicant")
-                                    || err_str.contains("password")
-                                    || err_str.contains("psk")
-                                    || err_str.contains("wrong")
-                                {
-                                    status.set_text("Wrong password, try again");
-                                    entry_clone.set_text("");
-                                    entry_clone.grab_focus();
-                                } else {
-                                    status.set_text(&format!("✗ Failed: {err}"));
-                                }
-                                entry_clone.set_sensitive(true);
-                                if let Some(ref user_entry) = user_entry_clone2 {
-                                    user_entry.set_sensitive(true);
-                                }
-                            }
-                        }
+                println!("Calling nm.connect() for '{ssid}'");
+                match nm.connect(&ssid, creds).await {
+                    Ok(_) => {
+                        println!("nm.connect() succeeded!");
+                        status.set_text("✓ Connected!");
+                        on_success();
+                        glib::timeout_future_seconds(1).await;
+                        dialog.close();
                     }
                     Err(err) => {
-                        eprintln!("Failed to create NetworkManager: {err}");
-                        status.set_text(&format!("✗ Error: {err}"));
-                        entry_clone.set_sensitive(true);
-                        if let Some(ref user_entry) = user_entry_clone2 {
+                        eprintln!("nm.connect() failed: {err}");
+                        let err_str = err.to_string().to_lowercase();
+                        if err_str.contains("authentication")
+                            || err_str.contains("supplicant")
+                            || err_str.contains("password")
+                            || err_str.contains("psk")
+                            || err_str.contains("wrong")
+                        {
+                            status.set_text("Wrong password, try again");
+                            entry.set_text("");
+                            entry.grab_focus();
+                        } else {
+                            status.set_text(&format!("✗ Failed: {err}"));
+                        }
+                        entry.set_sensitive(true);
+                        if let Some(ref user_entry) = user_entry {
                             user_entry.set_sensitive(true);
                         }
                     }
                 }
-
-                println!("---finished spawned task---");
             });
         });
     }

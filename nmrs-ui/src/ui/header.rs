@@ -1,25 +1,21 @@
 use glib::clone;
 use gtk::prelude::*;
 use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
-use nmrs_core::NetworkManager;
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::ui::networks;
+use crate::ui::networks::NetworksContext;
 
 pub fn build_header(
-    status: &Label,
+    ctx: Rc<NetworksContext>,
     list_container: &GtkBox,
-    parent_window: &gtk::ApplicationWindow,
-    stack: &gtk::Stack,
     is_scanning: Rc<Cell<bool>>,
 ) -> HeaderBar {
     let header = HeaderBar::new();
     header.set_show_title_buttons(false);
 
-    let parent_window = parent_window.clone();
-    let status = status.clone();
     let list_container = list_container.clone();
 
     let wifi_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -37,43 +33,18 @@ pub fn build_header(
     refresh_btn.connect_clicked(clone!(
         #[weak]
         list_container,
-        #[weak]
-        status,
-        #[weak]
-        parent_window,
-        #[weak]
-        stack,
+        #[strong]
+        ctx,
         #[strong]
         is_scanning,
         move |_| {
-            glib::MainContext::default().spawn_local(clone!(
-                #[strong]
-                list_container,
-                #[strong]
-                status,
-                #[strong]
-                parent_window,
-                #[strong]
-                stack,
-                #[strong]
-                is_scanning,
-                async move {
-                    match NetworkManager::new().await {
-                        Ok(nm) => {
-                            refresh_networks(
-                                &nm,
-                                &list_container,
-                                &status,
-                                &parent_window,
-                                &stack,
-                                &is_scanning,
-                            )
-                            .await;
-                        }
-                        Err(err) => status.set_text(&format!("Error: {err}")),
-                    }
-                }
-            ));
+            let ctx = ctx.clone();
+            let list_container = list_container.clone();
+            let is_scanning = is_scanning.clone();
+
+            glib::MainContext::default().spawn_local(async move {
+                refresh_networks(ctx, &list_container, &is_scanning).await;
+            });
         }
     ));
 
@@ -82,88 +53,56 @@ pub fn build_header(
     header.pack_end(&wifi_switch);
     wifi_switch.set_size_request(24, 24);
 
-    header.pack_end(&status);
+    header.pack_end(&ctx.status);
 
-    // Initialize Wi-Fi state
-    // This runs once on startup
     {
-        let list_container_clone = list_container.clone();
-        let status_clone = status.clone();
-        let wifi_switch_clone = wifi_switch.clone();
-        let pw = parent_window.clone();
-        let stack_clone = stack.clone();
-        let is_scanning_clone = is_scanning.clone();
+        let list_container = list_container.clone();
+        let wifi_switch = wifi_switch.clone();
+        let ctx = ctx.clone();
+        let is_scanning = is_scanning.clone();
 
         glib::MainContext::default().spawn_local(async move {
-            stack_clone.set_visible_child_name("loading");
-            clear_children(&list_container_clone);
+            ctx.stack.set_visible_child_name("loading");
+            clear_children(&list_container);
 
-            match NetworkManager::new().await {
-                Ok(nm) => match nm.wifi_enabled().await {
-                    Ok(enabled) => {
-                        wifi_switch_clone.set_active(enabled);
-                        if enabled {
-                            refresh_networks(
-                                &nm,
-                                &list_container_clone,
-                                &status_clone,
-                                &pw,
-                                &stack_clone,
-                                &is_scanning_clone,
-                            )
-                            .await;
-                        }
+            match ctx.nm.wifi_enabled().await {
+                Ok(enabled) => {
+                    wifi_switch.set_active(enabled);
+                    if enabled {
+                        refresh_networks(ctx, &list_container, &is_scanning).await;
                     }
-                    Err(err) => {
-                        status_clone.set_text(&format!("Error fetching networks: {err}"));
-                    }
-                },
-                Err(err) => status_clone.set_text(&format!("Error: {err}")),
+                }
+                Err(err) => {
+                    ctx.status
+                        .set_text(&format!("Error fetching networks: {err}"));
+                }
             }
         })
     };
 
-    // Handle Wi-Fi toggle changes
-    // This runs whenever the user toggles the switch
     {
-        let pw2 = parent_window.clone();
-        let stack_clone = stack.clone();
+        let ctx = ctx.clone();
 
         wifi_switch.connect_active_notify(move |sw| {
-            let pw = pw2.clone();
-            let list_container_clone = list_container.clone();
-            let status_clone = status.clone();
+            let ctx = ctx.clone();
+            let list_container = list_container.clone();
             let sw = sw.clone();
-            let stack_inner = stack_clone.clone();
-            let is_scanning_clone = is_scanning.clone();
+            let is_scanning = is_scanning.clone();
 
             glib::MainContext::default().spawn_local(async move {
-                clear_children(&list_container_clone);
+                clear_children(&list_container);
 
-                match NetworkManager::new().await {
-                    Ok(nm) => {
-                        if let Err(err) = nm.set_wifi_enabled(sw.is_active()).await {
-                            status_clone.set_text(&format!("Error setting Wi-Fi: {err}"));
-                            return;
-                        }
+                if let Err(err) = ctx.nm.set_wifi_enabled(sw.is_active()).await {
+                    ctx.status.set_text(&format!("Error setting Wi-Fi: {err}"));
+                    return;
+                }
 
-                        if sw.is_active() {
-                            if nm.wait_for_wifi_ready().await.is_ok() {
-                                refresh_networks(
-                                    &nm,
-                                    &list_container_clone,
-                                    &status_clone,
-                                    &pw,
-                                    &stack_inner,
-                                    &is_scanning_clone,
-                                )
-                                .await;
-                            } else {
-                                status_clone.set_text("Wi-Fi failed to initialize");
-                            }
-                        }
+                if sw.is_active() {
+                    if ctx.nm.wait_for_wifi_ready().await.is_ok() {
+                        refresh_networks(ctx, &list_container, &is_scanning).await;
+                    } else {
+                        ctx.status.set_text("Wi-Fi failed to initialize");
                     }
-                    Err(err) => status_clone.set_text(&format!("Error: {err}")),
                 }
             });
         });
@@ -172,32 +111,29 @@ pub fn build_header(
     header
 }
 
-async fn refresh_networks(
-    nm: &NetworkManager,
+pub async fn refresh_networks(
+    ctx: Rc<NetworksContext>,
     list_container: &GtkBox,
-    status: &Label,
-    pw: &gtk::ApplicationWindow,
-    stack: &gtk::Stack,
     is_scanning: &Rc<Cell<bool>>,
 ) {
     if is_scanning.get() {
-        status.set_text("Scan already in progress");
+        ctx.status.set_text("Scan already in progress");
         return;
     }
     is_scanning.set(true);
 
     clear_children(list_container);
-    status.set_text("Scanning...");
+    ctx.status.set_text("Scanning...");
 
-    if let Err(err) = nm.scan_networks().await {
-        status.set_text(&format!("Scan failed: {err}"));
+    if let Err(err) = ctx.nm.scan_networks().await {
+        ctx.status.set_text(&format!("Scan failed: {err}"));
         is_scanning.set(false);
         return;
     }
 
     let mut last_len = 0;
     for _ in 0..5 {
-        let nets = nm.list_networks().await.unwrap_or_default();
+        let nets = ctx.nm.list_networks().await.unwrap_or_default();
         if nets.len() == last_len && last_len > 0 {
             break;
         }
@@ -205,9 +141,9 @@ async fn refresh_networks(
         glib::timeout_future_seconds(1).await;
     }
 
-    match nm.list_networks().await {
+    match ctx.nm.list_networks().await {
         Ok(mut nets) => {
-            let current_conn = nm.current_connection_info().await;
+            let current_conn = ctx.nm.current_connection_info().await;
             let (current_ssid, current_band) = if let Some((ssid, freq)) = current_conn {
                 let ssid_str = ssid.clone();
                 let band: Option<String> = freq.map(|f| {
@@ -249,56 +185,20 @@ async fn refresh_networks(
                 seen_combinations.insert(key)
             });
 
-            status.set_text("");
-
-            let refresh_callback = {
-                let list_container_clone = list_container.clone();
-                let status_clone = status.clone();
-                let pw_clone = pw.clone();
-                let stack_clone = stack.clone();
-                let is_scanning_clone = is_scanning.clone();
-
-                Rc::new(move || {
-                    let list_container = list_container_clone.clone();
-                    let status = status_clone.clone();
-                    let pw = pw_clone.clone();
-                    let stack = stack_clone.clone();
-                    let is_scanning = is_scanning_clone.clone();
-
-                    glib::MainContext::default().spawn_local(async move {
-                        match NetworkManager::new().await {
-                            Ok(nm) => {
-                                refresh_networks(
-                                    &nm,
-                                    &list_container,
-                                    &status,
-                                    &pw,
-                                    &stack,
-                                    &is_scanning,
-                                )
-                                .await;
-                            }
-                            Err(e) => {
-                                status.set_text(&format!("Error: {e}"));
-                            }
-                        }
-                    });
-                })
-            };
+            ctx.status.set_text("");
 
             let list: ListBox = networks::networks_view(
+                ctx.clone(),
                 &nets,
-                pw,
-                stack,
                 current_ssid.as_deref(),
                 current_band.as_deref(),
-                refresh_callback,
-                status,
             );
             list_container.append(&list);
-            stack.set_visible_child_name("networks");
+            ctx.stack.set_visible_child_name("networks");
         }
-        Err(err) => status.set_text(&format!("Error fetching networks: {err}")),
+        Err(err) => ctx
+            .status
+            .set_text(&format!("Error fetching networks: {err}")),
     }
 
     is_scanning.set(false);
