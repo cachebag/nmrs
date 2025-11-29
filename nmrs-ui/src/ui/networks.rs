@@ -53,17 +53,7 @@ pub fn networks_view(
             }
             // If we have band info, check it matches
             if let Some(band) = current_band {
-                let net_band = net.frequency.map(|freq| {
-                    if (2400..=2500).contains(&freq) {
-                        "2.4GHz"
-                    } else if (5000..=6000).contains(&freq) {
-                        "5GHz"
-                    } else if (5925..=7125).contains(&freq) {
-                        "6GHz"
-                    } else {
-                        "unknown"
-                    }
-                });
+                let net_band = freq_to_band(net.frequency.unwrap_or_default());
                 return net_band == Some(band);
             }
             // If no band info, just match SSID (fallback)
@@ -98,16 +88,11 @@ pub fn networks_view(
 
         // Add band suffix for display only
         let display_name = if let Some(freq) = net.frequency {
-            let band = if (2400..=2500).contains(&freq) {
-                " (2.4GHz)"
-            } else if (5000..=6000).contains(&freq) {
-                " (5GHz)"
-            } else if (5925..=7125).contains(&freq) {
-                " (6GHz)"
+            if let Some(band) = freq_to_band(freq) {
+                format!("{} ({})", net.ssid, band)
             } else {
-                ""
-            };
-            format!("{}{}", net.ssid, band)
+                net.ssid.clone()
+            }
         } else {
             net.ssid.clone()
         };
@@ -246,4 +231,13 @@ pub fn networks_view(
         list.append(&row);
     }
     list
+}
+
+fn freq_to_band(freq: u32) -> Option<&'static str> {
+    match freq {
+        2400..=2500 => Some("2.4GHz"),
+        5000..=5900 => Some("5GHz"),
+        5901..=7125 => Some("6GHz"),
+        _ => None,
+    }
 }
