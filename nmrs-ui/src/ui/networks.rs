@@ -46,29 +46,11 @@ pub fn networks_view(
     let conn_threshold = 75;
     let list = ListBox::new();
 
-    // Helper function to check if a network is connected (matches both SSID and band)
-    let is_connected = |net: &models::Network| -> bool {
-        if let Some(ssid) = current_ssid {
-            if ssid != net.ssid {
-                return false;
-            }
-            // If we have band info, check it matches
-            if let Some(band) = current_band {
-                let net_band = freq_to_band(net.frequency.unwrap_or_default());
-                return net_band == Some(band);
-            }
-            // If no band info, just match SSID (fallback)
-            true
-        } else {
-            false
-        }
-    };
-
     // Sort networks: connected network first, then by signal strength (descending)
     let mut sorted_networks = networks.to_vec();
     sorted_networks.sort_by(|a, b| {
-        let a_connected = is_connected(a);
-        let b_connected = is_connected(b);
+        let a_connected = is_current_network(a, current_ssid, current_band);
+        let b_connected = is_current_network(b, current_ssid, current_band);
 
         match (a_connected, b_connected) {
             (true, false) => std::cmp::Ordering::Less,
@@ -83,24 +65,18 @@ pub fn networks_view(
 
         row.add_css_class("network-selection");
 
-        if is_connected(&net) {
+        if is_current_network(&net, current_ssid, current_band) {
             row.add_css_class("connected");
         }
 
-        // Add band suffix for display only
-        let display_name = if let Some(freq) = net.frequency {
-            if let Some(band) = freq_to_band(freq) {
-                format!("{} ({})", net.ssid, band)
-            } else {
-                net.ssid.clone()
-            }
-        } else {
-            net.ssid.clone()
+        let display_name = match net.frequency.and_then(freq_to_band) {
+            Some(band) => format!("{} ({band})", net.ssid),
+            None => net.ssid.clone(),
         };
 
         hbox.append(&Label::new(Some(&display_name)));
 
-        if is_connected(&net) {
+        if is_current_network(&net, current_ssid, current_band) {
             let connected_label = Label::new(Some("Connected"));
             connected_label.add_css_class("connected-label");
             hbox.append(&connected_label);
@@ -241,4 +217,27 @@ fn freq_to_band(freq: u32) -> Option<&'static str> {
         5901..=7125 => Some("6GHz"),
         _ => None,
     }
+}
+
+fn is_current_network(
+    net: &models::Network,
+    current_ssid: Option<&str>,
+    current_band: Option<&str>,
+) -> bool {
+    let ssid = match current_ssid {
+        Some(s) => s,
+        None => return false,
+    };
+
+    if net.ssid != ssid {
+        return false;
+    }
+
+    if let Some(band) = current_band {
+        let net_band = net.frequency.and_then(freq_to_band);
+
+        return net_band == Some(band);
+    }
+
+    true
 }
