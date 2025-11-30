@@ -1,3 +1,4 @@
+use anyhow::Result;
 use gtk::Align;
 use gtk::GestureClick;
 use gtk::prelude::*;
@@ -23,16 +24,16 @@ impl NetworksContext {
         status: &Label,
         stack: &gtk::Stack,
         parent_window: &gtk::ApplicationWindow,
-    ) -> Self {
-        let nm = Rc::new(NetworkManager::new().await.unwrap());
+    ) -> Result<Self> {
+        let nm = Rc::new(NetworkManager::new().await?);
 
-        Self {
+        Ok(Self {
             nm,
             on_success,
             status: status.clone(),
             stack: stack.clone(),
             parent_window: parent_window.clone(),
-        }
+        })
     }
 }
 
