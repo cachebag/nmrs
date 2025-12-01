@@ -10,6 +10,14 @@ use std::rc::Rc;
 use crate::ui::connect;
 use crate::ui::network_page::NetworkPage;
 
+pub struct NetworkRowController {
+    pub row: gtk::ListBoxRow,
+    pub arrow: gtk::Image,
+    pub ctx: Rc<NetworksContext>,
+    pub net: models::Network,
+    pub details_page: Rc<NetworkPage>,
+}
+
 pub struct NetworksContext {
     pub nm: Rc<NetworkManager>,
     pub on_success: Rc<dyn Fn()>,
@@ -34,6 +42,114 @@ impl NetworksContext {
             stack: stack.clone(),
             parent_window: parent_window.clone(),
         })
+    }
+}
+
+impl NetworkRowController {
+    pub fn new(
+        row: gtk::ListBoxRow,
+        arrow: gtk::Image,
+        ctx: Rc<NetworksContext>,
+        net: models::Network,
+        details_page: Rc<NetworkPage>,
+    ) -> Self {
+        Self {
+            row,
+            arrow,
+            ctx,
+            net,
+            details_page,
+        }
+    }
+
+    pub fn attach(&self) {
+        self.attach_arrow();
+        self.attach_row_double();
+    }
+
+    fn attach_arrow(&self) {
+        let click = GestureClick::new();
+
+        let ctx = self.ctx.clone();
+        let net = self.net.clone();
+        let stack = self.ctx.stack.clone();
+        let page = self.details_page.clone();
+
+        click.connect_pressed(move |_, _, _, _| {
+            let ctx_c = ctx.clone();
+            let net_c = net.clone();
+            let stack_c = stack.clone();
+            let page_c = page.clone();
+
+            glib::MainContext::default().spawn_local(async move {
+                if let Ok(info) = ctx_c.nm.show_details(&net_c).await {
+                    page_c.update(&info);
+                    stack_c.set_visible_child_name("details");
+                }
+            });
+        });
+
+        self.arrow.add_controller(click);
+    }
+
+    fn attach_row_double(&self) {
+        let click = GestureClick::new();
+
+        let ctx = self.ctx.clone();
+        let net = self.net.clone();
+        let ssid = net.ssid.clone();
+        let secured = net.secured;
+        let is_eap = net.is_eap;
+
+        let status = ctx.status.clone();
+        let window = ctx.parent_window.clone();
+        let on_success = ctx.on_success.clone();
+
+        click.connect_pressed(move |_, n, _, _| {
+            if n != 2 {
+                return;
+            }
+
+            status.set_text(&format!("Connecting to {ssid}..."));
+
+            let ssid_c = ssid.clone();
+            let nm_c = ctx.nm.clone();
+            let status_c = status.clone();
+            let window_c = window.clone();
+            let on_success_c = on_success.clone();
+
+            glib::MainContext::default().spawn_local(async move {
+                if secured {
+                    let have = nm_c.has_saved_connection(&ssid_c).await.unwrap_or(false);
+
+                    if have {
+                        let creds = WifiSecurity::WpaPsk { psk: "".into() };
+                        match nm_c.connect(&ssid_c, creds).await {
+                            Ok(_) => on_success_c(),
+                            Err(e) => status_c.set_text(&format!("Failed to connect: {e}")),
+                        }
+                    } else {
+                        connect::connect_modal(
+                            nm_c.clone(),
+                            &window_c,
+                            &ssid_c,
+                            is_eap,
+                            on_success_c.clone(),
+                        );
+                    }
+                } else {
+                    let creds = WifiSecurity::Open;
+                    match nm_c.connect(&ssid_c, creds).await {
+                        Ok(_) => on_success_c(),
+                        Err(e) => status_c.set_text(&format!("Failed to connect: {e}")),
+                    }
+                }
+
+                status_c.set_text("");
+            });
+        });
+
+        self.row.add_controller(click);
     }
 }
 
@@ -120,91 +236,20 @@ pub fn networks_view(
         arrow.set_halign(Align::End);
         arrow.add_css_class("network-arrow");
         arrow.set_cursor_from_name(Some("pointer"));
-
-        let ctx_details = ctx.clone();
-        let stack_for_details = ctx.stack.clone();
-        let net_clone = net.clone();
-        let details_page = details_page.clone();
-
-        let arrow_click = GestureClick::new();
-
-        arrow_click.connect_pressed(move |_, _, _, _| {
-            let ctx = ctx_details.clone();
-            let stack = stack_for_details.clone();
-            let net = net_clone.clone();
-            let details_page = details_page.clone();
-
-            glib::MainContext::default().spawn_local(async move {
-                let nm = ctx.nm.clone();
-
-                if let Ok(details) = nm.show_details(&net).await {
-                    details_page.update(&details);
-                    stack.set_visible_child_name("details");
-                }
-            });
-        });
-        arrow.add_controller(arrow_click);
-
-        // Double-click row to connect / open modal for secured networks
-        let ctx_click = ctx.clone();
-        let list_clone = list.clone();
-        let ssid_str = net.ssid.clone();
-        let secured = net.secured;
-        let is_eap = net.is_eap;
-
-        let gesture = GestureClick::new();
-        gesture.connect_pressed(move |_, n_press, _, _| {
-            if n_press == 2 {
-                let ssid = ssid_str.clone();
-                let nm = ctx_click.nm.clone();
-                let status = ctx_click.status.clone();
-                let window = ctx_click.parent_window.clone();
-                let list = list_clone.clone();
-                let on_success = ctx_click.on_success.clone();
-
-                status.set_text(&format!("Connecting to {ssid}..."));
-                list.set_sensitive(false);
-
-                glib::MainContext::default().spawn_local(async move {
-                    if secured {
-                        let have = nm.has_saved_connection(&ssid).await.unwrap_or(false);
-
-                        if have {
-                            let creds = WifiSecurity::WpaPsk { psk: "".into() };
-                            match nm.connect(&ssid, creds).await {
-                                Ok(_) => on_success(),
-                                Err(e) => status.set_text(&format!("Failed to connect: {e}")),
-                            }
-                            status.set_text("");
-                            list.set_sensitive(true);
-                        } else {
-                            list.set_sensitive(true);
-                            status.set_text("");
-                            connect::connect_modal(
-                                nm.clone(),
-                                &window,
-                                &ssid,
-                                is_eap,
-                                on_success.clone(),
-                            );
-                        }
-                    } else {
-                        eprintln!("Connecting to open network: {ssid}");
-                        let creds = WifiSecurity::Open;
-                        match nm.connect(&ssid, creds).await {
-                            Ok(_) => on_success(),
-                            Err(e) => status.set_text(&format!("Failed to connect: {e}")),
-                        }
-                        status.set_text("");
-                        list.set_sensitive(true);
-                    }
-                });
-            }
-        });
-        row.add_controller(gesture);
-
         hbox.append(&arrow);
+
         row.set_child(Some(&hbox));
+
+        let controller = NetworkRowController::new(
+            row.clone(),
+            arrow.clone(),
+            ctx.clone(),
+            net.clone(),
+            details_page.clone(),
+        );
+
+        controller.attach();
+
         list.append(&row);
     }
     list
