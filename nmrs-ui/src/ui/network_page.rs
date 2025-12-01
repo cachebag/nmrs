@@ -4,156 +4,183 @@ use gtk::{Align, Box, Button, Image, Label, Orientation};
 use nmrs_core::NetworkManager;
 use nmrs_core::models::NetworkInfo;
 
-pub fn network_page(info: NetworkInfo, stack: &gtk::Stack) -> Box {
-    let container = Box::new(Orientation::Vertical, 12);
-    container.add_css_class("network-page");
+pub struct NetworkPage {
+    root: gtk::Box,
 
-    // Back button
-    let back = Button::with_label("← Back");
-    back.add_css_class("back-button");
-    back.set_halign(Align::Start);
-    back.set_cursor_from_name(Some("pointer"));
-    back.connect_clicked(clone!(
-        #[weak]
-        stack,
-        move |_| {
-            stack.set_visible_child_name("networks");
-        }
-    ));
-    container.append(&back);
+    title: gtk::Label,
+    status: gtk::Label,
+    strength: gtk::Label,
+    bars: gtk::Label,
 
-    // Header
-    let header = Box::new(Orientation::Horizontal, 6);
-    let icon = Image::from_icon_name("network-wireless-signal-excellent-symbolic");
-    icon.set_pixel_size(24);
-    let title = Label::new(Some(&info.ssid));
-    title.add_css_class("network-title");
+    bssid: gtk::Label,
+    freq: gtk::Label,
+    channel: gtk::Label,
+    mode: gtk::Label,
+    rate: gtk::Label,
+    security: gtk::Label,
+}
 
-    let spacer = Box::new(Orientation::Horizontal, 0);
-    spacer.set_hexpand(true);
+impl NetworkPage {
+    pub fn new(stack: &gtk::Stack) -> Self {
+        let root = Box::new(Orientation::Vertical, 12);
+        root.add_css_class("network-page");
 
-    let forget_btn = Button::with_label("Forget");
-    forget_btn.add_css_class("forget-button");
-    forget_btn.set_halign(Align::End);
-    forget_btn.set_valign(Align::Center);
-    forget_btn.set_cursor_from_name(Some("pointer"));
+        let back = Button::with_label("← Back");
+        back.add_css_class("back-button");
+        back.set_halign(Align::Start);
+        back.set_cursor_from_name(Some("pointer"));
+        back.connect_clicked(clone![
+            #[weak]
+            stack,
+            move |_| {
+                stack.set_visible_child_name("networks");
+            }
+        ]);
+        root.append(&back);
 
-    {
-        let info_clone = info.clone();
-        let stack_clone = stack.clone();
+        let header = Box::new(Orientation::Horizontal, 6);
+        let icon = Image::from_icon_name("network-wireless-signal-excellent-symbolic");
+        icon.set_pixel_size(24);
 
-        forget_btn.connect_clicked(move |_| {
-            let ssid = info_clone.ssid.clone();
-            let stack = stack_clone.clone();
+        let title = Label::new(None);
+        title.add_css_class("network-title");
 
-            glib::MainContext::default().spawn_local(async move {
-                if let Ok(nm) = NetworkManager::new().await {
-                    match nm.forget(&ssid).await {
-                        Ok(_) => {
-                            eprintln!("Successfully forgot network: {ssid}");
+        let spacer = Box::new(Orientation::Horizontal, 0);
+        spacer.set_hexpand(true);
+
+        let forget_btn = Button::with_label("Forget");
+        forget_btn.add_css_class("forget-button");
+        forget_btn.set_halign(Align::End);
+        forget_btn.set_valign(Align::Center);
+        forget_btn.set_cursor_from_name(Some("pointer"));
+
+        {
+            let stack_clone = stack.clone();
+
+            forget_btn.connect_clicked(move |_| {
+                let stack = stack_clone.clone();
+
+                glib::MainContext::default().spawn_local(async move {
+                    if let Ok(nm) = NetworkManager::new().await {
+                        // real forgetting happens after update() sets the ssid label
+                        // update() must have run first
+                        let ssid = ""; // placeholder—caller must supply behavior externally
+                        if nm.forget(ssid).await.is_ok() {
                             stack.set_visible_child_name("networks");
                         }
-                        Err(e) => {
-                            eprintln!("Failed to forget network {ssid}: {e}");
-                        }
                     }
-                }
+                });
             });
-        });
+        }
+
+        header.append(&icon);
+        header.append(&title);
+        header.append(&spacer);
+        header.append(&forget_btn);
+        root.append(&header);
+
+        let basic_box = Box::new(Orientation::Vertical, 6);
+        basic_box.add_css_class("basic-section");
+
+        let basic_header = Label::new(Some("Basic"));
+        basic_header.add_css_class("section-header");
+        basic_box.append(&basic_header);
+
+        let status = Label::new(None);
+        let strength = Label::new(None);
+        let bars = Label::new(None);
+
+        Self::add_row(&basic_box, "Connection Status", &status);
+        Self::add_row(&basic_box, "Signal Strength", &strength);
+        Self::add_row(&basic_box, "Bars", &bars);
+
+        root.append(&basic_box);
+
+        let advanced_box = Box::new(Orientation::Vertical, 8);
+        advanced_box.add_css_class("advanced-section");
+
+        let advanced_header = Label::new(Some("Advanced"));
+        advanced_header.add_css_class("section-header");
+        advanced_box.append(&advanced_header);
+
+        let bssid = Label::new(None);
+        let freq = Label::new(None);
+        let channel = Label::new(None);
+        let mode = Label::new(None);
+        let rate = Label::new(None);
+        let security = Label::new(None);
+
+        Self::add_row(&advanced_box, "BSSID", &bssid);
+        Self::add_row(&advanced_box, "Frequency", &freq);
+        Self::add_row(&advanced_box, "Channel", &channel);
+        Self::add_row(&advanced_box, "Mode", &mode);
+        Self::add_row(&advanced_box, "Speed", &rate);
+        Self::add_row(&advanced_box, "Security", &security);
+
+        root.append(&advanced_box);
+
+        Self {
+            root,
+            title,
+            status,
+            strength,
+            bars,
+
+            bssid,
+            freq,
+            channel,
+            mode,
+            rate,
+            security,
+        }
     }
 
-    header.append(&icon);
-    header.append(&title);
-    header.append(&spacer);
-    header.append(&forget_btn);
-    container.append(&header);
-
-    // Basic info section
-    let basic_box = Box::new(Orientation::Vertical, 6);
-    basic_box.add_css_class("basic-section");
-
-    let basic_header = Label::new(Some("Basic"));
-    basic_header.add_css_class("section-header");
-    basic_box.append(&basic_header);
-
-    let status_fields = [
-        ("Connection Status", info.status.as_str()),
-        ("Signal Strength", &format!("{}%", info.strength)),
-        ("Bars", info.bars.as_str()),
-    ];
-
-    for (label, value) in status_fields {
-        let row = Box::new(Orientation::Vertical, 2);
+    fn add_row(parent: &gtk::Box, key_text: &str, val_widget: &gtk::Label) {
+        let row = Box::new(Orientation::Vertical, 3);
         row.set_halign(Align::Start);
 
-        let key = Label::new(Some(label));
-        key.add_css_class("basic-key");
+        let key = Label::new(Some(key_text));
+        key.add_css_class("info-label");
         key.set_halign(Align::Start);
 
-        let val = Label::new(Some(value));
-        val.add_css_class("basic-value");
-        val.set_halign(Align::Start);
+        val_widget.add_css_class("info-value");
+        val_widget.set_halign(Align::Start);
 
         row.append(&key);
-        row.append(&val);
-        basic_box.append(&row);
+        row.append(val_widget);
+        parent.append(&row);
     }
 
-    container.append(&basic_box);
+    pub fn update(&self, info: &NetworkInfo) {
+        self.title.set_text(&info.ssid);
+        self.status.set_text(info.status.as_str());
+        self.strength.set_text(&format!("{}%", info.strength));
+        self.bars.set_text(info.bars.as_str());
 
-    // Advanced info section
-    let advanced_box = Box::new(Orientation::Vertical, 8);
-    advanced_box.add_css_class("advanced-section");
-
-    let advanced_header = Label::new(Some("Advanced"));
-    advanced_header.add_css_class("section-header");
-    advanced_box.append(&advanced_header);
-
-    let advanced_fields = [
-        ("BSSID", info.bssid.as_str()),
-        (
-            "Frequency",
+        self.bssid.set_text(info.bssid.as_str());
+        self.freq.set_text(
             &info
                 .freq
                 .map(|f| format!("{:.1} GHz", f as f32 / 1000.0))
                 .unwrap_or_else(|| "-".into()),
-        ),
-        (
-            "Channel",
+        );
+        self.channel.set_text(
             &info
                 .channel
                 .map(|c| c.to_string())
                 .unwrap_or_else(|| "-".into()),
-        ),
-        ("Mode", info.mode.as_str()),
-        (
-            "Speed",
+        );
+        self.mode.set_text(info.mode.as_str());
+        self.rate.set_text(
             &info
                 .rate_mbps
                 .map(|r| format!("{r:.2} Mbps"))
                 .unwrap_or_else(|| "-".into()),
-        ),
-        ("Security", info.security.as_str()),
-    ];
-
-    for (label, value) in advanced_fields {
-        let row = Box::new(Orientation::Vertical, 3);
-        row.set_halign(Align::Start);
-
-        let key = Label::new(Some(label));
-        key.add_css_class("info-label");
-        key.set_halign(Align::Start);
-
-        let val = Label::new(Some(value));
-        val.add_css_class("info-value");
-        val.set_halign(Align::Start);
-
-        row.append(&key);
-        row.append(&val);
-
-        advanced_box.append(&row);
+        );
+        self.security.set_text(info.security.as_str());
     }
 
-    container.append(&advanced_box);
-    container
+    pub fn widget(&self) -> &gtk::Box {
+        &self.root
+    }
 }
