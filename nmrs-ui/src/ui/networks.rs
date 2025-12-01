@@ -8,7 +8,7 @@ use nmrs_core::{NetworkManager, models};
 use std::rc::Rc;
 
 use crate::ui::connect;
-use crate::ui::network_page::network_page;
+use crate::ui::network_page::NetworkPage;
 
 pub struct NetworksContext {
     pub nm: Rc<NetworkManager>,
@@ -58,6 +58,9 @@ pub fn networks_view(
             _ => b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)),
         }
     });
+
+    let details_page = Rc::new(NetworkPage::new(&ctx.stack));
+    ctx.stack.add_named(details_page.widget(), Some("details"));
 
     for net in sorted_networks {
         let row = ListBoxRow::new();
@@ -120,25 +123,22 @@ pub fn networks_view(
 
         let ctx_details = ctx.clone();
         let stack_for_details = ctx.stack.clone();
+        let net_clone = net.clone();
+        let details_page = details_page.clone();
 
         let arrow_click = GestureClick::new();
-        let net_clone = net.clone();
 
         arrow_click.connect_pressed(move |_, _, _, _| {
             let ctx = ctx_details.clone();
             let stack = stack_for_details.clone();
             let net = net_clone.clone();
+            let details_page = details_page.clone();
 
             glib::MainContext::default().spawn_local(async move {
                 let nm = ctx.nm.clone();
 
                 if let Ok(details) = nm.show_details(&net).await {
-                    let container = network_page(details, &stack);
-
-                    if let Some(old) = stack.child_by_name("details") {
-                        stack.remove(&old);
-                    }
-                    stack.add_named(&container, Some("details"));
+                    details_page.update(&details);
                     stack.set_visible_child_name("details");
                 }
             });
