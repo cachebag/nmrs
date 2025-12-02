@@ -1,6 +1,7 @@
 // Internal implementation modules (not exposed to external users)
 mod connection;
 mod connection_settings;
+mod constants;
 mod device;
 mod network_info;
 mod proxies;
