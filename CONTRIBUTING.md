@@ -28,7 +28,7 @@ I'm fairly accepting to all PR's, only with a couple caveats:
 When you've made changes and are ready to commit, I prefer that you follow the standards explained [here](https://www.conventionalcommits.org/en/v1.0.0/).
 
 I additionally request that you format your commits as such: <br>
-"a bug fix(on (some issue number)): changes made to fix bug", <br> i.e.
+"a bug fix((some issue number)): changes made to fix bug", <br> i.e.
 ```log
 fix(#24): fixed bug where something was happening
 ```
