@@ -101,6 +101,8 @@ pub enum ConnectionError {
     NotFound,
     #[error("Authentication failed")]
     AuthFailed,
+    #[error("Invalid UTF-8 in SSID: {0}")]
+    InvalidUtf8(#[from] std::str::Utf8Error),
 }
 
 impl From<u32> for DeviceType {

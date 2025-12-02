@@ -3,7 +3,10 @@ use zbus::{Connection, Result};
 use crate::constants::{device_type, rate, security_flags};
 use crate::models::{Network, NetworkInfo};
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
-use crate::utils::{bars_from_strength, channel_from_freq, mode_to_string};
+use crate::try_log;
+use crate::utils::{
+    bars_from_strength, channel_from_freq, decode_ssid_or_empty, mode_to_string, strength_or_zero,
+};
 
 pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<NetworkInfo> {
     let nm = NMProxy::new(conn).await?;
@@ -28,8 +31,8 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
                 .await?;
 
             let ssid_bytes = ap.ssid().await?;
-            if std::str::from_utf8(&ssid_bytes).unwrap_or("") == net.ssid {
-                let strength = net.strength.unwrap_or(0);
+            if decode_ssid_or_empty(&ssid_bytes) == net.ssid {
+                let strength = strength_or_zero(net.strength);
                 let bssid = ap.hw_address().await?;
                 let flags = ap.flags().await?;
                 let wpa_flags = ap.wpa_flags().await?;
@@ -101,70 +104,83 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
 }
 
 pub(crate) async fn current_ssid(conn: &Connection) -> Option<String> {
-    // find active Wi-Fi device
-    let nm = NMProxy::new(conn).await.ok()?;
-    let devices = nm.get_devices().await.ok()?;
+    let nm = try_log!(NMProxy::new(conn).await, "Failed to create NM proxy");
+    let devices = try_log!(nm.get_devices().await, "Failed to get devices");
 
     for dp in devices {
-        let dev = NMDeviceProxy::builder(conn)
-            .path(dp.clone())
-            .ok()?
-            .build()
-            .await
-            .ok()?;
-        if dev.device_type().await.ok()? != 2 {
+        let dev_builder = try_log!(
+            NMDeviceProxy::builder(conn).path(dp.clone()),
+            "Failed to create device proxy builder"
+        );
+        let dev = try_log!(dev_builder.build().await, "Failed to build device proxy");
+
+        let dev_type = try_log!(dev.device_type().await, "Failed to get device type");
+        if dev_type != device_type::WIFI {
             continue;
         }
 
-        let wifi = NMWirelessProxy::builder(conn)
-            .path(dp.clone())
-            .ok()?
-            .build()
-            .await
-            .ok()?;
+        let wifi_builder = try_log!(
+            NMWirelessProxy::builder(conn).path(dp.clone()),
+            "Failed to create wireless proxy builder"
+        );
+        let wifi = try_log!(wifi_builder.build().await, "Failed to build wireless proxy");
+
         if let Ok(active_ap) = wifi.active_access_point().await
             && active_ap.as_str() != "/"
         {
-            let builder = NMAccessPointProxy::builder(conn).path(active_ap).ok()?;
-            let ap = builder.build().await.ok()?;
-            let ssid_bytes = ap.ssid().await.ok()?;
-            let ssid = std::str::from_utf8(&ssid_bytes).ok()?;
-            return Some(ssid.to_string());
+            let ap_builder = try_log!(
+                NMAccessPointProxy::builder(conn).path(active_ap),
+                "Failed to create access point proxy builder"
+            );
+            let ap = try_log!(
+                ap_builder.build().await,
+                "Failed to build access point proxy"
+            );
+            let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
+            let ssid = decode_ssid_or_empty(&ssid_bytes);
+            return Some(ssid);
         }
     }
     None
 }
 
 pub(crate) async fn current_connection_info(conn: &Connection) -> Option<(String, Option<u32>)> {
-    let nm = NMProxy::new(conn).await.ok()?;
-    let devices = nm.get_devices().await.ok()?;
+    let nm = try_log!(NMProxy::new(conn).await, "Failed to create NM proxy");
+    let devices = try_log!(nm.get_devices().await, "Failed to get devices");
 
     for dp in devices {
-        let dev = NMDeviceProxy::builder(conn)
-            .path(dp.clone())
-            .ok()?
-            .build()
-            .await
-            .ok()?;
-        if dev.device_type().await.ok()? != 2 {
+        let dev_builder = try_log!(
+            NMDeviceProxy::builder(conn).path(dp.clone()),
+            "Failed to create device proxy builder"
+        );
+        let dev = try_log!(dev_builder.build().await, "Failed to build device proxy");
+
+        let dev_type = try_log!(dev.device_type().await, "Failed to get device type");
+        if dev_type != device_type::WIFI {
             continue;
         }
 
-        let wifi = NMWirelessProxy::builder(conn)
-            .path(dp.clone())
-            .ok()?
-            .build()
-            .await
-            .ok()?;
+        let wifi_builder = try_log!(
+            NMWirelessProxy::builder(conn).path(dp.clone()),
+            "Failed to create wireless proxy builder"
+        );
+        let wifi = try_log!(wifi_builder.build().await, "Failed to build wireless proxy");
+
         if let Ok(active_ap) = wifi.active_access_point().await
             && active_ap.as_str() != "/"
         {
-            let builder = NMAccessPointProxy::builder(conn).path(active_ap).ok()?;
-            let ap = builder.build().await.ok()?;
-            let ssid_bytes = ap.ssid().await.ok()?;
-            let ssid = std::str::from_utf8(&ssid_bytes).ok()?;
+            let ap_builder = try_log!(
+                NMAccessPointProxy::builder(conn).path(active_ap),
+                "Failed to create access point proxy builder"
+            );
+            let ap = try_log!(
+                ap_builder.build().await,
+                "Failed to build access point proxy"
+            );
+            let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
+            let ssid = decode_ssid_or_empty(&ssid_bytes);
             let frequency = ap.frequency().await.ok();
-            return Some((ssid.to_string(), frequency));
+            return Some((ssid, frequency));
         }
     }
     None
