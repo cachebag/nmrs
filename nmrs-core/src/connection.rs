@@ -8,6 +8,7 @@ use crate::constants::{device_state, device_type, retries, timeouts};
 use crate::models::{ConnectionOptions, DeviceState, WifiSecurity};
 use crate::network_info::current_ssid;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::utils::decode_ssid_or_empty;
 use crate::wifi_builders::build_wifi_connection;
 
 pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) -> Result<()> {
@@ -105,7 +106,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
             .build()
             .await?;
         let ssid_bytes = apx.ssid().await?;
-        let ap_ssid = std::str::from_utf8(&ssid_bytes).unwrap_or("");
+        let ap_ssid = decode_ssid_or_empty(&ssid_bytes);
         eprintln!("Found AP: '{ap_ssid}'");
         if ap_ssid == ssid {
             ap_path = Some(ap.clone());
@@ -456,7 +457,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> zbus::Result<()> {
                 .build()
                 .await?;
             if let Ok(bytes) = ap.ssid().await
-                && std::str::from_utf8(&bytes).ok() == Some(ssid)
+                && decode_ssid_or_empty(&bytes) == ssid
             {
                 eprintln!("Disconnecting from active network: {ssid}");
                 let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
@@ -540,7 +541,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> zbus::Result<()> {
                         raw.push(b);
                     }
                 }
-                if std::str::from_utf8(&raw).ok() == Some(ssid) {
+                if decode_ssid_or_empty(&raw) == ssid {
                     should_delete = true;
                     eprintln!("Found connection by SSID match");
                 }

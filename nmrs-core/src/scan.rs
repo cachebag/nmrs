@@ -4,6 +4,7 @@ use zbus::{Connection, Result};
 use crate::constants::{device_type, security_flags};
 use crate::models::Network;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::utils::{decode_ssid_or_hidden, strength_or_zero};
 
 pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
     let nm = NMProxy::new(conn).await?;
@@ -57,12 +58,7 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
                 .build()
                 .await?;
             let ssid_bytes = ap.ssid().await?;
-            let ssid = if ssid_bytes.is_empty() {
-                "<Hidden Network>".to_string()
-            } else {
-                let s = std::str::from_utf8(&ssid_bytes).unwrap_or("<Hidden Network");
-                s.to_string()
-            };
+            let ssid = decode_ssid_or_hidden(&ssid_bytes);
             let strength = ap.strength().await?;
             let bssid = ap.hw_address().await?;
             let flags = ap.flags().await?;
@@ -89,7 +85,7 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
             networks
                 .entry((ssid.clone(), frequency))
                 .and_modify(|n| {
-                    if strength > n.strength.unwrap_or(0) {
+                    if strength > strength_or_zero(n.strength) {
                         *n = new_net.clone();
                     }
                     if new_net.secured {
