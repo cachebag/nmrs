@@ -1,10 +1,10 @@
 use futures_timer::Delay;
 use std::collections::HashMap;
-use std::time::Duration;
 use zbus::{Connection, Result};
 use zvariant::OwnedObjectPath;
 
 use crate::connection_settings::{delete_connection, get_saved_connection_path};
+use crate::constants::{device_state, device_type, retries, timeouts};
 use crate::models::{ConnectionOptions, DeviceState, WifiSecurity};
 use crate::network_info::current_ssid;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
@@ -67,7 +67,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
             .path(dp.clone())?
             .build()
             .await?;
-        if dev.device_type().await? == 2 {
+        if dev.device_type().await? == device_type::WIFI {
             wifi_device = Some(dp.clone());
             eprintln!("   Found WiFi device: {dp}");
             break;
@@ -95,7 +95,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
         Ok(_) => eprintln!("Scan requested successfully"),
         Err(e) => eprintln!("Scan request FAILED: {e}"),
     }
-    Delay::new(Duration::from_secs(3)).await;
+    Delay::new(timeouts::scan_wait()).await;
     eprintln!("Scan wait complete");
 
     let mut ap_path: Option<OwnedObjectPath> = None;
@@ -130,7 +130,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
                 }
             }
 
-            for i in 0..10 {
+            for i in 0..retries::DISCONNECT_MAX_RETRIES {
                 let d = NMDeviceProxy::builder(conn)
                     .path(wifi_device.clone())?
                     .build()
@@ -143,10 +143,10 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
                     break;
                 }
 
-                Delay::new(Duration::from_millis(300)).await;
+                Delay::new(timeouts::disconnect_poll_interval()).await;
             }
 
-            Delay::new(Duration::from_millis(500)).await;
+            Delay::new(timeouts::disconnect_final_delay()).await;
             eprintln!("Disconnect complete");
         }
 
@@ -167,7 +167,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
                     active_conn.as_str()
                 );
 
-                Delay::new(Duration::from_millis(500)).await;
+                Delay::new(timeouts::disconnect_final_delay()).await;
 
                 let dev_check = NMDeviceProxy::builder(conn)
                     .path(wifi_device.clone())?
@@ -176,7 +176,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
 
                 let check_state = dev_check.state().await?;
 
-                if check_state == 30 {
+                if check_state == device_state::DISCONNECTED {
                     eprintln!("Connection activated but device stuck in Disconnected state");
                     eprintln!("Saved connection has invalid settings, deleting and retrying");
 
@@ -257,7 +257,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
                 }
             }
 
-            for i in 0..10 {
+            for i in 0..retries::DISCONNECT_MAX_RETRIES {
                 let d = NMDeviceProxy::builder(conn)
                     .path(wifi_device.clone())?
                     .build()
@@ -270,10 +270,10 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
                     break;
                 }
 
-                Delay::new(Duration::from_millis(300)).await;
+                Delay::new(timeouts::disconnect_poll_interval()).await;
             }
 
-            Delay::new(Duration::from_millis(500)).await;
+            Delay::new(timeouts::disconnect_final_delay()).await;
             eprintln!("Disconnect complete");
         }
 
@@ -289,7 +289,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
         }
     }
 
-    Delay::new(Duration::from_millis(300)).await;
+    Delay::new(timeouts::disconnect_poll_interval()).await;
 
     let dev_proxy = NMDeviceProxy::builder(conn)
         .path(wifi_device.clone())?
@@ -302,18 +302,18 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
     eprintln!("Waiting for connection to complete...");
     let mut connected = false;
     let mut config_state_count = 0;
-    for i in 0..40 {
-        Delay::new(Duration::from_millis(500)).await;
+    for i in 0..retries::CONNECTION_MAX_RETRIES {
+        Delay::new(timeouts::connection_poll_interval()).await;
         match dev_proxy.state().await {
             Ok(state) => {
                 let device_state = DeviceState::from(state);
                 eprintln!("Connection progress {i}: state = {device_state:?} ({state})");
 
-                if state == 100 {
+                if state == device_state::ACTIVATED {
                     eprintln!("✓ Connection activated successfully!");
                     connected = true;
                     break;
-                } else if state == 120 {
+                } else if state == device_state::FAILED {
                     eprintln!("✗ Connection failed!");
 
                     if let Ok(reason) = dev_proxy.state_reason().await {
@@ -380,9 +380,9 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
                     return Err(zbus::Error::Failure(
                         "Connection failed - authentication or network issue".into(),
                     ));
-                } else if state == 50 {
+                } else if state == device_state::CONFIG {
                     config_state_count += 1;
-                    if config_state_count > 15 {
+                    if config_state_count > retries::CONNECTION_CONFIG_STUCK_THRESHOLD {
                         eprintln!(
                             "✗ Connection stuck in Config state - likely authentication failure"
                         );
@@ -394,7 +394,8 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
                     config_state_count = 0;
                 }
 
-                if i > 10 && state == 30 {
+                if i > retries::CONNECTION_STUCK_CHECK_START && state == device_state::DISCONNECTED
+                {
                     eprintln!("✗ Connection stuck in disconnected state");
                     return Err(zbus::Error::Failure(
                         "Connection failed - stuck in disconnected state".into(),
@@ -411,7 +412,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
     if !connected {
         let final_state = dev_proxy.state().await.unwrap_or(0);
         eprintln!("✗ Connection did not complete. Final state: {final_state}");
-        if final_state == 50 {
+        if final_state == device_state::CONFIG {
             return Err(zbus::Error::Failure(
                 "Connection failed - authentication failed".into(),
             ));
@@ -439,7 +440,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> zbus::Result<()> {
             .path(dev_path.clone())?
             .build()
             .await?;
-        if dev.device_type().await? != 2 {
+        if dev.device_type().await? != device_type::WIFI {
             continue;
         }
 
@@ -471,12 +472,14 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> zbus::Result<()> {
                 }
 
                 eprintln!("About to enter wait loop...");
-                for i in 0..20 {
-                    Delay::new(Duration::from_millis(200)).await;
+                for i in 0..retries::FORGET_MAX_RETRIES {
+                    Delay::new(timeouts::forget_poll_interval()).await;
                     match dev.state().await {
                         Ok(current_state) => {
                             eprintln!("Wait loop {i}: device state = {current_state}");
-                            if current_state == 30 || current_state == 20 {
+                            if current_state == device_state::DISCONNECTED
+                                || current_state == device_state::UNAVAILABLE
+                            {
                                 eprintln!("Device reached disconnected state");
                                 break;
                             }

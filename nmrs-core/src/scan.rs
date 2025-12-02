@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use zbus::{Connection, Result};
 
+use crate::constants::{device_type, security_flags};
 use crate::models::Network;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 
@@ -14,7 +15,7 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
             .build()
             .await?;
 
-        if d_proxy.device_type().await? != 2 {
+        if d_proxy.device_type().await? != device_type::WIFI {
             continue;
         }
 
@@ -69,9 +70,9 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
             let rsn = ap.rsn_flags().await?;
             let frequency = ap.frequency().await?;
 
-            let secured = (flags & 0x1) != 0 || wpa != 0 || rsn != 0;
-            let is_psk = (wpa & 0x0100) != 0 || (rsn & 0x0100) != 0;
-            let is_eap = (wpa & 0x0200) != 0 || (rsn & 0x0200) != 0;
+            let secured = (flags & security_flags::WEP) != 0 || wpa != 0 || rsn != 0;
+            let is_psk = (wpa & security_flags::PSK) != 0 || (rsn & security_flags::PSK) != 0;
+            let is_eap = (wpa & security_flags::EAP) != 0 || (rsn & security_flags::EAP) != 0;
 
             let new_net = Network {
                 device: dp.to_string(),

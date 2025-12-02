@@ -1,6 +1,6 @@
-use std::time::Duration;
 use zbus::{Connection, Result};
 
+use crate::constants::{retries, timeouts};
 use crate::models::{Device, DeviceState, DeviceType};
 use crate::proxies::{NMDeviceProxy, NMProxy};
 
@@ -36,7 +36,7 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
 }
 
 pub(crate) async fn wait_for_wifi_ready(conn: &Connection) -> Result<()> {
-    for _ in 0..20 {
+    for _ in 0..retries::WIFI_READY_MAX_RETRIES {
         let devices = list_devices(conn).await?;
         for dev in devices {
             if dev.device_type == DeviceType::Wifi
@@ -45,7 +45,7 @@ pub(crate) async fn wait_for_wifi_ready(conn: &Connection) -> Result<()> {
                 return Ok(());
             }
         }
-        futures_timer::Delay::new(Duration::from_secs(1)).await;
+        futures_timer::Delay::new(timeouts::scan_wait()).await;
     }
 
     Err(zbus::Error::Failure(

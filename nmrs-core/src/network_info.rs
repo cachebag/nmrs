@@ -1,5 +1,6 @@
 use zbus::{Connection, Result};
 
+use crate::constants::{device_type, rate, security_flags};
 use crate::models::{Network, NetworkInfo};
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::utils::{bars_from_strength, channel_from_freq, mode_to_string};
@@ -11,7 +12,7 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
             .path(dp.clone())?
             .build()
             .await?;
-        if dev.device_type().await? != 2 {
+        if dev.device_type().await? != device_type::WIFI {
             continue;
         }
 
@@ -37,11 +38,11 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
                 let max_br = ap.max_bitrate().await.ok();
                 let mode_raw = ap.mode().await.ok();
 
-                let wep = (flags & 0x1) != 0 && wpa_flags == 0 && rsn_flags == 0;
+                let wep = (flags & security_flags::WEP) != 0 && wpa_flags == 0 && rsn_flags == 0;
                 let wpa1 = wpa_flags != 0;
                 let wpa2_or_3 = rsn_flags != 0;
-                let psk = ((wpa_flags | rsn_flags) & 0x0100) != 0;
-                let eap = ((wpa_flags | rsn_flags) & 0x0200) != 0;
+                let psk = ((wpa_flags | rsn_flags) & security_flags::PSK) != 0;
+                let eap = ((wpa_flags | rsn_flags) & security_flags::EAP) != 0;
 
                 let mut parts = Vec::new();
                 if wep {
@@ -74,7 +75,7 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
                 };
 
                 let channel = freq.and_then(channel_from_freq);
-                let rate_mbps = max_br.map(|kbit| kbit / 1000);
+                let rate_mbps = max_br.map(|kbit| kbit / rate::KBIT_TO_MBPS);
                 let bars = bars_from_strength(strength).to_string();
                 let mode = mode_raw
                     .map(mode_to_string)
