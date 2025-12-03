@@ -1,6 +1,8 @@
 # Changelog
 ## [Unreleased]
 
+## [0.2.0-beta] - 2025-12-03
+
 ### Added
 - Write `.css` file for user by default ([#58](https://github.com/cachebag/nmrs/pull/58))
 - CI: Nix derivation test ([#57](https://github.com/cachebag/nmrs/pull/57))
@@ -9,6 +11,7 @@
 - Core: prevent multiple instances of `nmrs` from running by introducing a file lock ([#65](https://github.com/cachebag/nmrs/pull/65))
 - UI(Refactor): refactored `network.rs` and `network_page.rs` to follow best practices and enhancement general functionality and perf ([#66](https://github.com/cachebag/nmrs/pull/90)) 
 - CI+tests: Cross platform builds, API testing, unit testing and integration testing ([#95](https://github.com/cachebag/nmrs/pull/96))
+- Core: Minor refactors (see issue #77) - ([#91](https://github.com/cachebag/nmrs/pull/91))
 
 ## [0.1.1-beta] - 2025-11-21
 
@@ -60,6 +63,7 @@
 - EAP connections default to no certificates (advanced certificate management coming in future releases)
 - VPN connections planned for near future
 
-[unreleased]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...HEAD
+[unreleased]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta...HEAD
+[0.2.0-beta]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...v0.2.0-beta
 [0.1.1-beta]: https://github.com/cachebag/nmrs/compare/v0.1.0-beta...v0.1.1-beta
 [0.1.0-beta]: https://github.com/cachebag/nmrs/releases/tag/v0.1.0-beta
