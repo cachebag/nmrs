@@ -13,10 +13,12 @@ pub mod models;
 pub mod network_manager;
 pub mod wifi_builders;
 
-// Re-exported types
-pub type Result<T> = std::result::Result<T, ConnectionError>;
-
 // Re-exported public API
+pub use models::{
+    ConnectionError, ConnectionOptions, Device, DeviceState, DeviceType, EapMethod, EapOptions,
+    Network, NetworkInfo, Phase2, WifiSecurity,
+};
 pub use network_manager::NetworkManager;
 
-use crate::models::ConnectionError;
+// Re-exported types
+pub type Result<T> = std::result::Result<T, ConnectionError>;

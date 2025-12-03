@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UI: Visual indication on successful connection ([#64](https://github.com/cachebag/nmrs/pull/64))
 - Core: prevent multiple instances of `nmrs` from running by introducing a file lock ([#65](https://github.com/cachebag/nmrs/pull/65))
 - UI(Refactor): refactored `network.rs` and `network_page.rs` to follow best practices and enhancement general functionality and perf ([#66](https://github.com/cachebag/nmrs/pull/90)) 
+- CI+tests: Cross platform builds, API testing, unit testing and integration testing ([#95](https://github.com/cachebag/nmrs/pull/96))
 
 ## [0.1.1-beta] - 2025-11-21
 
