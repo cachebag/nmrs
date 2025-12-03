@@ -35,6 +35,37 @@ fix(#24): fixed bug where something was happening
 
 All issues are acceptable. If a situation arises where a request or concern is not valid, I will respond directly to the issue. 
 
+
+## Tests
+All tests must pass before a merge takes place.
+
+### Ensure NetworkManager is running
+```bash
+sudo systemctl start NetworkManager
+```
+
+### Test everything (unit + integration)
+```bash
+cargo test --all-features
+```
+
+### Integration tests
+These require WiFi hardware. I'm currently thinking of a solution for this for CI but for now, please make sure you 
+run this locally before your PR to ensure everything works.
+```bash
+cargo test --test integration_test --all-features
+```
+
+If you do not have access to WiFi hardware (for whatever odd reason that is), you can do something like this:
+```bash
+sudo modprobe mac80211_hwsim radios=2
+cargo test --test integration_test --all-features
+sudo modprobe -r mac80211_hwsim
+```
+> [!NOTE]
+>
+> This method only works on linux
+
 ## License
 
 All contributions fall under the [MIT License](https://github.com/cachebag/nmrs?tab=MIT-1-ov-file).

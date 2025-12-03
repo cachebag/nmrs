@@ -1,0 +1,696 @@
+use nmrs_core::{DeviceState, DeviceType, NetworkManager, WifiSecurity};
+use std::time::Duration;
+use tokio::time::sleep;
+
+/// Helper function to check if NetworkManager is available
+/// Returns true if we can connect to NetworkManager, false otherwise
+async fn is_networkmanager_available() -> bool {
+    NetworkManager::new().await.is_ok()
+}
+
+/// Check if WiFi is available
+async fn has_wifi_device(nm: &NetworkManager) -> bool {
+    match nm.list_devices().await {
+        Ok(devices) => devices
+            .iter()
+            .any(|d| matches!(d.device_type, DeviceType::Wifi)),
+        Err(_) => false,
+    }
+}
+
+/// Skip tests if NetworkManager is not available
+macro_rules! require_networkmanager {
+    () => {
+        if !is_networkmanager_available().await {
+            eprintln!("Skipping test: NetworkManager not available");
+            return;
+        }
+    };
+}
+
+/// Skip tests if WiFi device is not available
+macro_rules! require_wifi {
+    ($nm:expr) => {
+        if !has_wifi_device($nm).await {
+            eprintln!("Skipping test: No WiFi device available");
+            return;
+        }
+    };
+}
+
+/// Test NetworkManager initialization
+#[tokio::test]
+async fn test_networkmanager_initialization() {
+    require_networkmanager!();
+
+    let _nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+}
+
+/// Test listing devices
+#[tokio::test]
+async fn test_list_devices() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    let devices = nm.list_devices().await.expect("Failed to list devices");
+
+    // Should have at least one device (usually loopback)
+    assert!(!devices.is_empty(), "Expected at least one device");
+
+    // Verify device structure
+    for device in &devices {
+        assert!(!device.path.is_empty(), "Device path should not be empty");
+        assert!(
+            !device.interface.is_empty(),
+            "Device interface should not be empty"
+        );
+    }
+}
+
+/// Test WiFi enabled state
+#[tokio::test]
+async fn test_wifi_enabled_get_set() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    let initial_state = nm
+        .wifi_enabled()
+        .await
+        .expect("Failed to get WiFi enabled state");
+
+    // Toggle WiFi
+    nm.set_wifi_enabled(!initial_state)
+        .await
+        .expect("Failed to set WiFi enabled");
+
+    // Wait a bit for the change to take effect
+    sleep(Duration::from_millis(500)).await;
+
+    // Verify the state changed
+    let new_state = nm
+        .wifi_enabled()
+        .await
+        .expect("Failed to get WiFi enabled state after toggle");
+    assert_eq!(new_state, !initial_state, "WiFi state should have changed");
+
+    // Restore original state
+    nm.set_wifi_enabled(initial_state)
+        .await
+        .expect("Failed to restore WiFi enabled state");
+
+    // Wait a bit for the change to take effect
+    sleep(Duration::from_millis(500)).await;
+
+    // Verify restored
+    let restored_state = nm
+        .wifi_enabled()
+        .await
+        .expect("Failed to get WiFi enabled state after restore");
+    assert_eq!(
+        restored_state, initial_state,
+        "WiFi state should be restored to original"
+    );
+}
+
+/// Test waiting for WiFi to be ready
+#[tokio::test]
+async fn test_wait_for_wifi_ready() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let result = nm.wait_for_wifi_ready().await;
+
+    // This should either succeed or fail gracefully
+    // We don't assert success because WiFi might not be ready in all test environments
+    match result {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!(
+                "WiFi not ready (this may be expected in some environments): {}",
+                e
+            );
+        }
+    }
+}
+
+/// Test scanning networks
+#[tokio::test]
+async fn test_scan_networks() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let _ = nm.wait_for_wifi_ready().await;
+
+    // Request a scan
+    let result = nm.scan_networks().await;
+
+    // Scan should either succeed or fail gracefully
+    match result {
+        Ok(_) => {
+            // Success - wait a bit for scan to complete
+            sleep(Duration::from_secs(2)).await;
+        }
+        Err(e) => {
+            eprintln!("Scan failed (may be expected in some environments): {}", e);
+        }
+    }
+}
+
+/// Test listing networks
+#[tokio::test]
+async fn test_list_networks() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let _ = nm.wait_for_wifi_ready().await;
+
+    // Request a scan first
+    let _ = nm.scan_networks().await;
+    sleep(Duration::from_secs(2)).await;
+
+    // List networks
+    let networks = nm.list_networks().await.expect("Failed to list networks");
+
+    // Verify network structure
+    for network in &networks {
+        assert!(
+            !network.ssid.is_empty() || network.ssid == "<hidden>",
+            "SSID should not be empty (unless hidden)"
+        );
+        assert!(
+            !network.device.is_empty(),
+            "Device path should not be empty"
+        );
+    }
+}
+
+/// Test getting current SSID
+#[tokio::test]
+async fn test_current_ssid() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Get current SSID (may be None if not connected)
+    let current_ssid = nm.current_ssid().await;
+
+    // If connected, SSID should not be empty
+    if let Some(ssid) = current_ssid {
+        assert!(
+            !ssid.is_empty(),
+            "Current SSID should not be empty if connected"
+        );
+    }
+}
+
+/// Test getting current connection info
+#[tokio::test]
+async fn test_current_connection_info() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Get current connection info (may be None if not connected)
+    let info = nm.current_connection_info().await;
+
+    // If connected, SSID should not be empty
+    if let Some((ssid, _frequency)) = info {
+        assert!(
+            !ssid.is_empty(),
+            "Current SSID should not be empty if connected"
+        );
+    }
+}
+
+/// Test showing details
+#[tokio::test]
+async fn test_show_details() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let _ = nm.wait_for_wifi_ready().await;
+
+    // Request a scan first
+    let _ = nm.scan_networks().await;
+    sleep(Duration::from_secs(2)).await;
+
+    // List networks
+    let networks = nm.list_networks().await.expect("Failed to list networks");
+
+    // Try to show details for the first network (if any)
+    if let Some(network) = networks.first() {
+        let result = nm.show_details(network).await;
+
+        match result {
+            Ok(details) => {
+                // Verify details structure
+                assert_eq!(details.ssid, network.ssid, "SSID should match");
+                assert!(!details.bssid.is_empty(), "BSSID should not be empty");
+                assert!(details.strength <= 100, "Strength should be <= 100");
+                assert!(!details.mode.is_empty(), "Mode should not be empty");
+                assert!(!details.security.is_empty(), "Security should not be empty");
+                assert!(!details.status.is_empty(), "Status should not be empty");
+            }
+            Err(e) => {
+                // Network might have disappeared between scan and details request
+                eprintln!("Failed to show details (may be expected): {}", e);
+            }
+        }
+    }
+}
+
+/// Test checking if a connection is saved
+#[tokio::test]
+async fn test_has_saved_connection() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Test with a non-existent SSID
+    let result = nm
+        .has_saved_connection("__NONEXISTENT_TEST_SSID__")
+        .await
+        .expect("Failed to check saved connection");
+    assert!(
+        !result,
+        "Non-existent SSID should not have saved connection"
+    );
+
+    // Test with empty SSID
+    let _result = nm
+        .has_saved_connection("")
+        .await
+        .expect("Failed to check saved connection for empty SSID");
+}
+
+/// Test getting the path of a saved connection
+#[tokio::test]
+async fn test_get_saved_connection_path() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Test with a non-existent SSID
+    let result = nm
+        .get_saved_connection_path("__NONEXISTENT_TEST_SSID__")
+        .await
+        .expect("Failed to get saved connection path");
+    assert!(
+        result.is_none(),
+        "Non-existent SSID should not have saved connection path"
+    );
+
+    // Test with empty SSID
+    let result = nm
+        .get_saved_connection_path("")
+        .await
+        .expect("Failed to get saved connection path for empty SSID");
+    // Result can be Some or None depending on system state
+    assert!(result.is_some() || result.is_none());
+}
+
+/// Test connecting to an open network
+#[tokio::test]
+async fn test_connect_open_network() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let _ = nm.wait_for_wifi_ready().await;
+
+    // Request a scan first
+    let _ = nm.scan_networks().await;
+    sleep(Duration::from_secs(2)).await;
+
+    // List networks to find an open network
+    let networks = nm.list_networks().await.expect("Failed to list networks");
+
+    // Find an open network (if any)
+    let open_network = networks.iter().find(|n| !n.secured);
+
+    if let Some(network) = open_network {
+        let test_ssid = &network.ssid;
+
+        // Skip if SSID is hidden or empty
+        if test_ssid.is_empty() || test_ssid == "<hidden>" {
+            eprintln!("Skipping: Found open network but SSID is hidden/empty");
+            return;
+        }
+
+        // Try to connect to the open network
+        let result = nm.connect(test_ssid, WifiSecurity::Open).await;
+
+        match result {
+            Ok(_) => {
+                // Connection succeeded - wait a bit and verify
+                sleep(Duration::from_secs(3)).await;
+                let current = nm.current_ssid().await;
+                if let Some(connected_ssid) = current {
+                    // May or may not match depending on connection success
+                    eprintln!("Connected SSID: {}", connected_ssid);
+                }
+            }
+            Err(e) => {
+                // Connection failed - this is acceptable in test environments
+                eprintln!("Connection failed (may be expected): {}", e);
+            }
+        }
+    } else {
+        eprintln!("No open networks found for testing");
+    }
+}
+
+/// Test connecting to a PSK network with an empty password
+#[tokio::test]
+async fn test_connect_psk_network_with_empty_password() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let _ = nm.wait_for_wifi_ready().await;
+
+    // Request a scan first
+    let _ = nm.scan_networks().await;
+    sleep(Duration::from_secs(2)).await;
+
+    // List networks to find a PSK network
+    let networks = nm.list_networks().await.expect("Failed to list networks");
+
+    // Find a PSK network (if any)
+    let psk_network = networks.iter().find(|n| n.is_psk);
+
+    if let Some(network) = psk_network {
+        let test_ssid = &network.ssid;
+
+        // Skip if SSID is hidden or empty
+        if test_ssid.is_empty() || test_ssid == "<hidden>" {
+            eprintln!("Skipping: Found PSK network but SSID is hidden/empty");
+            return;
+        }
+
+        // Check if we have a saved connection for this network
+        let has_saved = nm
+            .has_saved_connection(test_ssid)
+            .await
+            .expect("Failed to check saved connection");
+
+        if has_saved {
+            // Try to connect with empty password (should use saved credentials)
+            let result = nm
+                .connect(test_ssid, WifiSecurity::WpaPsk { psk: String::new() })
+                .await;
+
+            match result {
+                Ok(_) => {
+                    // Connection succeeded - wait a bit
+                    sleep(Duration::from_secs(3)).await;
+                }
+                Err(e) => {
+                    // Connection failed - this is acceptable
+                    eprintln!("Connection with saved credentials failed: {}", e);
+                }
+            }
+        } else {
+            eprintln!("No saved connection for PSK network, skipping test");
+        }
+    } else {
+        eprintln!("No PSK networks found for testing");
+    }
+}
+
+/// Test forgetting a nonexistent network
+#[tokio::test]
+async fn test_forget_nonexistent_network() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Try to forget a non-existent network
+    let result = nm.forget("__NONEXISTENT_TEST_SSID_TO_FORGET__").await;
+
+    // This should fail since the network doesn't exist
+    assert!(
+        result.is_err(),
+        "Forgetting non-existent network should fail"
+    );
+}
+
+/// Test device states
+#[tokio::test]
+async fn test_device_states() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    let devices = nm.list_devices().await.expect("Failed to list devices");
+
+    // Verify that all devices have valid states
+    for device in &devices {
+        // DeviceState should be one of the known states
+        match device.state {
+            DeviceState::Unmanaged
+            | DeviceState::Unavailable
+            | DeviceState::Disconnected
+            | DeviceState::Prepare
+            | DeviceState::Config
+            | DeviceState::Activated
+            | DeviceState::Deactivating
+            | DeviceState::Failed
+            | DeviceState::Other(_) => {
+                // Valid state
+            }
+        }
+    }
+}
+
+/// Test device types
+#[tokio::test]
+async fn test_device_types() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    let devices = nm.list_devices().await.expect("Failed to list devices");
+
+    // Verify that all devices have valid types
+    for device in &devices {
+        // DeviceType should be one of the known types
+        match device.device_type {
+            DeviceType::Ethernet
+            | DeviceType::Wifi
+            | DeviceType::WifiP2P
+            | DeviceType::Loopback
+            | DeviceType::Other(_) => {
+                // Valid type
+            }
+        }
+    }
+}
+
+/// Test network properties
+#[tokio::test]
+async fn test_network_properties() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let _ = nm.wait_for_wifi_ready().await;
+
+    // Request a scan first
+    let _ = nm.scan_networks().await;
+    sleep(Duration::from_secs(2)).await;
+
+    // List networks
+    let networks = nm.list_networks().await.expect("Failed to list networks");
+
+    // Verify network properties
+    for network in &networks {
+        // SSID should not be empty (unless hidden)
+        assert!(
+            !network.ssid.is_empty() || network.ssid == "<hidden>",
+            "SSID should not be empty"
+        );
+
+        // Device path should not be empty
+        assert!(
+            !network.device.is_empty(),
+            "Device path should not be empty"
+        );
+
+        // If strength is Some, it should be <= 100
+        if let Some(strength) = network.strength {
+            assert!(strength <= 100, "Strength should be <= 100");
+        }
+
+        // Security flags should be consistent
+        if !network.secured {
+            assert!(!network.is_psk, "Unsecured network should not be PSK");
+            assert!(!network.is_eap, "Unsecured network should not be EAP");
+        }
+    }
+}
+
+/// Test multiple scan requests
+#[tokio::test]
+async fn test_multiple_scan_requests() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Wait for WiFi to be ready
+    let _ = nm.wait_for_wifi_ready().await;
+
+    // Request multiple scans
+    for i in 0..3 {
+        let result = nm.scan_networks().await;
+        match result {
+            Ok(_) => {
+                eprintln!("Scan {} succeeded", i + 1);
+                sleep(Duration::from_secs(1)).await;
+            }
+            Err(e) => {
+                eprintln!("Scan {} failed: {}", i + 1, e);
+            }
+        }
+    }
+
+    // List networks after multiple scans
+    let networks = nm.list_networks().await.expect("Failed to list networks");
+    eprintln!("Found {} networks after multiple scans", networks.len());
+}
+
+/// Test concurrent operations
+#[tokio::test]
+async fn test_concurrent_operations() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    // Ensure WiFi is enabled
+    nm.set_wifi_enabled(true)
+        .await
+        .expect("Failed to enable WiFi");
+
+    // Run multiple operations concurrently
+    let (devices_result, wifi_enabled_result, networks_result) =
+        tokio::join!(nm.list_devices(), nm.wifi_enabled(), nm.list_networks());
+
+    // All should succeed
+    assert!(devices_result.is_ok(), "list_devices should succeed");
+    assert!(wifi_enabled_result.is_ok(), "wifi_enabled should succeed");
+    // networks_result may fail if WiFi is not ready, which is acceptable
+    let _ = networks_result;
+}

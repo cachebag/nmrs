@@ -174,3 +174,91 @@ impl WifiSecurity {
         matches!(self, WifiSecurity::WpaEap { .. })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn device_type_from_u32_all_variants() {
+        assert_eq!(DeviceType::from(1), DeviceType::Ethernet);
+        assert_eq!(DeviceType::from(2), DeviceType::Wifi);
+        assert_eq!(DeviceType::from(30), DeviceType::WifiP2P);
+        assert_eq!(DeviceType::from(32), DeviceType::Loopback);
+        assert_eq!(DeviceType::from(999), DeviceType::Other(999));
+        assert_eq!(DeviceType::from(0), DeviceType::Other(0));
+    }
+
+    #[test]
+    fn device_type_display() {
+        assert_eq!(format!("{}", DeviceType::Ethernet), "Ethernet");
+        assert_eq!(format!("{}", DeviceType::Wifi), "Wi-Fi");
+        assert_eq!(format!("{}", DeviceType::WifiP2P), "Wi-Fi P2P");
+        assert_eq!(format!("{}", DeviceType::Loopback), "Loopback");
+        assert_eq!(format!("{}", DeviceType::Other(42)), "Other(42)");
+    }
+
+    #[test]
+    fn device_state_from_u32_all_variants() {
+        assert_eq!(DeviceState::from(10), DeviceState::Unmanaged);
+        assert_eq!(DeviceState::from(20), DeviceState::Unavailable);
+        assert_eq!(DeviceState::from(30), DeviceState::Disconnected);
+        assert_eq!(DeviceState::from(40), DeviceState::Prepare);
+        assert_eq!(DeviceState::from(50), DeviceState::Config);
+        assert_eq!(DeviceState::from(100), DeviceState::Activated);
+        assert_eq!(DeviceState::from(110), DeviceState::Deactivating);
+        assert_eq!(DeviceState::from(120), DeviceState::Failed);
+        assert_eq!(DeviceState::from(7), DeviceState::Other(7));
+        assert_eq!(DeviceState::from(0), DeviceState::Other(0));
+    }
+
+    #[test]
+    fn device_state_display() {
+        assert_eq!(format!("{}", DeviceState::Unmanaged), "Unmanaged");
+        assert_eq!(format!("{}", DeviceState::Unavailable), "Unavailable");
+        assert_eq!(format!("{}", DeviceState::Disconnected), "Disconnected");
+        assert_eq!(format!("{}", DeviceState::Prepare), "Preparing");
+        assert_eq!(format!("{}", DeviceState::Config), "Configuring");
+        assert_eq!(format!("{}", DeviceState::Activated), "Activated");
+        assert_eq!(format!("{}", DeviceState::Deactivating), "Deactivating");
+        assert_eq!(format!("{}", DeviceState::Failed), "Failed");
+        assert_eq!(format!("{}", DeviceState::Other(99)), "Other(99)");
+    }
+
+    #[test]
+    fn wifi_security_open() {
+        let open = WifiSecurity::Open;
+        assert!(!open.secured());
+        assert!(!open.is_psk());
+        assert!(!open.is_eap());
+    }
+
+    #[test]
+    fn wifi_security_psk() {
+        let psk = WifiSecurity::WpaPsk {
+            psk: "password123".into(),
+        };
+        assert!(psk.secured());
+        assert!(psk.is_psk());
+        assert!(!psk.is_eap());
+    }
+
+    #[test]
+    fn wifi_security_eap() {
+        let eap = WifiSecurity::WpaEap {
+            opts: EapOptions {
+                identity: "user@example.com".into(),
+                password: "secret".into(),
+                anonymous_identity: None,
+                domain_suffix_match: None,
+                ca_cert_path: None,
+                system_ca_certs: false,
+                method: EapMethod::Peap,
+                phase2: Phase2::Mschapv2,
+            },
+        };
+        assert!(eap.secured());
+        assert!(!eap.is_psk());
+        assert!(eap.is_eap());
+    }
+}

@@ -84,3 +84,78 @@ macro_rules! try_log {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_channel_from_freq_2_4ghz() {
+        assert_eq!(channel_from_freq(2412), Some(1));
+        assert_eq!(channel_from_freq(2437), Some(6));
+        assert_eq!(channel_from_freq(2472), Some(13));
+        assert_eq!(channel_from_freq(2484), Some(14));
+    }
+
+    #[test]
+    fn test_channel_from_freq_5ghz() {
+        assert_eq!(channel_from_freq(5180), Some(36));
+        assert_eq!(channel_from_freq(5220), Some(44));
+        assert_eq!(channel_from_freq(5500), Some(100));
+    }
+
+    #[test]
+    fn test_channel_from_freq_6ghz() {
+        assert_eq!(channel_from_freq(5955), Some(1));
+        assert_eq!(channel_from_freq(6115), Some(33));
+    }
+
+    #[test]
+    fn test_channel_from_freq_invalid() {
+        assert_eq!(channel_from_freq(1000), None);
+        assert_eq!(channel_from_freq(9999), None);
+    }
+
+    #[test]
+    fn test_bars_from_strength() {
+        assert_eq!(bars_from_strength(0), "▂___");
+        assert_eq!(bars_from_strength(24), "▂___");
+        assert_eq!(bars_from_strength(25), "▂▄__");
+        assert_eq!(bars_from_strength(49), "▂▄__");
+        assert_eq!(bars_from_strength(50), "▂▄▆_");
+        assert_eq!(bars_from_strength(74), "▂▄▆_");
+        assert_eq!(bars_from_strength(75), "▂▄▆█");
+        assert_eq!(bars_from_strength(100), "▂▄▆█");
+    }
+
+    #[test]
+    fn test_mode_to_string() {
+        assert_eq!(mode_to_string(1), "Adhoc");
+        assert_eq!(mode_to_string(2), "Infra");
+        assert_eq!(mode_to_string(3), "AP");
+        assert_eq!(mode_to_string(99), "Unknown");
+    }
+
+    #[test]
+    fn test_decode_ssid_or_hidden() {
+        assert_eq!(decode_ssid_or_hidden(b"MyNetwork"), "MyNetwork");
+        assert_eq!(decode_ssid_or_hidden(b""), "");
+        assert_eq!(decode_ssid_or_hidden(b"Test_SSID-123"), "Test_SSID-123");
+    }
+
+    #[test]
+    fn test_decode_ssid_or_empty() {
+        assert_eq!(decode_ssid_or_empty(b"MyNetwork"), "MyNetwork");
+        assert_eq!(decode_ssid_or_empty(b""), "");
+        // Test with valid UTF-8
+        assert_eq!(decode_ssid_or_empty("café".as_bytes()), "café");
+    }
+
+    #[test]
+    fn test_strength_or_zero() {
+        assert_eq!(strength_or_zero(Some(75)), 75);
+        assert_eq!(strength_or_zero(Some(0)), 0);
+        assert_eq!(strength_or_zero(Some(100)), 100);
+        assert_eq!(strength_or_zero(None), 0);
+    }
+}
