@@ -1,5 +1,7 @@
 # Changelog
 ## [Unreleased]
+- Fixed UI not freezing on connections ([#101](https://github.com/cachebag/nmrs/pull/101))
+- Expose system default theme toggle (light/dark) ([#102](https://github.com/cachebag/nmrs/pull/102))
 
 ## [0.2.0-beta] - 2025-12-03
 

@@ -1,5 +1,6 @@
 pub mod file_lock;
 pub mod style;
+pub mod theme_config;
 pub mod ui;
 
 use gtk::Application;

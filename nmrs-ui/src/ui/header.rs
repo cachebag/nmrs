@@ -12,6 +12,7 @@ pub fn build_header(
     ctx: Rc<NetworksContext>,
     list_container: &GtkBox,
     is_scanning: Rc<Cell<bool>>,
+    window: &gtk::ApplicationWindow,
 ) -> HeaderBar {
     let header = HeaderBar::new();
     header.set_show_title_buttons(false);
@@ -47,6 +48,40 @@ pub fn build_header(
             });
         }
     ));
+
+    let theme_btn = gtk::Button::new();
+    theme_btn.add_css_class("theme-toggle-btn");
+    theme_btn.set_valign(gtk::Align::Center);
+    theme_btn.set_has_frame(false);
+
+    let is_light = window.has_css_class("light-theme");
+    let initial_icon = if is_light {
+        "weather-clear-night-symbolic"
+    } else {
+        "weather-clear-symbolic"
+    };
+    theme_btn.set_icon_name(initial_icon);
+
+    let window_weak = window.downgrade();
+    theme_btn.connect_clicked(move |btn| {
+        if let Some(window) = window_weak.upgrade() {
+            let is_light = window.has_css_class("light-theme");
+
+            if is_light {
+                window.remove_css_class("light-theme");
+                window.add_css_class("dark-theme");
+                btn.set_icon_name("weather-clear-symbolic");
+                crate::theme_config::save_theme(false);
+            } else {
+                window.remove_css_class("dark-theme");
+                window.add_css_class("light-theme");
+                btn.set_icon_name("weather-clear-night-symbolic");
+                crate::theme_config::save_theme(true);
+            }
+        }
+    });
+
+    header.pack_end(&theme_btn);
 
     let wifi_switch = Switch::new();
     wifi_switch.set_valign(gtk::Align::Center);

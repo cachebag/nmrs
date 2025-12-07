@@ -19,6 +19,14 @@ pub fn build_ui(app: &Application) {
     win.set_title(Some(""));
     win.set_default_size(400, 600);
 
+    // Load and apply saved theme preference
+    let is_light = crate::theme_config::load_theme();
+    if is_light {
+        win.add_css_class("light-theme");
+    } else {
+        win.add_css_class("dark-theme");
+    }
+
     let vbox = GtkBox::new(Orientation::Vertical, 0);
     let status = Label::new(None);
     let list_container = GtkBox::new(Orientation::Vertical, 0);
@@ -101,7 +109,8 @@ pub fn build_ui(app: &Application) {
                     parent_window: win_clone.clone(),
                 });
 
-                let header = header::build_header(ctx, &list_container_clone, is_scanning_clone);
+                let header =
+                    header::build_header(ctx, &list_container_clone, is_scanning_clone, &win_clone);
                 vbox_clone.prepend(&header);
             }
             Err(err) => {

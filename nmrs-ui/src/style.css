@@ -1,6 +1,39 @@
+/* Light theme colors */
+window.light-theme {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #e5e5e5;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a4a4a;
+  --text-tertiary: #6a6a6a;
+  --border-color: #d0d0d0;
+  --border-color-hover: #b0b0b0;
+  --accent-color: #2563eb;
+  --success-color: #16a34a;
+  --warning-color: #d97706;
+  --error-color: #dc2626;
+}
+
+/* Dark theme colors (default) */
+window,
+window.dark-theme {
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e1e;
+  --bg-tertiary: #2a2a2a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #bbbbbb;
+  --text-tertiary: #9ca3af;
+  --border-color: #2a2a2a;
+  --border-color-hover: #3a3a3a;
+  --accent-color: #2563eb;
+  --success-color: #22c55e;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+}
+
 window {
-  background-color: #121212;
-  color: #e0e0e0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 scrolledwindow {
@@ -21,32 +54,32 @@ scrollbar trough {
 }
 
 headerbar {
-  background: #1e1e1e;
-  color: #e0e0e0;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 switch {
-  background-color: #2a2a2a;
+  background-color: var(--bg-tertiary);
   padding: 2px;
 }
 switch slider {
-  background-color: #bbbbbb;
+  background-color: var(--text-secondary);
 }
 switch:checked {
-  background-color: #2563eb;
+  background-color: var(--accent-color);
 }
 switch:checked slider {
-  background-color: #ffffff;
+  background-color: var(--bg-primary);
 }
 
 .wifi-label {
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 list {
-  background: #121212;
+  background: var(--bg-primary);
   border: none;
 }
 list > row {
@@ -55,56 +88,56 @@ list > row {
   padding: 0;
 }
 list > row:selected {
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--accent-color);
+  color: var(--bg-primary);
 }
 
 .pw-entry {
   background-color: transparent;
-  color: white;
+  color: var(--text-primary);
   border-color: transparent;
 }
 
 .network-selection {
   padding: 6px 10px;
   margin: 2px 0;
-  background: #1e1e1e;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
 }
 .network-selection:hover {
-  background: #2a2a2a;
-  border-color: #3a3a3a;
+  background: var(--bg-tertiary);
+  border-color: var(--border-color-hover);
   transition: background 150ms ease, border-color 150ms ease;
 }
 .network-selection.connected {
-  background: rgba(34, 197, 94, 0.15);
-  border-color: rgba(34, 197, 94, 0.3);
+  background: color-mix(in srgb, var(--success-color) 15%, transparent);
+  border-color: color-mix(in srgb, var(--success-color) 30%, transparent);
 }
 .network-selection.connected:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(34, 197, 94, 0.4);
+  background: color-mix(in srgb, var(--success-color) 20%, transparent);
+  border-color: color-mix(in srgb, var(--success-color) 40%, transparent);
 }
 .network-selection label {
   font-size: 14px;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 .connected-label {
   font-size: 12px;
-  color: #22c55e;
+  color: var(--success-color);
   font-style: italic;
   margin-left: 8px;
   opacity: 0.9;
 }
 
-label.network-good { color: #22c55e; }
-label.network-okay { color: #f59e0b; }
-label.network-poor { color: #ef4444; }
+label.network-good { color: var(--success-color); }
+label.network-okay { color: var(--warning-color); }
+label.network-poor { color: var(--error-color); }
 
 .network-page {
-  background: #121212;
+  background: var(--bg-primary);
   padding: 16px 20px;
   border: none;
-  color: #e0e0e0;
+  color: var(--text-primary);
   min-height: 0;
   max-height: none;
 }
@@ -112,26 +145,25 @@ label.network-poor { color: #ef4444; }
 .back-button {
   background: none;
   border: none;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-weight: 500;
   font-size: 13px;
   padding: 4px 0;
 }
-.back-button:hover { color: #ffffff; }
+.back-button:hover { color: var(--text-primary); }
 
 .network-icon {
-  color: #ffffff;
-  filter: brightness(2);
+  color: var(--text-primary);
 }
 .network-title {
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .network-arrow {
-  color: white;
+  color: var(--text-primary);
 }
 
 .network-info {
@@ -140,7 +172,7 @@ label.network-poor { color: #ef4444; }
 }
 .info-row { padding: 2px 0; }
 .info-value {
-  color: #ffffff;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -149,10 +181,10 @@ label.network-poor { color: #ef4444; }
   font-weight: 600;
   font-size: 13px;
   text-transform: uppercase;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border-color);
   padding-bottom: 4px;
   margin-bottom: 6px;
-  color: #bfbfbf;
+  color: var(--text-secondary);
   letter-spacing: 0.5px;
 }
 
@@ -166,7 +198,7 @@ label.network-poor { color: #ef4444; }
 .info-label {
   font-weight: 600;
   font-size: 13px;
-  color: #a3a3a3;
+  color: var(--text-tertiary);
   margin-bottom: 2px;
   text-decoration: underline;
 }
@@ -174,7 +206,7 @@ label.network-poor { color: #ef4444; }
 .basic-value,
 .info-value {
   font-size: 14px;
-  color: #ffffff;
+  color: var(--text-primary);
   font-weight: 500;
   margin-bottom: 8px;
 }
@@ -183,15 +215,15 @@ label.network-poor { color: #ef4444; }
   margin-top: 10px;
   margin-bottom: 10px;
   opacity: 0.25;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .wifi-secure {
-  color: white;
+  color: var(--text-primary);
 }
 
 .wifi-open {
-  color: white;
+  color: var(--text-primary);
 }
 
 .loading-spinner {
@@ -213,10 +245,24 @@ label.network-poor { color: #ef4444; }
 .refresh-btn {
     background: none;
     border: none;
-    color: #9ca3af;
+    color: var(--text-tertiary);
     font-weight: 500;
     font-size: 13px;
     padding: 4px 0;
 }
 
-.refresh-btn:hover { color: #ffffff; }
+.refresh-btn:hover { color: var(--text-primary); }
+
+.theme-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    padding: 4px 8px;
+    opacity: 0.7;
+    transition: opacity 150ms ease, color 150ms ease;
+}
+
+.theme-toggle-btn:hover {
+    opacity: 1;
+    color: var(--text-primary);
+}
