@@ -112,6 +112,8 @@ pub fn build_ui(app: &Application) {
 
     let scroller = ScrolledWindow::new();
     scroller.set_vexpand(true);
+    scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroller.set_propagate_natural_height(true);
     scroller.set_child(Some(&stack));
     vbox.append(&scroller);
 

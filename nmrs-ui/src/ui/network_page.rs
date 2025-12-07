@@ -3,6 +3,8 @@ use gtk::prelude::*;
 use gtk::{Align, Box, Button, Image, Label, Orientation};
 use nmrs_core::NetworkManager;
 use nmrs_core::models::NetworkInfo;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct NetworkPage {
     root: gtk::Box,
@@ -18,6 +20,8 @@ pub struct NetworkPage {
     mode: gtk::Label,
     rate: gtk::Label,
     security: gtk::Label,
+
+    current_ssid: Rc<RefCell<String>>,
 }
 
 impl NetworkPage {
@@ -54,20 +58,21 @@ impl NetworkPage {
         forget_btn.set_valign(Align::Center);
         forget_btn.set_cursor_from_name(Some("pointer"));
 
+        let current_ssid = Rc::new(RefCell::new(String::new()));
+
         {
             let stack_clone = stack.clone();
+            let current_ssid_clone = current_ssid.clone();
 
             forget_btn.connect_clicked(move |_| {
                 let stack = stack_clone.clone();
+                let ssid = current_ssid_clone.borrow().clone();
 
                 glib::MainContext::default().spawn_local(async move {
-                    if let Ok(nm) = NetworkManager::new().await {
-                        // real forgetting happens after update() sets the ssid label
-                        // update() must have run first
-                        let ssid = ""; // placeholder—caller must supply behavior externally
-                        if nm.forget(ssid).await.is_ok() {
-                            stack.set_visible_child_name("networks");
-                        }
+                    if let Ok(nm) = NetworkManager::new().await
+                        && nm.forget(&ssid).await.is_ok()
+                    {
+                        stack.set_visible_child_name("networks");
                     }
                 });
             });
@@ -132,6 +137,7 @@ impl NetworkPage {
             mode,
             rate,
             security,
+            current_ssid,
         }
     }
 
@@ -152,12 +158,13 @@ impl NetworkPage {
     }
 
     pub fn update(&self, info: &NetworkInfo) {
+        self.current_ssid.replace(info.ssid.clone());
         self.title.set_text(&info.ssid);
-        self.status.set_text(info.status.as_str());
+        self.status.set_text(&info.status);
         self.strength.set_text(&format!("{}%", info.strength));
-        self.bars.set_text(info.bars.as_str());
+        self.bars.set_text(&info.bars);
 
-        self.bssid.set_text(info.bssid.as_str());
+        self.bssid.set_text(&info.bssid);
         self.freq.set_text(
             &info
                 .freq
@@ -170,14 +177,14 @@ impl NetworkPage {
                 .map(|c| c.to_string())
                 .unwrap_or_else(|| "-".into()),
         );
-        self.mode.set_text(info.mode.as_str());
+        self.mode.set_text(&info.mode);
         self.rate.set_text(
             &info
                 .rate_mbps
                 .map(|r| format!("{r:.2} Mbps"))
                 .unwrap_or_else(|| "-".into()),
         );
-        self.security.set_text(info.security.as_str());
+        self.security.set_text(&info.security);
     }
 
     pub fn widget(&self) -> &gtk::Box {

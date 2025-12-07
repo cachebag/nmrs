@@ -123,11 +123,13 @@ impl NetworkRowController {
                     let have = nm_c.has_saved_connection(&ssid_c).await.unwrap_or(false);
 
                     if have {
+                        window_c.set_sensitive(false);
                         let creds = WifiSecurity::WpaPsk { psk: "".into() };
                         match nm_c.connect(&ssid_c, creds).await {
                             Ok(_) => on_success_c(),
                             Err(e) => status_c.set_text(&format!("Failed to connect: {e}")),
                         }
+                        window_c.set_sensitive(true);
                     } else {
                         connect::connect_modal(
                             nm_c.clone(),
@@ -138,11 +140,13 @@ impl NetworkRowController {
                         );
                     }
                 } else {
+                    window_c.set_sensitive(false);
                     let creds = WifiSecurity::Open;
                     match nm_c.connect(&ssid_c, creds).await {
                         Ok(_) => on_success_c(),
                         Err(e) => status_c.set_text(&format!("Failed to connect: {e}")),
                     }
+                    window_c.set_sensitive(true);
                 }
 
                 status_c.set_text("");
@@ -162,8 +166,13 @@ pub fn networks_view(
     let conn_threshold = 75;
     let list = ListBox::new();
 
-    // Sort networks: connected network first, then by signal strength (descending)
-    let mut sorted_networks = networks.to_vec();
+    // Filter out networks with empty SSIDs and sort: connected network first, then by signal strength (descending)
+    let mut sorted_networks: Vec<_> = networks
+        .iter()
+        .filter(|net| !net.ssid.trim().is_empty())
+        .cloned()
+        .collect();
+
     sorted_networks.sort_by(|a, b| {
         let a_connected = is_current_network(a, current_ssid, current_band);
         let b_connected = is_current_network(b, current_ssid, current_band);
