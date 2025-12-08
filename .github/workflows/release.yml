@@ -2,6 +2,9 @@ name: Release
 
 on:
   workflow_dispatch:
+    branches: [ master ]
+  push:
+    branches: [ master ]
     inputs:
       version:
         description: 'Version to release'
