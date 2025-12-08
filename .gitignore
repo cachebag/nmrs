@@ -1,3 +1,6 @@
 /target
 .direnv/
 nmrs/
+RELEASE_NOTES.md
+__pycache__/
+*.pyc

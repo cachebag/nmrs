@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release'
+        required: true
+        type: string
+      release_type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+
+jobs:
+  release:
+    name: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Bump version
+        run: |
+          python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}"
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
+        continue-on-error: true
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Update Cargo.lock
+        run: cargo update --workspace
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libglib2.0-dev \
+            libgirepository1.0-dev \
+            libgdk-pixbuf2.0-dev \
+            libpango1.0-dev \
+            libcairo2-dev \
+            libgtk-4-dev \
+            libadwaita-1-dev
+
+      - name: Verify build
+        run: cargo build --release --locked
+
+      - name: Create tag and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          
+          # Get the current branch name
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
+          git commit -m "chore: bump version to ${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
+          git tag -a "v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}" -m "Release v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
+          git push origin "$BRANCH"
+          git push origin "v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
+
+      - name: Extract release notes
+        run: |
+          python3 scripts/extract_release_notes.py "${{ env.VERSION }}" "${{ env.RELEASE_TYPE }}" RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}
+          name: Release v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: ${{ env.RELEASE_TYPE == 'beta' }}
+
+      - name: Update PKGBUILD checksums (after release)
+        run: |
+          # Now that the release is created, the tarball exists and we can update checksums
+          python3 scripts/bump_version.py "${{ env.VERSION }}" "${{ env.RELEASE_TYPE }}" --update-checksums-only || echo "⚠ Could not update PKGBUILD checksums automatically"
+        continue-on-error: true
+
+      - name: Commit updated checksums
+        if: success()
+        run: |
+          git add nmrs/PKGBUILD package.nix
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update checksums for ${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
+            git push origin "$(git rev-parse --abbrev-ref HEAD)"
+          fi
+        continue-on-error: true
+
+      - name: Update AUR Package
+        if: env.RELEASE_TYPE == 'stable'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "⚠ AUR_SSH_PRIVATE_KEY secret not set, skipping AUR update"
+            echo "To enable AUR updates, add your AUR SSH private key as a GitHub secret"
+            exit 0
+          fi
+          
+          # Setup SSH for AUR
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur_key
+          chmod 600 ~/.ssh/aur_key
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          
+          # Configure SSH to use the key
+          cat >> ~/.ssh/config << EOF
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur_key
+            User aur
+          EOF
+          
+          # Clone AUR repo
+          if ! git clone ssh://aur@aur.archlinux.org/nmrs.git /tmp/nmrs-aur; then
+            echo "✗ Failed to clone AUR repo"
+            echo "⚠ AUR update skipped - you may need to update manually"
+            exit 0
+          fi
+          
+          # Copy updated PKGBUILD
+          cp nmrs/PKGBUILD /tmp/nmrs-aur/
+          cd /tmp/nmrs-aur
+          
+          # Note: Checksums and .SRCINFO need to be updated on an Arch Linux system
+          # The PKGBUILD is copied, but the maintainer should run:
+          #   updpkgsums
+          #   makepkg --printsrcinfo > .SRCINFO
+          # before committing, or this can be done manually
+          
+          # Commit and push (without .SRCINFO update - needs to be done manually or on Arch)
+          git config user.name "cachebag"
+          git config user.email "cachebag@users.noreply.github.com"
+          git add PKGBUILD
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update to ${{ env.VERSION }}
+
+Note: Please update checksums by running 'updpkgsums' and regenerate .SRCINFO with 'makepkg --printsrcinfo > .SRCINFO' on an Arch Linux system."
+            if git push origin master; then
+              echo "✓ AUR package updated"
+            else
+              echo "⚠ Failed to push to AUR - update may need to be done manually"
+            fi
+          fi

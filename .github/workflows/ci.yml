@@ -13,7 +13,7 @@ env:
 
 jobs:
   fmt:
-    name: Formatting
+    name: format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +22,61 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  semver:
+    name: semver-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for semver checks
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libglib2.0-dev \
+            libgirepository1.0-dev \
+            libgdk-pixbuf2.0-dev \
+            libpango1.0-dev \
+            libcairo2-dev \
+            libgtk-4-dev \
+            libadwaita-1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-semver-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-semver-
+      - name: Install cargo-semver-checks
+        run: cargo install cargo-semver-checks --locked
+      - name: Check semver compliance (nmrs-core)
+        run: |
+          # Get the latest release tag for baseline
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LATEST_TAG" ]; then
+            echo "Checking against baseline: $LATEST_TAG"
+            cargo semver-checks check-release --package nmrs-core --baseline-rev "$LATEST_TAG"
+          else
+            echo "No previous tags found, skipping semver check for nmrs-core"
+          fi
+      - name: Check semver compliance (nmrs-ui)
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LATEST_TAG" ]; then
+            echo "Checking against baseline: $LATEST_TAG"
+            cargo semver-checks check-release --package nmrs-ui --baseline-rev "$LATEST_TAG" || true
+          else
+            echo "No previous tags found, skipping semver check for nmrs-ui"
+          fi
+        # nmrs-ui may fail due to GTK bindings - continue anyway
+        continue-on-error: true
+
   clippy:
-    name: Clippy
+    name: clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +107,7 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test-unit:
-    name: Unit Tests
+    name: unit-tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +143,7 @@ jobs:
           xvfb-run -a cargo test --test smoke_test --test style_test
   
   networkmanager:
-    name: NetworkManager
+    name: networkmanager
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,7 +184,7 @@ jobs:
         run: sudo -E env "PATH=$PATH" $(which cargo) test --test integration_test --all-features -- --nocapture || true
 
   build:
-    name: Build (${{ matrix.target }})
+    name: build (${{ matrix.target }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -176,7 +229,7 @@ jobs:
           PKG_CONFIG_ALLOW_CROSS: 1
 
   audit:
-    name: Security
+    name: audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

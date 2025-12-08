@@ -1,7 +1,14 @@
 # Changelog
 ## [Unreleased]
+
+### Fixed
 - Fixed UI not freezing on connections ([#101](https://github.com/cachebag/nmrs/pull/101))
+- Fixed seperate `ScrolledWindow` for each stack child ([#103](https://github.com/cachebag/nmrs/pull/103))
+- Dropped deps that aren't needed for now ([#104](https://github.com/cachebag/nmrs/pull/104))
+
+### Added
 - Expose system default theme toggle (light/dark) ([#102](https://github.com/cachebag/nmrs/pull/102))
+- CI: Automated release workflow ([#105](https://github.com/cachebag/nmrs/pull/105)) 
 
 ## [0.2.0-beta] - 2025-12-03
 
