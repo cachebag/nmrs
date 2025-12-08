@@ -1,6 +1,7 @@
 # Changelog
 ## [Unreleased]
 
+## [0.3.0-beta] - 2025-12-08
 ### Fixed
 - Fixed UI not freezing on connections ([#101](https://github.com/cachebag/nmrs/pull/101))
 - Fixed seperate `ScrolledWindow` for each stack child ([#103](https://github.com/cachebag/nmrs/pull/103))
@@ -8,7 +9,7 @@
 
 ### Added
 - Expose system default theme toggle (light/dark) ([#102](https://github.com/cachebag/nmrs/pull/102))
-- CI: Automated release workflow ([#105](https://github.com/cachebag/nmrs/pull/105)) 
+- CI: Automated release workflow ([#105](https://github.com/cachebag/nmrs/pull/105))
 
 ## [0.2.0-beta] - 2025-12-03
 
@@ -72,7 +73,9 @@
 - EAP connections default to no certificates (advanced certificate management coming in future releases)
 - VPN connections planned for near future
 
-[unreleased]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta...HEAD
+[0.3.0-beta]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta
+[0...v0.3.0-beta
+[unreleased]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta...HEAD
 [0.2.0-beta]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...v0.2.0-beta
 [0.1.1-beta]: https://github.com/cachebag/nmrs/compare/v0.1.0-beta...v0.1.1-beta
 [0.1.0-beta]: https://github.com/cachebag/nmrs/releases/tag/v0.1.0-beta

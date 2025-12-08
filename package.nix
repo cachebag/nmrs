@@ -15,7 +15,7 @@
 
 rustPlatform.buildRustPackage {
   pname = "nmrs";
-  version = "0.2.0-beta";
+  version = "0.3.0-beta";
 
   src = ./.;
 
