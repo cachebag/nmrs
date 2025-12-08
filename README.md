@@ -3,13 +3,28 @@
 [![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml) <br>
 [![License](https://img.shields.io/github/license/cachebag/nmrs?color=red)](LICENSE) <br>
 
-# nmrs 🦀
+<h1 align="center">nmrs 🦀</h1>
+
 <div align="center">
   <h3>Wayland-native frontend for NetworkManager. Provides a GTK4 UI and a D-Bus proxy core, built in Rust.</h3>
 </div>
+
+<!-- Top image -->
 <p align="center">
-  <img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/276b448d-8a7d-4b66-9318-160b2c966571" />
+  <img src="https://github.com/user-attachments/assets/276b448d-8a7d-4b66-9318-160b2c966571" width="100%">
 </p>
+
+<!-- Bottom row of two images using table (GitHub safe) -->
+<table align="center">
+<tr>
+<td align="center">
+<img src="https://github.com/user-attachments/assets/3e0a898f-fec6-4cec-9c22-fec819695fb2" height="420">
+</td>
+<td align="center">
+<img src="https://github.com/user-attachments/assets/c51f40ae-f1e5-4c39-a583-bdc82c980f53" height="420">
+</td>
+</tr>
+</table>
 
 # 
 
@@ -27,7 +42,7 @@ paru -S nmrs
 ```config
 "network": {
     "tooltip": false,
-    "format-wifi": "  {essid}",
+    "format-wifi":📡 "{essid}",
     "format-ethernet": "",
     "on-click": "nmrs"
   },
@@ -43,23 +58,25 @@ paru -S nmrs
 #
 
 ## Styling
-Expose your own styles by placing `style.css` in `~/.config/nmrs/`
+`nmrs` produces a default style in your configuration directory (e.g. ~/.config/nmrs/style.css`
+
+You can override this by editing that file.
 
 Example:
 ```css
 /* Global overrides */
 * {
     font-family: "Inter", "Sans";
-    color: #073642; /* Solarized dark teal */
+    color: #ebdbb2; /* Gruvbox light text */
 }
 
 window, .network-page {
-    background: #fdf6e3; /* Solarized base3 */
+    background: #1d2021; /* Gruvbox dark background */
 }
 
 /* Replace all labels with a distinct color */
 label {
-    color: #586e75 !important;
+    color: #d5c4a1 !important; /* Gruvbox faded text */
 }
 ```
 
@@ -67,32 +84,10 @@ See `nmrs-ui/src/style.css` for any custom widget labels I currently use.
 
 #
 
-This project is still in development. If you would like to contribute, please read the [contribution guide](./CONTRIBUTING.md). Here's a quick list of setup steps to get you started:
+This project is still in development. If you would like to contribute, please read the [contribution guide](./CONTRIBUTING.md).
 
-**Requirements**
-* Rust toolchain (`rustup`, `cargo`, `rustc`)
-* GTK4 and libadwaita development libraries  
+## License
 
-On **Arch Linux**:
-```bash
-sudo pacman -S gtk4 libadwaita base-devel
-```
+This project is licensed under the MIT License.  
+See the [LICENSE](./LICENSE) file for details.
 
-On Debian/Ubuntu:
-```bash
-sudo apt install pkg-config libglib2.0-dev libgirepository1.0-dev \
-libgdk-pixbuf2.0-dev libpango1.0-dev libcairo2-dev \
-libgtk-4-dev libadwaita-1-dev
-```
-
-**Clone and Build**
-```bash
-git clone https://github.com/cachebag/nmrs.git
-cd nmrs
-cargo build --release
-```
-
-**Run**
-```bash
-cargo run
-```
