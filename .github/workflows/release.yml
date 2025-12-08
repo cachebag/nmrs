@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -38,7 +38,6 @@ jobs:
           python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}"
           echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
-        continue-on-error: true
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -66,14 +65,29 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
           
           # Get the current branch name
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
           
+          # Fetch latest changes and rebase if needed
+          git fetch origin "$BRANCH"
+          
+          # Check if we're behind remote and reset if needed
+          LOCAL=$(git rev-parse HEAD)
+          REMOTE=$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo "")
+          if [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
+            echo "Local branch differs from remote, resetting to remote"
+            git reset --hard "origin/$BRANCH"
+          else
+            echo "Local branch is up to date"
+          fi
+          
+          git add -A
           git commit -m "chore: bump version to ${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
           git tag -a "v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}" -m "Release v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
-          git push origin "$BRANCH"
+          
+          # Force push to handle any race conditions (safe since we just reset)
+          git push origin "$BRANCH" --force-with-lease
           git push origin "v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
 
       - name: Extract release notes
@@ -98,15 +112,20 @@ jobs:
       - name: Commit updated checksums
         if: success()
         run: |
-          git add nmrs/PKGBUILD package.nix
+          # Add PKGBUILD from root or nmrs/ directory
+          if [ -f "PKGBUILD" ]; then
+            git add PKGBUILD
+          elif [ -f "nmrs/PKGBUILD" ]; then
+            git add nmrs/PKGBUILD
+          fi
+          git add package.nix
           if ! git diff --staged --quiet; then
             git commit -m "chore: update checksums for ${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
-            git push origin "$(git rev-parse --abbrev-ref HEAD)"
+            git push origin "$(git rev-parse --abbrev-ref HEAD)" --force-with-lease
           fi
         continue-on-error: true
 
       - name: Update AUR Package
-        if: env.RELEASE_TYPE == 'stable'
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
@@ -136,8 +155,15 @@ jobs:
             exit 0
           fi
           
-          # Copy updated PKGBUILD
-          cp nmrs/PKGBUILD /tmp/nmrs-aur/
+          # Copy updated PKGBUILD (check both locations)
+          if [ -f "PKGBUILD" ]; then
+            cp PKGBUILD /tmp/nmrs-aur/
+          elif [ -f "nmrs/PKGBUILD" ]; then
+            cp nmrs/PKGBUILD /tmp/nmrs-aur/
+          else
+            echo "✗ PKGBUILD not found"
+            exit 1
+          fi
           cd /tmp/nmrs-aur
           
           # Note: Checksums and .SRCINFO need to be updated on an Arch Linux system

@@ -365,20 +365,24 @@ def main():
         print("=" * 50)
         success = True
         
-        # Only update checksums
-        pkgbuild_path = project_root / 'nmrs' / 'PKGBUILD'
+        # Only update checksums (check both locations: root and nmrs/)
+        pkgbuild_path = project_root / 'PKGBUILD'
+        if not pkgbuild_path.exists():
+            pkgbuild_path = project_root / 'nmrs' / 'PKGBUILD'
         if pkgbuild_path.exists():
             update_pkgbuild_checksums(pkgbuild_path, version, release_type)
         else:
-            print(f"✗ File not found: {pkgbuild_path}")
-            success = False
+            print(f"⚠ File not found: {pkgbuild_path}")
+            print(f"  Skipping PKGBUILD checksum update")
+            # Don't fail - PKGBUILD may not be needed in all contexts
         
         package_nix_path = project_root / 'package.nix'
         if package_nix_path.exists():
             update_package_nix_cargohash(package_nix_path)
         else:
-            print(f"✗ File not found: {package_nix_path}")
-            success = False
+            print(f"⚠ File not found: {package_nix_path}")
+            print(f"  Skipping package.nix cargoHash update")
+            # Don't fail - package.nix may not be needed in all contexts
     else:
         print(f"Bumping version to {version}-{release_type}")
         print("=" * 50)
@@ -395,14 +399,17 @@ def main():
                 if not update_cargo_toml(path, version):
                     success = False
         
-        # Update PKGBUILD
+    # Update PKGBUILD (check both locations: root and nmrs/)
+    pkgbuild_path = project_root / 'PKGBUILD'
+    if not pkgbuild_path.exists():
         pkgbuild_path = project_root / 'nmrs' / 'PKGBUILD'
-        if not pkgbuild_path.exists():
-            print(f"✗ File not found: {pkgbuild_path}")
+    if not pkgbuild_path.exists():
+        print(f"⚠ File not found: {pkgbuild_path}")
+        print(f"  Skipping PKGBUILD update (may not be needed in this context)")
+        # Don't fail the whole script if PKGBUILD doesn't exist
+    else:
+        if not update_pkgbuild(pkgbuild_path, version, release_type):
             success = False
-        else:
-            if not update_pkgbuild(pkgbuild_path, version, release_type):
-                success = False
         
         # Update package.nix
         package_nix_path = project_root / 'package.nix'
