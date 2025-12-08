@@ -154,9 +154,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update to ${{ env.VERSION }}
-
-Note: Please update checksums by running 'updpkgsums' and regenerate .SRCINFO with 'makepkg --printsrcinfo > .SRCINFO' on an Arch Linux system."
+            git commit -m "Update to ${{ env.VERSION }} - checksums need manual update with updpkgsums"
             if git push origin master; then
               echo "✓ AUR package updated"
             else
