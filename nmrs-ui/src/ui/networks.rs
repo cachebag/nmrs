@@ -185,7 +185,13 @@ pub fn networks_view(
     });
 
     let details_page = Rc::new(NetworkPage::new(&ctx.stack));
-    ctx.stack.add_named(details_page.widget(), Some("details"));
+
+    // Wrap the details page in its own ScrolledWindow
+    let details_scroller = gtk::ScrolledWindow::new();
+    details_scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    details_scroller.set_child(Some(details_page.widget()));
+
+    ctx.stack.add_named(&details_scroller, Some("details"));
 
     for net in sorted_networks {
         let row = ListBoxRow::new();
