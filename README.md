@@ -58,7 +58,7 @@ paru -S nmrs
 #
 
 ## Styling
-`nmrs` produces a default style in your configuration directory (e.g. ~/.config/nmrs/style.css`
+`nmrs` produces a default style in your configuration directory (e.g. `~/.config/nmrs/style.css`)
 
 You can override this by editing that file.
 
