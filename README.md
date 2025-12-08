@@ -1,4 +1,8 @@
-![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg) <br> ![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)
+[![Version](https://img.shields.io/github/v/release/cachebag/nmrs?include_prereleases&label=version&color=blue)](https://github.com/cachebag/nmrs/releases) <br>
+[![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/ci.yml) <br>
+[![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml) <br>
+[![License](https://img.shields.io/github/license/cachebag/nmrs?color=red)](LICENSE) <br>
+
 # nmrs 🦀
 <div align="center">
   <h3>Wayland-native frontend for NetworkManager. Provides a GTK4 UI and a D-Bus proxy core, built in Rust.</h3>

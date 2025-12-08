@@ -15,11 +15,11 @@
 
 rustPlatform.buildRustPackage {
   pname = "nmrs";
-  version = "0.1.0-beta";
+  version = "0.2.0-beta";
 
   src = ./.;
 
-  cargoHash = "sha256-cNMdMZZsolCPJqf5pgU0eakKrc2WcYb63ABU7SPNXnI=";
+  cargoHash = "sha256-040v0HfXKFnvWdAR7Ll6bUkEAfHPPWCrY5Hsi07vvhs=";
 
   nativeBuildInputs = [
     pkg-config
