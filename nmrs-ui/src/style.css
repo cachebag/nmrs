@@ -36,23 +36,6 @@ window {
   color: var(--text-primary);
 }
 
-scrolledwindow {
-  overflow: hidden;
-}
-
-scrolledwindow > viewport {
-  background: inherit;
-}
-
-scrollbar,
-scrollbar slider,
-scrollbar trough {
-  background: transparent;
-  border: none;
-  min-width: 0;
-  min-height: 0;
-}
-
 headerbar {
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -61,16 +44,9 @@ headerbar {
 
 switch {
   background-color: var(--bg-tertiary);
-  padding: 2px;
-}
-switch slider {
-  background-color: var(--text-secondary);
 }
 switch:checked {
   background-color: var(--accent-color);
-}
-switch:checked slider {
-  background-color: var(--bg-primary);
 }
 
 .wifi-label {
@@ -138,8 +114,6 @@ label.network-poor { color: var(--error-color); }
   padding: 16px 20px;
   border: none;
   color: var(--text-primary);
-  min-height: 0;
-  max-height: none;
 }
 
 .back-button {

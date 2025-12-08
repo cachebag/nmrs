@@ -19,7 +19,6 @@ pub fn build_ui(app: &Application) {
     win.set_title(Some(""));
     win.set_default_size(400, 600);
 
-    // Load and apply saved theme preference
     let is_light = crate::theme_config::load_theme();
     if is_light {
         win.add_css_class("light-theme");
@@ -43,8 +42,6 @@ pub fn build_ui(app: &Application) {
 
     stack.add_named(&spinner, Some("loading"));
     stack.set_visible_child_name("loading");
-
-    stack.add_named(&list_container, Some("networks"));
 
     let status_clone = status.clone();
     let list_container_clone = list_container.clone();
@@ -95,7 +92,6 @@ pub fn build_ui(app: &Application) {
                         });
                     }) as Rc<dyn Fn()>;
 
-                    // Store the callback in the cell for self-reference
                     *on_success_cell_clone.borrow_mut() = Some(callback.clone());
 
                     callback
@@ -119,12 +115,15 @@ pub fn build_ui(app: &Application) {
         }
     });
 
-    let scroller = ScrolledWindow::new();
-    scroller.set_vexpand(true);
-    scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroller.set_propagate_natural_height(true);
-    scroller.set_child(Some(&stack));
-    vbox.append(&scroller);
+    let networks_scroller = ScrolledWindow::new();
+    networks_scroller.set_vexpand(true);
+    networks_scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    networks_scroller.set_child(Some(&list_container));
+
+    stack.add_named(&networks_scroller, Some("networks"));
+
+    stack.set_vexpand(true);
+    vbox.append(&stack);
 
     win.set_child(Some(&vbox));
     win.show();
