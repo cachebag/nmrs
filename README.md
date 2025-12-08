@@ -51,7 +51,7 @@ paru -S nmrs
 **For tiling window managers to avoid automatic tiling (Hyprland, Sway, i3, etc.)**
 
  ```
- windowrulev2 = float, class:^(org\.netrs\.ui)$
+ windowrulev2 = float, class:^(org\.nmrs\.ui)$
  ```
  Adjust class if your compositor reports a different one via `hyprctl clients`.
 
