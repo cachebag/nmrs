@@ -123,32 +123,13 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
 
     if use_saved_connection {
         if let Some(active) = current_ssid(conn).await {
-            eprintln!("Disconnecting from {active}.");
+            eprintln!("Disconnecting from {active}");
             if let Ok(conns) = nm.active_connections().await {
                 for conn_path in conns {
-                    eprintln!("Deactivating connection: {conn_path}");
                     let _ = nm.deactivate_connection(conn_path).await;
                 }
             }
-
-            for i in 0..retries::DISCONNECT_MAX_RETRIES {
-                let d = NMDeviceProxy::builder(conn)
-                    .path(wifi_device.clone())?
-                    .build()
-                    .await?;
-                let state = DeviceState::from(d.state().await?);
-                eprintln!("Loop {i}: Device state = {state:?}");
-
-                if state == DeviceState::Disconnected || state == DeviceState::Unavailable {
-                    eprintln!("Device disconnected");
-                    break;
-                }
-
-                Delay::new(timeouts::disconnect_poll_interval()).await;
-            }
-
-            Delay::new(timeouts::disconnect_final_delay()).await;
-            eprintln!("Disconnect complete");
+            disconnect_wifi_device(conn, &wifi_device).await?
         }
 
         let conn_path = saved_conn_path.unwrap();
@@ -253,29 +234,10 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
             eprintln!("Disconnecting from {active}.");
             if let Ok(conns) = nm.active_connections().await {
                 for conn_path in conns {
-                    eprintln!("Deactivating connection: {conn_path}");
                     let _ = nm.deactivate_connection(conn_path).await;
                 }
             }
-
-            for i in 0..retries::DISCONNECT_MAX_RETRIES {
-                let d = NMDeviceProxy::builder(conn)
-                    .path(wifi_device.clone())?
-                    .build()
-                    .await?;
-                let state = DeviceState::from(d.state().await?);
-                eprintln!("Loop {i}: Device state = {state:?}");
-
-                if state == DeviceState::Disconnected || state == DeviceState::Unavailable {
-                    eprintln!("Device disconnected");
-                    break;
-                }
-
-                Delay::new(timeouts::disconnect_poll_interval()).await;
-            }
-
-            Delay::new(timeouts::disconnect_final_delay()).await;
-            eprintln!("Disconnect complete");
+            disconnect_wifi_device(conn, &wifi_device).await?;
         }
 
         match nm
@@ -578,5 +540,43 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> zbus::Result<()> {
         Err(zbus::Error::Failure(format!(
             "No saved connection for {ssid}"
         )))
+    }
+}
+
+pub(crate) async fn disconnect_wifi_device(
+    conn: &Connection,
+    dev_path: &OwnedObjectPath,
+) -> Result<()> {
+    let dev = NMDeviceProxy::builder(conn)
+        .path(dev_path.clone())?
+        .build()
+        .await?;
+
+    let raw: zbus::proxy::Proxy = zbus::proxy::Builder::new(conn)
+        .destination("org.freedesktop.NetworkManager")?
+        .path(dev_path.clone())?
+        .interface("org.freedesktop.NetworkManager.Device")?
+        .build()
+        .await?;
+
+    let _ = raw.call_method("Disconnect", &()).await;
+
+    for _ in 0..retries::DISCONNECT_MAX_RETRIES {
+        Delay::new(timeouts::disconnect_poll_interval()).await;
+        match dev.state().await {
+            Ok(s) if s == device_state::DISCONNECTED || s == device_state::UNAVAILABLE => {
+                break;
+            }
+            Ok(_) => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Delay::new(timeouts::disconnect_final_delay()).await;
+
+    match dev.state().await {
+        Ok(s) if s == device_state::DISCONNECTED || s == device_state::UNAVAILABLE => Ok(()),
+        Ok(s) => Err(zbus::Error::Failure(format!("device stuck in state {s}"))),
+        Err(e) => Err(e),
     }
 }
