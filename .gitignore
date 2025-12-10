@@ -6,3 +6,5 @@ nmrs/*.tar.gz.*
 RELEASE_NOTES.md
 __pycache__/
 *.pyc
+vendor/
+
