@@ -5,11 +5,13 @@ pub mod networks;
 
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box as GtkBox, Label, Orientation, ScrolledWindow, Spinner,
-    Stack,
+    Application, ApplicationWindow, Box as GtkBox, Label, Orientation,
+    STYLE_PROVIDER_PRIORITY_USER, ScrolledWindow, Spinner, Stack,
 };
 use std::cell::Cell;
 use std::rc::Rc;
+
+use crate::ui::header::THEMES;
 
 type Callback = Rc<dyn Fn()>;
 type CallbackCell = Rc<std::cell::RefCell<Option<Callback>>>;
@@ -19,10 +21,19 @@ pub fn build_ui(app: &Application) {
     win.set_title(Some(""));
     win.set_default_size(400, 600);
 
-    let is_light = crate::theme_config::load_theme();
-    if is_light {
-        win.add_css_class("light-theme");
-    } else {
+    if let Some(key) = crate::theme_config::load_theme()
+        && let Some(theme) = THEMES.iter().find(|t| t.key == key.as_str())
+    {
+        let provider = gtk::CssProvider::new();
+        provider.load_from_data(theme.css);
+
+        let display = gtk::prelude::RootExt::display(&win);
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            STYLE_PROVIDER_PRIORITY_USER,
+        );
+
         win.add_css_class("dark-theme");
     }
 

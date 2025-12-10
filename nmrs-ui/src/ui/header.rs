@@ -1,12 +1,47 @@
 use glib::clone;
+use gtk::STYLE_PROVIDER_PRIORITY_USER;
 use gtk::prelude::*;
-use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
+use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch, glib};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::ui::networks;
 use crate::ui::networks::NetworksContext;
+
+pub struct ThemeDef {
+    pub key: &'static str,
+    pub name: &'static str,
+    pub css: &'static str,
+}
+
+pub static THEMES: &[ThemeDef] = &[
+    ThemeDef {
+        key: "gruvbox",
+        name: "Gruvbox",
+        css: include_str!("../themes/gruvbox.css"),
+    },
+    ThemeDef {
+        key: "nord",
+        name: "Nord",
+        css: include_str!("../themes/nord.css"),
+    },
+    ThemeDef {
+        key: "dracula",
+        name: "Dracula",
+        css: include_str!("../themes/dracula.css"),
+    },
+    ThemeDef {
+        key: "catppuccin",
+        name: "Catppuccin",
+        css: include_str!("../themes/catppuccin.css"),
+    },
+    ThemeDef {
+        key: "tokyo",
+        name: "Tokyo Night",
+        css: include_str!("../themes/tokyo.css"),
+    },
+];
 
 pub fn build_header(
     ctx: Rc<NetworksContext>,
@@ -24,7 +59,46 @@ pub fn build_header(
     wifi_label.set_halign(gtk::Align::Start);
     wifi_label.add_css_class("wifi-label");
 
+    let names: Vec<&str> = THEMES.iter().map(|t| t.name).collect();
+    let dropdown = gtk::DropDown::from_strings(&names);
+
+    if let Some(saved) = crate::theme_config::load_theme()
+        && let Some(idx) = THEMES.iter().position(|t| t.key == saved.as_str())
+    {
+        dropdown.set_selected(idx as u32);
+    }
+
+    dropdown.set_valign(gtk::Align::Center);
+    dropdown.add_css_class("dropdown");
+
+    let window_weak = window.downgrade();
+
+    dropdown.connect_selected_notify(move |dd| {
+        let idx = dd.selected() as usize;
+        if idx >= THEMES.len() {
+            return;
+        }
+
+        let theme = &THEMES[idx];
+
+        if let Some(window) = window_weak.upgrade() {
+            let provider = gtk::CssProvider::new();
+            provider.load_from_data(theme.css);
+
+            let display = gtk::prelude::RootExt::display(&window);
+
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &provider,
+                STYLE_PROVIDER_PRIORITY_USER,
+            );
+
+            crate::theme_config::save_theme(theme.key);
+        }
+    });
+
     wifi_box.append(&wifi_label);
+    wifi_box.append(&dropdown);
     header.pack_start(&wifi_box);
 
     let refresh_btn = gtk::Button::from_icon_name("view-refresh-symbolic");
@@ -71,12 +145,12 @@ pub fn build_header(
                 window.remove_css_class("light-theme");
                 window.add_css_class("dark-theme");
                 btn.set_icon_name("weather-clear-symbolic");
-                crate::theme_config::save_theme(false);
+                crate::theme_config::save_theme("light");
             } else {
                 window.remove_css_class("dark-theme");
                 window.add_css_class("light-theme");
                 btn.set_icon_name("weather-clear-night-symbolic");
-                crate::theme_config::save_theme(true);
+                crate::theme_config::save_theme("dark");
             }
         }
     });

@@ -1,48 +1,47 @@
-/* Themes */
+/* Light theme */
 window.light-theme {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #e5e5e5;
-  --text-primary: #1a1a1a;
-  --text-secondary: #4a4a4a;
-  --text-tertiary: #6a6a6a;
-  --border-color: #d0d0d0;
-  --border-color-hover: #b0b0b0;
-  --accent-color: #2563eb;
-  --success-color: #16a34a;
-  --warning-color: #d97706;
-  --error-color: #dc2626;
-}
-window,
-window.dark-theme {
-  --bg-primary: #121212;
-  --bg-secondary: #1e1e1e;
-  --bg-tertiary: #2a2a2a;
-  --text-primary: #e0e0e0;
-  --text-secondary: #bbbbbb;
-  --text-tertiary: #9ca3af;
-  --border-color: #2a2a2a;
-  --border-color-hover: #3a3a3a;
-  --accent-color: #2563eb;
-  --success-color: #22c55e;
-  --warning-color: #f59e0b;
-  --error-color: #ef4444;
+  --bg-primary: #dfe1e8;
+  --bg-secondary: #cfd1d9;
+  --bg-tertiary: #bfc2cc;
+  --text-primary: #1a1b26;
+  --text-secondary: #414868;
+  --text-tertiary: #565f89;
+  --border-color: #bfc2cc;
+  --border-color-hover: #a9acb8;
+  --accent-color: #7aa2f7;
+  --success-color: #9ece6a;
+  --warning-color: #e0af68;
+  --error-color: #f7768e;
 }
 
-/* Window */
+/* Dark theme */
+window,
+window.dark-theme {
+  --bg-primary: #1a1b26;
+  --bg-secondary: #24283b;
+  --bg-tertiary: #2f3549;
+  --text-primary: #c0caf5;
+  --text-secondary: #a9b1d6;
+  --text-tertiary: #737aa2;
+  --border-color: #2f3549;
+  --border-color-hover: #414868;
+  --accent-color: #7aa2f7;
+  --success-color: #9ece6a;
+  --warning-color: #e0af68;
+  --error-color: #f7768e;
+}
+
 window {
   background-color: var(--bg-primary);
   color: var(--text-primary);
 }
 
-/* Header */
 headerbar {
   background: var(--bg-secondary);
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-color);
 }
 
-/* Switch */
 switch {
   background-color: var(--bg-tertiary);
 }
@@ -50,13 +49,11 @@ switch:checked {
   background-color: var(--accent-color);
 }
 
-/* Wi-Fi label */
 .wifi-label {
   font-weight: 600;
   color: var(--text-primary);
 }
 
-/* List */
 list {
   background: var(--bg-primary);
   border: none;
@@ -71,14 +68,12 @@ list > row:selected {
   color: var(--bg-primary);
 }
 
-/* Entry fields */
 .pw-entry {
   background-color: transparent;
   color: var(--text-primary);
   border-color: transparent;
 }
 
-/* Network selection */
 .network-selection {
   padding: 6px 10px;
   margin: 2px 0;
@@ -110,12 +105,10 @@ list > row:selected {
   opacity: 0.9;
 }
 
-/* Network quality labels */
 label.network-good { color: var(--success-color); }
 label.network-okay { color: var(--warning-color); }
 label.network-poor { color: var(--error-color); }
 
-/* Network page */
 .network-page {
   background: var(--bg-primary);
   padding: 16px 20px;
@@ -123,7 +116,6 @@ label.network-poor { color: var(--error-color); }
   border: none;
 }
 
-/* Back button */
 .back-button {
   background: none;
   border: none;
@@ -134,7 +126,6 @@ label.network-poor { color: var(--error-color); }
 }
 .back-button:hover { color: var(--text-primary); }
 
-/* Network details */
 .network-icon {
   color: var(--text-primary);
 }
@@ -158,7 +149,6 @@ label.network-poor { color: var(--error-color); }
   font-weight: 500;
 }
 
-/* Section headers */
 .section-header {
   font-weight: 600;
   font-size: 13px;
@@ -170,7 +160,6 @@ label.network-poor { color: var(--error-color); }
   letter-spacing: 0.5px;
 }
 
-/* Info keys and values */
 .basic-key,
 .info-label {
   font-weight: 600;
@@ -187,7 +176,6 @@ label.network-poor { color: var(--error-color); }
   margin-bottom: 8px;
 }
 
-/* Divider */
 .divider {
   margin-top: 10px;
   margin-bottom: 10px;
@@ -195,18 +183,15 @@ label.network-poor { color: var(--error-color); }
   border-bottom: 1px solid var(--border-color);
 }
 
-/* Wi-Fi secure/open */
 .wifi-secure { color: var(--text-primary); }
 .wifi-open { color: var(--text-primary); }
 
-/* Loading spinner */
 .loading-spinner {
   margin-top: 12px;
   margin-bottom: 12px;
   opacity: 0.6;
 }
 
-/* Forget button */
 .forget-button {
   font-size: 0.85em;
   opacity: 0.7;
@@ -215,7 +200,6 @@ label.network-poor { color: var(--error-color); }
 }
 .forget-button:hover { opacity: 1; }
 
-/* Refresh button */
 .refresh-btn {
   background: none;
   border: none;
@@ -226,7 +210,6 @@ label.network-poor { color: var(--error-color); }
 }
 .refresh-btn:hover { color: var(--text-primary); }
 
-/* Theme toggle */
 .theme-toggle-btn {
   background: none;
   border: none;
@@ -240,7 +223,6 @@ label.network-poor { color: var(--error-color); }
   color: var(--text-primary);
 }
 
-/* Dropdown */
 .dropdown {
   background: var(--bg-secondary);
   border: none;
@@ -263,7 +245,6 @@ label.network-poor { color: var(--error-color); }
   border-radius: 0;
 }
 
-/* Popover */
 popover.background,
 popover contents {
   background: var(--bg-secondary);
@@ -284,4 +265,3 @@ popover row:selected {
 popover row label {
   color: var(--text-primary);
 }
-
