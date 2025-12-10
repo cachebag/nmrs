@@ -10,15 +10,17 @@ fn get_config_path() -> Option<PathBuf> {
     })?
 }
 
-pub fn save_theme(is_light: bool) {
+/// Save the selected theme *name* (e.g. "nord", "gruvbox", "dracula")
+pub fn save_theme(name: &str) {
     if let Some(path) = get_config_path() {
-        let _ = fs::write(path, if is_light { "light" } else { "dark" });
+        let _ = fs::write(path, name);
     }
 }
 
-pub fn load_theme() -> bool {
+/// Load the previously selected theme.
+/// Returns Some("nord") or None if missing.
+pub fn load_theme() -> Option<String> {
     get_config_path()
         .and_then(|path| fs::read_to_string(path).ok())
-        .map(|content| content.trim() == "light")
-        .unwrap_or(false) // Default to dark theme
+        .map(|s| s.trim().to_string())
 }
