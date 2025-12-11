@@ -5,9 +5,10 @@ use zvariant::OwnedObjectPath;
 
 use crate::connection_settings::{delete_connection, get_saved_connection_path};
 use crate::constants::{device_state, device_type, retries, timeouts};
-use crate::models::{ConnectionOptions, DeviceState, WifiSecurity};
+use crate::models::{ConnectionOptions, WifiSecurity};
 use crate::network_info::current_ssid;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::state_wait::wait_for_connection_state;
 use crate::utils::decode_ssid_or_empty;
 use crate::wifi_builders::build_wifi_connection;
 
@@ -263,127 +264,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
     eprintln!("Dev state after connect(): {initial_state:?}");
 
     eprintln!("Waiting for connection to complete...");
-    let mut connected = false;
-    let mut config_state_count = 0;
-    for i in 0..retries::CONNECTION_MAX_RETRIES {
-        Delay::new(timeouts::connection_poll_interval()).await;
-        match dev_proxy.state().await {
-            Ok(state) => {
-                let device_state = DeviceState::from(state);
-                eprintln!("Connection progress {i}: state = {device_state:?} ({state})");
-
-                if state == device_state::ACTIVATED {
-                    eprintln!("✓ Connection activated successfully!");
-                    connected = true;
-                    break;
-                } else if state == device_state::FAILED {
-                    eprintln!("✗ Connection failed!");
-
-                    if let Ok(reason) = dev_proxy.state_reason().await {
-                        eprintln!("Failure reason code: {reason:?}");
-                        let reason_str = match reason.1 {
-                            0 => "Unknown",
-                            1 => "None",
-                            2 => "User disconnected",
-                            3 => "Device disconnected",
-                            4 => "Carrier changed",
-                            7 => "Supplicant disconnected",
-                            8 => "Supplicant config failed",
-                            9 => "Supplicant failed",
-                            10 => "Supplicant timeout",
-                            11 => "PPP start failed",
-                            15 => "DHCP start failed",
-                            16 => "DHCP error",
-                            17 => "DHCP failed",
-                            24 => "Modem connection failed",
-                            25 => "Modem init failed",
-                            42 => "Infiniband mode",
-                            43 => "Dependency failed",
-                            44 => "BR2684 failed",
-                            45 => "Mode set failed",
-                            46 => "GSM APN select failed",
-                            47 => "GSM not searching",
-                            48 => "GSM registration denied",
-                            49 => "GSM registration timeout",
-                            50 => "GSM registration failed",
-                            51 => "GSM PIN check failed",
-                            52 => "Firmware missing",
-                            53 => "Device removed",
-                            54 => "Sleeping",
-                            55 => "Connection removed",
-                            56 => "User requested",
-                            57 => "Carrier",
-                            58 => "Connection assumed",
-                            59 => "Supplicant available",
-                            60 => "Modem not found",
-                            61 => "Bluetooth failed",
-                            62 => "GSM SIM not inserted",
-                            63 => "GSM SIM PIN required",
-                            64 => "GSM SIM PUK required",
-                            65 => "GSM SIM wrong",
-                            66 => "InfiniBand mode",
-                            67 => "Dependency failed",
-                            68 => "BR2684 failed",
-                            69 => "Modem manager unavailable",
-                            70 => "SSID not found",
-                            71 => "Secondary connection failed",
-                            72 => "DCB or FCoE setup failed",
-                            73 => "Teamd control failed",
-                            74 => "Modem failed or no longer available",
-                            75 => "Modem now ready and available",
-                            76 => "SIM PIN was incorrect",
-                            77 => "New connection activation enqueued",
-                            78 => "Parent device unreachable",
-                            79 => "Parent device changed",
-                            _ => "Unknown reason",
-                        };
-                        eprintln!("Failure details: {reason_str}");
-                    }
-
-                    return Err(zbus::Error::Failure(
-                        "Connection failed - authentication or network issue".into(),
-                    ));
-                } else if state == device_state::CONFIG {
-                    config_state_count += 1;
-                    if config_state_count > retries::CONNECTION_CONFIG_STUCK_THRESHOLD {
-                        eprintln!(
-                            "✗ Connection stuck in Config state - likely authentication failure"
-                        );
-                        return Err(zbus::Error::Failure(
-                            "Connection failed - authentication failed".into(),
-                        ));
-                    }
-                } else {
-                    config_state_count = 0;
-                }
-
-                if i > retries::CONNECTION_STUCK_CHECK_START && state == device_state::DISCONNECTED
-                {
-                    eprintln!("✗ Connection stuck in disconnected state");
-                    return Err(zbus::Error::Failure(
-                        "Connection failed - stuck in disconnected state".into(),
-                    ));
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to check device state: {e}");
-                break;
-            }
-        }
-    }
-
-    if !connected {
-        let final_state = dev_proxy.state().await.unwrap_or(0);
-        eprintln!("✗ Connection did not complete. Final state: {final_state}");
-        if final_state == device_state::CONFIG {
-            return Err(zbus::Error::Failure(
-                "Connection failed - authentication failed".into(),
-            ));
-        }
-        return Err(zbus::Error::Failure(
-            "Connection failed - timeout waiting for activation".into(),
-        ));
-    }
+    wait_for_connection_state(&dev_proxy).await?;
 
     eprintln!("---Connection request for '{ssid}' submitted successfully---");
 

@@ -1,4 +1,4 @@
-// Internal implementation modules (not exposed to external users)
+// Internal implementation modules
 mod connection;
 mod connection_settings;
 mod constants;
@@ -6,6 +6,7 @@ mod device;
 mod network_info;
 mod proxies;
 mod scan;
+mod state_wait;
 mod utils;
 
 // Public API modules
