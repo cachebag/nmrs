@@ -77,6 +77,9 @@ pub trait NMWireless {
 
     #[zbus(property)]
     fn active_access_point(&self) -> Result<OwnedObjectPath>;
+
+    #[zbus(property)]
+    fn bitrate(&self) -> Result<u32>;
 }
 
 #[proxy(

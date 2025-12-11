@@ -24,6 +24,7 @@ pub struct NetworksContext {
     pub status: Label,
     pub stack: gtk::Stack,
     pub parent_window: gtk::ApplicationWindow,
+    pub details_page: Rc<NetworkPage>,
 }
 
 impl NetworksContext {
@@ -32,6 +33,7 @@ impl NetworksContext {
         status: &Label,
         stack: &gtk::Stack,
         parent_window: &gtk::ApplicationWindow,
+        details_page: Rc<NetworkPage>,
     ) -> Result<Self> {
         let nm = Rc::new(NetworkManager::new().await?);
 
@@ -41,6 +43,7 @@ impl NetworksContext {
             status: status.clone(),
             stack: stack.clone(),
             parent_window: parent_window.clone(),
+            details_page,
         })
     }
 }
@@ -166,7 +169,6 @@ pub fn networks_view(
     let conn_threshold = 75;
     let list = ListBox::new();
 
-    // Filter out networks with empty SSIDs and sort: connected network first, then by signal strength (descending)
     let mut sorted_networks: Vec<_> = networks
         .iter()
         .filter(|net| !net.ssid.trim().is_empty())
@@ -183,15 +185,6 @@ pub fn networks_view(
             _ => b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)),
         }
     });
-
-    let details_page = Rc::new(NetworkPage::new(&ctx.stack));
-
-    // Wrap the details page in its own ScrolledWindow
-    let details_scroller = gtk::ScrolledWindow::new();
-    details_scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    details_scroller.set_child(Some(details_page.widget()));
-
-    ctx.stack.add_named(&details_scroller, Some("details"));
 
     for net in sorted_networks {
         let row = ListBoxRow::new();
@@ -260,7 +253,7 @@ pub fn networks_view(
             arrow.clone(),
             ctx.clone(),
             net.clone(),
-            details_page.clone(),
+            ctx.details_page.clone(),
         );
 
         controller.attach();

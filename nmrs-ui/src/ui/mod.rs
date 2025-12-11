@@ -66,7 +66,12 @@ pub fn build_ui(app: &Application) {
             Ok(nm) => {
                 let nm = Rc::new(nm);
 
-                // Create the callback with a self-reference using std::cell::RefCell
+                let details_page = Rc::new(network_page::NetworkPage::new(&stack_clone));
+                let details_scroller = ScrolledWindow::new();
+                details_scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+                details_scroller.set_child(Some(details_page.widget()));
+                stack_clone.add_named(&details_scroller, Some("details"));
+
                 let on_success: Rc<dyn Fn()> = {
                     let list_container = list_container_clone.clone();
                     let is_scanning = is_scanning_clone.clone();
@@ -74,8 +79,8 @@ pub fn build_ui(app: &Application) {
                     let status = status_clone.clone();
                     let stack = stack_clone.clone();
                     let parent_window = win_clone.clone();
+                    let details_page = details_page.clone();
 
-                    // Store a weak self-reference that we'll populate later
                     let on_success_cell: CallbackCell = Rc::new(std::cell::RefCell::new(None));
                     let on_success_cell_clone = on_success_cell.clone();
 
@@ -87,9 +92,9 @@ pub fn build_ui(app: &Application) {
                         let stack = stack.clone();
                         let parent_window = parent_window.clone();
                         let on_success_cell = on_success_cell.clone();
+                        let details_page = details_page.clone();
 
                         glib::MainContext::default().spawn_local(async move {
-                            // Get the callback from the cell to pass to the refreshed context
                             let callback = on_success_cell.borrow().as_ref().map(|cb| cb.clone());
                             let refresh_ctx = Rc::new(networks::NetworksContext {
                                 nm,
@@ -97,6 +102,7 @@ pub fn build_ui(app: &Application) {
                                 status,
                                 stack,
                                 parent_window,
+                                details_page,
                             });
                             header::refresh_networks(refresh_ctx, &list_container, &is_scanning)
                                 .await;
@@ -114,6 +120,7 @@ pub fn build_ui(app: &Application) {
                     status: status_clone.clone(),
                     stack: stack_clone.clone(),
                     parent_window: win_clone.clone(),
+                    details_page,
                 });
 
                 let header =
