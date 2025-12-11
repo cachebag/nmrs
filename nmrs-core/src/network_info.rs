@@ -10,6 +10,9 @@ use crate::utils::{
 
 pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<NetworkInfo> {
     let nm = NMProxy::new(conn).await?;
+    let active_ssid = current_ssid(conn).await;
+    let is_connected = active_ssid.as_deref() == Some(&net.ssid);
+
     for dp in nm.get_devices().await? {
         let dev = NMDeviceProxy::builder(conn)
             .path(dp.clone())?
@@ -24,7 +27,30 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
             .build()
             .await?;
 
-        for ap_path in wifi.get_all_access_points().await? {
+        let actual_bitrate = if is_connected {
+            wifi.bitrate().await.ok()
+        } else {
+            None
+        };
+
+        let target_ap_path = if is_connected {
+            let active_ap = wifi.active_access_point().await?;
+            if active_ap.as_str() != "/" {
+                Some(active_ap)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let ap_paths = if let Some(active_path) = target_ap_path {
+            vec![active_path]
+        } else {
+            wifi.get_all_access_points().await?
+        };
+
+        for ap_path in ap_paths {
             let ap = NMAccessPointProxy::builder(conn)
                 .path(ap_path.clone())?
                 .build()
@@ -70,15 +96,16 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
                     parts.join(" + ")
                 };
 
-                let active_ssid = current_ssid(conn).await;
-                let status = if active_ssid.as_deref() == Some(&net.ssid) {
+                let status = if is_connected {
                     "Connected".to_string()
                 } else {
                     "Disconnected".to_string()
                 };
 
                 let channel = freq.and_then(channel_from_freq);
-                let rate_mbps = max_br.map(|kbit| kbit / rate::KBIT_TO_MBPS);
+                let rate_mbps = actual_bitrate
+                    .or(max_br)
+                    .map(|kbit| kbit / rate::KBIT_TO_MBPS);
                 let bars = bars_from_strength(strength).to_string();
                 let mode = mode_raw
                     .map(mode_to_string)
