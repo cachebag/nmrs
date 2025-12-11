@@ -19,7 +19,7 @@ type CallbackCell = Rc<std::cell::RefCell<Option<Callback>>>;
 pub fn build_ui(app: &Application) {
     let win = ApplicationWindow::new(app);
     win.set_title(Some(""));
-    win.set_default_size(400, 600);
+    win.set_default_size(100, 600);
 
     if let Some(key) = crate::theme_config::load_theme()
         && let Some(theme) = THEMES.iter().find(|t| t.key == key.as_str())

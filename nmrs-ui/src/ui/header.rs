@@ -103,7 +103,6 @@ pub fn build_header(
 
     let refresh_btn = gtk::Button::from_icon_name("view-refresh-symbolic");
     refresh_btn.add_css_class("refresh-btn");
-    refresh_btn.set_valign(gtk::Align::Start);
     header.pack_end(&refresh_btn);
     refresh_btn.connect_clicked(clone!(
         #[weak]
