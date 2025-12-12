@@ -1,6 +1,30 @@
 # Changelog
 ## [Unreleased]
 
+### Changed
+- Core: Refactored `connect()` to use event-driven D-Bus signals instead of polling ([#46](https://github.com/cachebag/nmrs/issues/46))
+  - Subscribes to `NMDevice.StateChanged` signal for immediate disconnect detection
+  - Subscribes to `NMActiveConnection.StateChanged` for connection activation monitoring
+  - Uses `tokio::time::timeout` for proper timeout handling
+  - Replaced `futures-timer` polling with signal streams
+  - Faster response times and lower CPU usage
+
+### Added
+- Core: `ActiveConnectionState` enum for connection lifecycle states ([#46](https://github.com/cachebag/nmrs/issues/46))
+- Core: `ConnectionStateReason` enum with detailed failure reasons (NoSecrets, LoginFailed, ConnectTimeout, etc.) ([#46](https://github.com/cachebag/nmrs/issues/46))
+- Core: `connection_state_reason_to_error()` for mapping activation failures to typed errors ([#46](https://github.com/cachebag/nmrs/issues/46))
+- Core: `NMActiveConnection` D-Bus proxy for monitoring connection activation ([#46](https://github.com/cachebag/nmrs/issues/46))
+- Core: Signal-based wait helpers (`wait_for_connection_activation`, `wait_for_device_disconnect`, `wait_for_wifi_device_ready`) ([#46](https://github.com/cachebag/nmrs/issues/46))
+
+### Fixed
+- Core: `forget()` now verifies final device state if disconnect wait fails - proceeds to deletion only if device is confirmed disconnected, otherwise returns error ([#124](https://github.com/cachebag/nmrs/issues/124))
+- Core: `list_networks()` now preserves security flags when deduplicating APs - previously a secured AP could be overwritten by an unsecured AP with stronger signal ([#123](https://github.com/cachebag/nmrs/issues/123))
+- Core: Fixed race condition in signal-based state waiting - now subscribes to signals before checking current state to avoid missing rapid transitions
+- Core: Fixed UI freeze when using nmrs from GTK apps - replaced tokio-specific timeout with runtime-agnostic `futures-timer` that works with any async runtime (glib, tokio, etc.)
+
+### Removed
+- Core: Removed `futures-timer` dependency - replaced with tokio + D-Bus signals ([#46](https://github.com/cachebag/nmrs/issues/46))
+
 ## [0.4.0-beta] - 2025-12-11
 ### **Breaking Changes**
 - **nmrs**: Expanded `ConnectionError` enum with new variants (`AuthFailed`, `SupplicantConfigFailed`, `SupplicantTimeout`, `DhcpFailed`, `Timeout`, `Stuck`, `NoWifiDevice`, `WifiNotReady`, `NoSavedConnection`, `Failed(StateReason)`) - exhaustive matches will need a wildcard ([#82](https://github.com/cachebag/nmrs/issues/82))
