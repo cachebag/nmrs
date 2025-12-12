@@ -1,6 +1,6 @@
+use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
-use tokio::time::sleep;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
@@ -124,8 +124,22 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                 && decode_ssid_or_empty(&bytes) == ssid
             {
                 debug!("Disconnecting from active network: {ssid}");
-                disconnect_wifi_and_wait(conn, dev_path).await?;
-                debug!("Wait loop completed");
+                if let Err(e) = disconnect_wifi_and_wait(conn, dev_path).await {
+                    warn!("Disconnect wait failed: {e}");
+                    let final_state = dev.state().await?;
+                    if final_state != device_state::DISCONNECTED
+                        && final_state != device_state::UNAVAILABLE
+                    {
+                        error!(
+                            "Device still connected (state: {final_state}), cannot safely delete"
+                        );
+                        return Err(ConnectionError::Stuck(format!(
+                            "disconnect failed, device in state {final_state}"
+                        )));
+                    }
+                    debug!("Device confirmed disconnected, proceeding with deletion");
+                }
+                debug!("Disconnect phase completed");
             }
         }
     }
@@ -249,7 +263,7 @@ pub(crate) async fn disconnect_wifi_and_wait(
     wait_for_device_disconnect(&dev).await?;
 
     // Brief stabilization delay
-    sleep(timeouts::stabilization_delay()).await;
+    Delay::new(timeouts::stabilization_delay()).await;
 
     Ok(())
 }
@@ -489,7 +503,7 @@ async fn scan_and_resolve_ap(
     }
 
     // Brief wait for scan results to populate
-    sleep(timeouts::scan_wait()).await;
+    Delay::new(timeouts::scan_wait()).await;
     debug!("Scan wait complete");
 
     let ap = find_ap(conn, wifi, ssid).await?;
