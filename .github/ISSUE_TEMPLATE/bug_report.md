@@ -8,14 +8,11 @@ assignees: ''
 ---
 
 **Describe the bug**
-A clear and concise description of what the bug is.
+<!--A clear and concise description of what the bug is.-->
 
-**Desktop/Laptop (please complete the following information):**
-<!--
-Run fastfetch (or similar) and/or paste your respective `Cargo.toml` file(s)- this will work fine in lieu of the following:
--->
-- **OS (Type and Version)**:
-- **Rust Version**:
+**What should happen?:**
+<!--What is supposed to happen instead?-->
+
 
 **Additional context**
-Add any other context about the problem here.
+<!--Add any other context about the problem here.-->
