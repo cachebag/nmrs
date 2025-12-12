@@ -80,7 +80,7 @@ label {
 }
 ```
 
-See `nmrs-ui/src/style.css` for any custom widget labels I currently use.
+See `nmrs-gui/src/style.css` for any custom widget labels I currently use.
 
 #
 

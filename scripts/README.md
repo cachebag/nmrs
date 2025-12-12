@@ -30,8 +30,8 @@ python3 scripts/bump_version.py 0.3.0 beta --update-checksums-only
 
 ### What it does
 
-1. Updates `version` in `nmrs-core/Cargo.toml`
-2. Updates `version` in `nmrs-ui/Cargo.toml`
+1. Updates `version` in `nmrs/Cargo.toml`
+2. Updates `version` in `nmrs-gui/Cargo.toml`
 3. Updates `pkgver` and source URLs in `nmrs/PKGBUILD`
 4. Updates `version` in `package.nix`
 5. Updates `CHANGELOG.md`:

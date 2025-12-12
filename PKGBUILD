@@ -19,7 +19,7 @@ build() {
 
 package() {
     cd "$srcdir/${pkgname}-0.3.0-beta"
-    install -Dm755 "target/release/nmrs-ui" "$pkgdir/usr/bin/nmrs"
+    install -Dm755 "target/release/nmrs-gui" "$pkgdir/usr/bin/nmrs"
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -Dm644 "$srcdir/nmrs.desktop" "$pkgdir/usr/share/applications/$pkgname.desktop"
 }

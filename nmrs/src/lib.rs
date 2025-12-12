@@ -10,9 +10,9 @@
 //! # Example
 //!
 //! ```no_run
-//! use nmrs_core::{NetworkManager, WifiSecurity};
+//! use nmrs::{NetworkManager, WifiSecurity};
 //!
-//! # async fn example() -> nmrs_core::Result<()> {
+//! # async fn example() -> nmrs::Result<()> {
 //! let nm = NetworkManager::new().await?;
 //!
 //! // List visible networks

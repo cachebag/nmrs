@@ -3,8 +3,10 @@
 
 ## [0.4.0-beta] - 2025-12-11
 ### **Breaking Changes**
-- **nmrs-core**: Expanded `ConnectionError` enum with new variants (`AuthFailed`, `SupplicantConfigFailed`, `SupplicantTimeout`, `DhcpFailed`, `Timeout`, `Stuck`, `NoWifiDevice`, `WifiNotReady`, `NoSavedConnection`, `Failed(StateReason)`) - exhaustive matches will need a wildcard ([#82](https://github.com/cachebag/nmrs/issues/82))
-- **nmrs-core**: Return types changed from `zbus::Result<T>` to `Result<T, ConnectionError>` for structured error handling
+- **nmrs**: Expanded `ConnectionError` enum with new variants (`AuthFailed`, `SupplicantConfigFailed`, `SupplicantTimeout`, `DhcpFailed`, `Timeout`, `Stuck`, `NoWifiDevice`, `WifiNotReady`, `NoSavedConnection`, `Failed(StateReason)`) - exhaustive matches will need a wildcard ([#82](https://github.com/cachebag/nmrs/issues/82))
+- **nmrs**: Return types changed from `zbus::Result<T>` to `Result<T, ConnectionError>` for structured error handling
+- **nmrs**: Renamed crate from `nmrs-core` to `nmrs`
+- **nmrs-gui**: Renamed crate from `nmrs-ui` to `nmrs-gui`
 
 ### Added
 - Core: `StateReason` enum and `reason_to_error()` for mapping NetworkManager failure codes to typed errors ([#82](https://github.com/cachebag/nmrs/issues/82))
@@ -62,8 +64,8 @@
 - Basic and advanced network information pages
 - Persistent saved-connection state tracking
 - Refresh button for manual network scanning ([#51](https://github.com/cachebag/nmrs/pull/51))
-- GTK4-based user interface (`nmrs-ui`)
-- DBus proxy core (`nmrs-core`) that subscribes directly to NetworkManager signals
+- GTK4-based user interface (`nmrs-gui`)
+- DBus proxy core (`nmrs`) that subscribes directly to NetworkManager signals
 - `.desktop` file for launcher integration
 - AUR package support (via `yay` and `paru`)
 - Nix flake for reproducible development environment ([#47](https://github.com/cachebag/nmrs/pull/47))

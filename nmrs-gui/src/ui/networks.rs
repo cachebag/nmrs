@@ -3,8 +3,8 @@ use gtk::Align;
 use gtk::GestureClick;
 use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
-use nmrs_core::models::WifiSecurity;
-use nmrs_core::{NetworkManager, models};
+use nmrs::models::WifiSecurity;
+use nmrs::{NetworkManager, models};
 use std::rc::Rc;
 
 use crate::ui::connect;

@@ -53,26 +53,26 @@ jobs:
             ${{ runner.os }}-semver-
       - name: Install cargo-semver-checks
         run: cargo install cargo-semver-checks --locked
-      - name: Check semver compliance (nmrs-core)
+      - name: Check semver compliance (nmrs)
         run: |
           # Get the latest release tag for baseline
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$LATEST_TAG" ]; then
             echo "Checking against baseline: $LATEST_TAG"
-            cargo semver-checks check-release --package nmrs-core --baseline-rev "$LATEST_TAG"
+            cargo semver-checks check-release --package nmrs --baseline-rev "$LATEST_TAG"
           else
-            echo "No previous tags found, skipping semver check for nmrs-core"
+            echo "No previous tags found, skipping semver check for nmrs"
           fi
-      - name: Check semver compliance (nmrs-ui)
+      - name: Check semver compliance (nmrs-gui)
         run: |
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$LATEST_TAG" ]; then
             echo "Checking against baseline: $LATEST_TAG"
-            cargo semver-checks check-release --package nmrs-ui --baseline-rev "$LATEST_TAG" || true
+            cargo semver-checks check-release --package nmrs-gui --baseline-rev "$LATEST_TAG" || true
           else
-            echo "No previous tags found, skipping semver check for nmrs-ui"
+            echo "No previous tags found, skipping semver check for nmrs-gui"
           fi
-        # nmrs-ui may fail due to GTK bindings - continue anyway
+        # nmrs-gui may fail due to GTK bindings - continue anyway
         continue-on-error: true
 
   clippy:
@@ -190,9 +190,9 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            packages: nmrs-ui
+            packages: nmrs-gui
           - target: aarch64-unknown-linux-gnu
-            packages: nmrs-core
+            packages: nmrs
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies

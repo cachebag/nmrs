@@ -3,7 +3,7 @@
 Version bumping script for nmrs.
 
 This script updates version numbers across all relevant files:
-- Cargo.toml files (nmrs-core, nmrs-ui)
+- Cargo.toml files (nmrs, nmrs-gui)
 - PKGBUILD
 - package.nix
 - CHANGELOG.md (moves Unreleased section to new version)
@@ -390,7 +390,7 @@ def main():
         success = True
         
         # Update Cargo.toml files
-        for cargo_toml in ['nmrs-core/Cargo.toml', 'nmrs-ui/Cargo.toml']:
+        for cargo_toml in ['nmrs/Cargo.toml', 'nmrs-gui/Cargo.toml']:
             path = project_root / cargo_toml
             if not path.exists():
                 print(f"✗ File not found: {path}")

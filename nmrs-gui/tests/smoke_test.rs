@@ -7,7 +7,7 @@ fn app_initializes_without_panic() {
 
     gtk::init().unwrap();
     let result = std::panic::catch_unwind(|| {
-        nmrs_ui::run().ok();
+        nmrs_gui::run().ok();
     });
     assert!(result.is_ok(), "UI startup panicked");
 }

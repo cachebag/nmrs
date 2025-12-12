@@ -75,7 +75,7 @@
             glib
           ];
 
-          meta.mainProgram = "nmrs-ui";
+          meta.mainProgram = "nmrs-gui";
         };
       }
     );
