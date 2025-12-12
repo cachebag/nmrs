@@ -1,6 +1,27 @@
 # Changelog
 ## [Unreleased]
 
+## [0.4.0-beta] - 2025-12-11
+### **Breaking Changes**
+- **nmrs-core**: Expanded `ConnectionError` enum with new variants (`AuthFailed`, `SupplicantConfigFailed`, `SupplicantTimeout`, `DhcpFailed`, `Timeout`, `Stuck`, `NoWifiDevice`, `WifiNotReady`, `NoSavedConnection`, `Failed(StateReason)`) - exhaustive matches will need a wildcard ([#82](https://github.com/cachebag/nmrs/issues/82))
+- **nmrs-core**: Return types changed from `zbus::Result<T>` to `Result<T, ConnectionError>` for structured error handling
+
+### Added
+- Core: `StateReason` enum and `reason_to_error()` for mapping NetworkManager failure codes to typed errors ([#82](https://github.com/cachebag/nmrs/issues/82))
+- Core: Comprehensive documentation across all modules ([#82](https://github.com/cachebag/nmrs/issues/82))
+- UI: Pre-defined themes (Catppuccin, Dracula, Gruvbox, Nord, Tokyo) ([#106](https://github.com/cachebag/nmrs/issues/106))
+- CLI: `--version` flag with build hash extraction ([#108](https://github.com/cachebag/nmrs/issues/108))
+
+### Changed
+- Core: Decomposed `connect()` into smaller helper functions ([#81](https://github.com/cachebag/nmrs/issues/81))
+- Core: Extracted disconnect + wait logic to unified helper ([#79](https://github.com/cachebag/nmrs/issues/79))
+- Core: Unified state polling logic ([#80](https://github.com/cachebag/nmrs/issues/80))
+
+### Fixed
+- Core: Auth error mapping now properly distinguishes supplicant failures, DHCP errors, and timeouts ([#82](https://github.com/cachebag/nmrs/issues/82), [#116](https://github.com/cachebag/nmrs/issues/116))
+- Core: `bitrate` property now fetches real connection speeds ([#110](https://github.com/cachebag/nmrs/issues/110))
+- UI: Re-aligned refresh button ([#111](https://github.com/cachebag/nmrs/issues/111))
+
 ## [0.3.0-beta] - 2025-12-08
 ### Fixed
 - Fixed UI not freezing on connections ([#101](https://github.com/cachebag/nmrs/pull/101))
@@ -75,7 +96,9 @@
 
 [0.3.0-beta]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta
 [0...v0.3.0-beta
-[unreleased]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta...HEAD
+[0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
+[unreleased]: https://github...v0.4.0-beta
+[unreleased]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...HEAD
 [0.2.0-beta]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...v0.2.0-beta
 [0.1.1-beta]: https://github.com/cachebag/nmrs/compare/v0.1.0-beta...v0.1.1-beta
 [0.1.0-beta]: https://github.com/cachebag/nmrs/releases/tag/v0.1.0-beta
