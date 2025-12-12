@@ -1,6 +1,11 @@
 # Changelog
 ## [Unreleased]
 
+## [0.4.0-beta] - 2025-12-12
+
+
+(No changes documented)
+
 ## [0.4.0-beta] - 2025-12-11
 ### **Breaking Changes**
 - **nmrs**: Expanded `ConnectionError` enum with new variants (`AuthFailed`, `SupplicantConfigFailed`, `SupplicantTimeout`, `DhcpFailed`, `Timeout`, `Stuck`, `NoWifiDevice`, `WifiNotReady`, `NoSavedConnection`, `Failed(StateReason)`) - exhaustive matches will need a wildcard ([#82](https://github.com/cachebag/nmrs/issues/82))
@@ -103,7 +108,11 @@
 [0.3.0-beta]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta
 [0...v0.3.0-beta
 [0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
+[0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
+[0...v0.4.0-beta
 [unreleased]: https://github...v0.4.0-beta
+[0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
+[0...v0.4.0-beta
 [unreleased]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...HEAD
 [0.2.0-beta]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...v0.2.0-beta
 [0.1.1-beta]: https://github.com/cachebag/nmrs/compare/v0.1.0-beta...v0.1.1-beta
