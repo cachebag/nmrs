@@ -2,6 +2,12 @@
 name = "nmrs"
 version = "0.4.0"
 edition = "2024"
+description = "A Rust library for NetworkManager over D-Bus"
+license = "MIT"
+repository = "https://github.com/cachebag/nmrs"
+documentation = "https://docs.rs/nmrs"
+keywords = ["networkmanager", "dbus", "wifi", "linux", "networking"]
+categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
 zbus = "5.11.0"
