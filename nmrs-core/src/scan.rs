@@ -1,11 +1,21 @@
-use std::collections::HashMap;
-use zbus::{Connection, Result};
+//! Wi-Fi network scanning and enumeration.
+//!
+//! Provides functions to trigger Wi-Fi scans and list visible networks
+//! with their properties (SSID, signal strength, security type).
 
+use std::collections::HashMap;
+use zbus::Connection;
+
+use crate::Result;
 use crate::constants::{device_type, security_flags};
 use crate::models::Network;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::utils::{decode_ssid_or_hidden, strength_or_zero};
 
+/// Triggers a Wi-Fi scan on all wireless devices.
+///
+/// Requests NetworkManager to scan for available networks. The scan
+/// runs asynchronously; call `list_networks` after a delay to see results.
 pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
     let nm = NMProxy::new(conn).await?;
     let devices = nm.get_devices().await?;
@@ -32,6 +42,14 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Lists all visible Wi-Fi networks.
+///
+/// Enumerates access points from all Wi-Fi devices and returns a deduplicated
+/// list of networks. Networks are keyed by (SSID, frequency) to distinguish
+/// 2.4GHz and 5GHz bands of the same network.
+///
+/// When multiple access points share the same SSID and frequency (e.g., mesh
+/// networks), the one with the strongest signal is returned.
 pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
     let nm = NMProxy::new(conn).await?;
     let devices = nm.get_devices().await?;

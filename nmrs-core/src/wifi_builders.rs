@@ -1,18 +1,36 @@
+//! NetworkManager connection settings builder.
+//!
+//! Constructs the D-Bus settings dictionaries required by NetworkManager's
+//! `AddAndActivateConnection` method. These settings define the connection
+//! type, security parameters, and IP configuration.
+//!
+//! # NetworkManager Settings Structure
+//!
+//! A connection is represented as a nested dictionary:
+//! - `connection`: General settings (type, id, uuid, autoconnect)
+//! - `802-11-wireless`: Wi-Fi specific settings (ssid, mode, security reference)
+//! - `802-11-wireless-security`: Security settings (key-mgmt, psk, auth-alg)
+//! - `802-1x`: Enterprise authentication settings (for WPA-EAP)
+//! - `ipv4` / `ipv6`: IP configuration (usually "auto" for DHCP)
+
 use models::ConnectionOptions;
 use std::collections::HashMap;
 use zvariant::Value;
 
 use crate::models::{self, EapMethod};
 
+/// Converts a string to bytes for SSID encoding.
 fn bytes(val: &str) -> Vec<u8> {
     val.as_bytes().to_vec()
 }
 
+/// Creates a D-Bus string array value.
 fn string_array(xs: &[&str]) -> Value<'static> {
     let vals: Vec<String> = xs.iter().map(|s| s.to_string()).collect();
     Value::from(vals)
 }
 
+/// Builds the `802-11-wireless` section with SSID and mode.
 fn base_wifi_section(ssid: &str) -> HashMap<&'static str, Value<'static>> {
     let mut s = HashMap::new();
     s.insert("ssid", Value::from(bytes(ssid)));
@@ -20,6 +38,7 @@ fn base_wifi_section(ssid: &str) -> HashMap<&'static str, Value<'static>> {
     s
 }
 
+/// Builds the `connection` section with type, id, uuid, and autoconnect settings.
 fn base_connection_section(
     ssid: &str,
     opts: &ConnectionOptions,
@@ -41,14 +60,19 @@ fn base_connection_section(
     s
 }
 
+/// Builds the `802-11-wireless-security` section for WPA-PSK networks.
+///
+/// Uses WPA2 (RSN) with CCMP encryption. The `psk-flags` of 0 means the
+/// password is stored in the connection (agent-owned).
 fn build_psk_security(psk: &str) -> HashMap<&'static str, Value<'static>> {
     let mut sec = HashMap::new();
 
     sec.insert("key-mgmt", Value::from("wpa-psk"));
     sec.insert("psk", Value::from(psk.to_string()));
-    sec.insert("psk-flags", Value::from(0u32)); // 0 = agent-owned, provided during activation
+    sec.insert("psk-flags", Value::from(0u32));
     sec.insert("auth-alg", Value::from("open"));
 
+    // Enforce WPA2 with AES
     sec.insert("proto", string_array(&["rsn"]));
     sec.insert("pairwise", string_array(&["ccmp"]));
     sec.insert("group", string_array(&["ccmp"]));
@@ -56,6 +80,10 @@ fn build_psk_security(psk: &str) -> HashMap<&'static str, Value<'static>> {
     sec
 }
 
+/// Builds security sections for WPA-EAP (802.1X) networks.
+///
+/// Returns both the `802-11-wireless-security` section and the `802-1x` section.
+/// Supports PEAP and TTLS methods with MSCHAPv2 or PAP inner authentication.
 fn build_eap_security(
     opts: &models::EapOptions,
 ) -> (
@@ -65,12 +93,10 @@ fn build_eap_security(
     let mut sec = HashMap::new();
     sec.insert("key-mgmt", Value::from("wpa-eap"));
     sec.insert("auth-alg", Value::from("open"));
-    // same hardening tips as psk
-    // proto, pairwise, group, etc.
 
-    // 802-1x
     let mut e1x = HashMap::new();
 
+    // EAP method (outer authentication)
     let eap_str = match opts.method {
         EapMethod::Peap => "peap",
         EapMethod::Ttls => "ttls",
@@ -83,20 +109,18 @@ fn build_eap_security(
         e1x.insert("anonymous-identity", Value::from(ai.clone()));
     }
 
-    // Phase 2
+    // Phase 2 (inner authentication)
     let p2 = match opts.phase2 {
         models::Phase2::Mschapv2 => "mschapv2",
         models::Phase2::Pap => "pap",
     };
     e1x.insert("phase2-auth", Value::from(p2));
 
-    // CA handling
-    // Note that sometimes Uni's don't require certs from students to connect
+    // CA certificate handling for server verification
     if opts.system_ca_certs {
         e1x.insert("system-ca-certs", Value::from(true));
     }
     if let Some(cert) = &opts.ca_cert_path {
-        // must be a file:// URL
         e1x.insert("ca-cert", Value::from(cert.clone()));
     }
     if let Some(dom) = &opts.domain_suffix_match {
@@ -106,6 +130,19 @@ fn build_eap_security(
     (sec, e1x)
 }
 
+/// Builds a complete Wi-Fi connection settings dictionary.
+///
+/// Constructs all required sections for NetworkManager based on the
+/// security type. The returned dictionary can be passed directly to
+/// `AddAndActivateConnection`.
+///
+/// # Sections Created
+///
+/// - `connection`: Always present
+/// - `802-11-wireless`: Always present
+/// - `ipv4` / `ipv6`: Always present (set to "auto" for DHCP)
+/// - `802-11-wireless-security`: Present for PSK and EAP networks
+/// - `802-1x`: Present only for EAP networks
 pub fn build_wifi_connection(
     ssid: &str,
     security: &models::WifiSecurity,

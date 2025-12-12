@@ -1,4 +1,9 @@
-/// NetworkManager device type constants
+//! Constants for NetworkManager D-Bus interface values.
+//!
+//! These constants correspond to the numeric codes used by NetworkManager's
+//! D-Bus API for device types, states, security flags, and other values.
+
+/// NetworkManager device type constants.
 pub mod device_type {
     // pub const ETHERNET: u32 = 1;
     pub const WIFI: u32 = 2;

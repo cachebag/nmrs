@@ -1,7 +1,16 @@
+//! Utility functions for Wi-Fi data conversion and display.
+//!
+//! Provides helpers for converting between Wi-Fi data representations:
+//! frequency to channel, signal strength to visual bars, SSID bytes to strings.
+
 use std::str;
 
 use crate::constants::{frequency, signal_strength, wifi_mode};
 
+/// Converts a Wi-Fi frequency in MHz to a channel number.
+///
+/// Supports 2.4GHz (channels 1-14), 5GHz, and 6GHz bands.
+/// Returns `None` for frequencies outside known Wi-Fi bands.
 pub(crate) fn channel_from_freq(mhz: u32) -> Option<u16> {
     match mhz {
         frequency::BAND_2_4_START..=frequency::BAND_2_4_END => {
@@ -18,6 +27,13 @@ pub(crate) fn channel_from_freq(mhz: u32) -> Option<u16> {
     }
 }
 
+/// Converts signal strength (0-100) to a visual bar representation.
+///
+/// Returns a 4-character string using Unicode block characters:
+/// - 0-24%:   `▂___` (1 bar)
+/// - 25-49%:  `▂▄__` (2 bars)
+/// - 50-74%:  `▂▄▆_` (3 bars)
+/// - 75-100%: `▂▄▆█` (4 bars)
 pub(crate) fn bars_from_strength(s: u8) -> &'static str {
     match s {
         0..=signal_strength::BAR_1_MAX => "▂___",
@@ -27,6 +43,9 @@ pub(crate) fn bars_from_strength(s: u8) -> &'static str {
     }
 }
 
+/// Converts a Wi-Fi mode code to a human-readable string.
+///
+/// Mode codes: 1 = Ad-hoc, 2 = Infrastructure, 3 = Access Point.
 pub(crate) fn mode_to_string(m: u32) -> &'static str {
     match m {
         wifi_mode::ADHOC => "Adhoc",

@@ -1,13 +1,29 @@
-use zbus::{Connection, Result};
+//! Network information and current connection status.
+//!
+//! Provides functions to retrieve detailed information about networks
+//! and query the current connection state.
 
+use zbus::Connection;
+
+use crate::Result;
 use crate::constants::{device_type, rate, security_flags};
-use crate::models::{Network, NetworkInfo};
+use crate::models::{ConnectionError, Network, NetworkInfo};
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::try_log;
 use crate::utils::{
     bars_from_strength, channel_from_freq, decode_ssid_or_empty, mode_to_string, strength_or_zero,
 };
 
+/// Returns detailed information about a network.
+///
+/// Queries the access point for comprehensive details including:
+/// - BSSID (MAC address)
+/// - Signal strength and visual bars
+/// - Frequency and channel
+/// - Wi-Fi mode (infrastructure, adhoc, etc.)
+/// - Connection speed (actual if connected, max otherwise)
+/// - Security capabilities (WEP, WPA, WPA2, PSK, 802.1X)
+/// - Current connection status
 pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<NetworkInfo> {
     let nm = NMProxy::new(conn).await?;
     let active_ssid = current_ssid(conn).await;
@@ -127,9 +143,16 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
             }
         }
     }
-    Err(zbus::Error::Failure("Network not found".into()))
+    Err(ConnectionError::NotFound)
 }
 
+/// Returns the SSID of the currently connected Wi-Fi network.
+///
+/// Checks all Wi-Fi devices for an active access point and returns
+/// its SSID. Returns `None` if not connected to any Wi-Fi network.
+///
+/// Uses the `try_log!` macro to gracefully handle errors without
+/// propagating them, since this is often used in non-critical contexts.
 pub(crate) async fn current_ssid(conn: &Connection) -> Option<String> {
     let nm = try_log!(NMProxy::new(conn).await, "Failed to create NM proxy");
     let devices = try_log!(nm.get_devices().await, "Failed to get devices");
@@ -171,6 +194,10 @@ pub(crate) async fn current_ssid(conn: &Connection) -> Option<String> {
     None
 }
 
+/// Returns the SSID and frequency of the current Wi-Fi connection.
+///
+/// Similar to `current_ssid` but also returns the operating frequency
+/// in MHz, useful for determining if connected to 2.4GHz or 5GHz band.
 pub(crate) async fn current_connection_info(conn: &Connection) -> Option<(String, Option<u32>)> {
     let nm = try_log!(NMProxy::new(conn).await, "Failed to create NM proxy");
     let devices = try_log!(nm.get_devices().await, "Failed to get devices");
