@@ -34,6 +34,20 @@
 //! All operations return `Result<T, ConnectionError>`. The error type provides
 //! specific variants for common failures like authentication errors, timeouts,
 //! and missing devices.
+//!
+//! # Logging
+//!
+//! This crate uses the [`log`](https://docs.rs/log) facade for logging. To see
+//! log output, add a logging implementation like `env_logger`:
+//!
+//! ```no_run
+//! fn main() {
+//!     env_logger::init();
+//!     // ...
+//! }
+//! ```
+//!
+//! Then run with `RUST_LOG=nmrs=debug` to see debug output.
 
 // Internal implementation modules
 mod connection;

@@ -1,4 +1,5 @@
 use futures_timer::Delay;
+use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
@@ -33,7 +34,7 @@ enum SavedDecision {
 /// If a saved connection exists but fails, it will be deleted and a fresh
 /// connection will be attempted with the provided credentials.
 pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) -> Result<()> {
-    println!(
+    debug!(
         "Connecting to '{}' | secured={} is_psk={} is_eap={}",
         ssid,
         creds.secured(),
@@ -47,7 +48,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
     let decision = decide_saved_connection(saved_raw, &creds)?;
 
     let wifi_device = find_wifi_device(conn, &nm).await?;
-    eprintln!("Found WiFi device: {}", wifi_device.as_str());
+    debug!("Found WiFi device: {}", wifi_device.as_str());
 
     let wifi = NMWirelessProxy::builder(conn)
         .path(wifi_device.clone())?
@@ -55,13 +56,13 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
         .await?;
 
     if let Some(active) = current_ssid(conn).await {
-        eprintln!("Currently connected to: {active}");
+        debug!("Currently connected to: {active}");
         if active == ssid {
-            eprintln!("Already connected to {active}, skipping connect()");
+            debug!("Already connected to {active}, skipping connect()");
             return Ok(());
         }
     } else {
-        eprintln!("Not currently connected to any network");
+        debug!("Not currently connected to any network");
     }
 
     let specific_object = scan_and_resolve_ap(conn, &wifi, ssid).await?;
@@ -79,10 +80,10 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
         .path(wifi_device.clone())?
         .build()
         .await?;
-    eprintln!("Waiting for connection to complete...");
+    debug!("Waiting for connection to complete...");
     wait_for_connection_state(&dev_proxy).await?;
 
-    eprintln!("---Connection request for '{ssid}' submitted successfully---");
+    info!("Connection request for '{ssid}' submitted successfully");
 
     Ok(())
 }
@@ -98,7 +99,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
     use std::collections::HashMap;
     use zvariant::{OwnedObjectPath, Value};
 
-    eprintln!("Starting forget operation for: {ssid}");
+    debug!("Starting forget operation for: {ssid}");
 
     let nm = NMProxy::new(conn).await?;
 
@@ -126,7 +127,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
             if let Ok(bytes) = ap.ssid().await
                 && decode_ssid_or_empty(&bytes) == ssid
             {
-                eprintln!("Disconnecting from active network: {ssid}");
+                debug!("Disconnecting from active network: {ssid}");
                 let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
                     .destination("org.freedesktop.NetworkManager")?
                     .path(dev_path.clone())?
@@ -135,35 +136,35 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                     .await?;
 
                 match dev_proxy.call_method("Disconnect", &()).await {
-                    Ok(_) => eprintln!("Disconnect call succeeded"),
-                    Err(e) => eprintln!("Disconnect call failed: {e}"),
+                    Ok(_) => debug!("Disconnect call succeeded"),
+                    Err(e) => warn!("Disconnect call failed: {e}"),
                 }
 
-                eprintln!("About to enter wait loop...");
+                debug!("About to enter wait loop...");
                 for i in 0..retries::FORGET_MAX_RETRIES {
                     Delay::new(timeouts::forget_poll_interval()).await;
                     match dev.state().await {
                         Ok(current_state) => {
-                            eprintln!("Wait loop {i}: device state = {current_state}");
+                            debug!("Wait loop {i}: device state = {current_state}");
                             if current_state == device_state::DISCONNECTED
                                 || current_state == device_state::UNAVAILABLE
                             {
-                                eprintln!("Device reached disconnected state");
+                                debug!("Device reached disconnected state");
                                 break;
                             }
                         }
                         Err(e) => {
-                            eprintln!("Failed to get device state in wait loop {i}: {e}");
+                            warn!("Failed to get device state in wait loop {i}: {e}");
                             break;
                         }
                     }
                 }
-                eprintln!("Wait loop completed");
+                debug!("Wait loop completed");
             }
         }
     }
 
-    eprintln!("Starting connection deletion phase...");
+    debug!("Starting connection deletion phase...");
 
     let settings: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
         .destination("org.freedesktop.NetworkManager")?
@@ -196,7 +197,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                 && id.as_str() == ssid
             {
                 should_delete = true;
-                eprintln!("Found connection by ID: {id}");
+                debug!("Found connection by ID: {id}");
             }
 
             if let Some(wifi_sec) = settings_map.get("802-11-wireless")
@@ -210,7 +211,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                 }
                 if decode_ssid_or_empty(&raw) == ssid {
                     should_delete = true;
-                    eprintln!("Found connection by SSID match");
+                    debug!("Found connection by SSID match");
                 }
             }
 
@@ -219,7 +220,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                 let empty_psk = matches!(wsec.get("psk"), Some(Value::Str(s)) if s.is_empty());
 
                 if (missing_psk || empty_psk) && should_delete {
-                    eprintln!("Connection has missing/empty PSK, will delete");
+                    debug!("Connection has missing/empty PSK, will delete");
                 }
             }
 
@@ -227,10 +228,10 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                 match cproxy.call_method("Delete", &()).await {
                     Ok(_) => {
                         deleted_count += 1;
-                        eprintln!("Deleted connection: {}", cpath.as_str());
+                        debug!("Deleted connection: {}", cpath.as_str());
                     }
                     Err(e) => {
-                        eprintln!("Failed to delete connection {}: {}", cpath.as_str(), e);
+                        warn!("Failed to delete connection {}: {}", cpath.as_str(), e);
                     }
                 }
             }
@@ -238,10 +239,10 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
     }
 
     if deleted_count > 0 {
-        eprintln!("Successfully deleted {deleted_count} connection(s) for '{ssid}'");
+        info!("Successfully deleted {deleted_count} connection(s) for '{ssid}'");
         Ok(())
     } else {
-        eprintln!("No saved connections found for '{ssid}'");
+        debug!("No saved connections found for '{ssid}'");
         Err(ConnectionError::NoSavedConnection)
     }
 }
@@ -346,7 +347,7 @@ async fn ensure_disconnected(
     wifi_device: &OwnedObjectPath,
 ) -> Result<()> {
     if let Some(active) = current_ssid(conn).await {
-        eprintln!("Disconnecting from {active}");
+        debug!("Disconnecting from {active}");
 
         if let Ok(conns) = nm.active_connections().await {
             for conn_path in conns {
@@ -376,14 +377,14 @@ async fn connect_via_saved(
     creds: &WifiSecurity,
     saved: OwnedObjectPath,
 ) -> Result<()> {
-    eprintln!("Activating saved connection: {}", saved.as_str());
+    debug!("Activating saved connection: {}", saved.as_str());
 
     match nm
         .activate_connection(saved.clone(), wifi_device.clone(), ap.clone())
         .await
     {
         Ok(active_conn) => {
-            eprintln!(
+            debug!(
                 "activate_connection() succeeded, active connection: {}",
                 active_conn.as_str()
             );
@@ -398,8 +399,8 @@ async fn connect_via_saved(
             let check_state = dev_check.state().await?;
 
             if check_state == device_state::DISCONNECTED {
-                eprintln!("Connection activated but device stuck in Disconnected state");
-                eprintln!("Saved connection has invalid settings, deleting and retrying");
+                warn!("Connection activated but device stuck in Disconnected state");
+                warn!("Saved connection has invalid settings, deleting and retrying");
 
                 let _ = nm.deactivate_connection(active_conn).await;
 
@@ -413,19 +414,19 @@ async fn connect_via_saved(
 
                 let settings = build_wifi_connection(ap.as_str(), creds, &opts);
 
-                eprintln!("Creating fresh connection with corrected settings");
+                debug!("Creating fresh connection with corrected settings");
                 nm.add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
                     .await
                     .map_err(|e| {
-                        eprintln!("Fresh connection also failed. SOL: {e}");
+                        error!("Fresh connection also failed: {e}");
                         e
                     })?;
             }
         }
 
         Err(e) => {
-            eprintln!("activate_connection() failed: {e}");
-            eprintln!(
+            warn!("activate_connection() failed: {e}");
+            warn!(
                 "Saved connection may be corrupted, deleting and retrying with fresh connection"
             );
 
@@ -442,7 +443,7 @@ async fn connect_via_saved(
             nm.add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
                 .await
                 .map_err(|e| {
-                    eprintln!("Fresh connection also failed. SOL: {e}");
+                    error!("Fresh connection also failed: {e}");
                     e
                 })?;
         }
@@ -472,7 +473,7 @@ async fn build_and_activate_new(
 
     let settings = build_wifi_connection(ssid, &creds, &opts);
 
-    eprintln!("Creating new connetion, settings: \n{settings:#?}");
+    debug!("Creating new connection, settings: \n{settings:#?}");
 
     ensure_disconnected(conn, nm, wifi_device).await?;
 
@@ -480,9 +481,9 @@ async fn build_and_activate_new(
         .add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
         .await
     {
-        Ok(_) => eprintln!("add_and_activate_connection() succeeded"),
+        Ok(_) => debug!("add_and_activate_connection() succeeded"),
         Err(e) => {
-            eprintln!("add_and_activate_connection() failed: {e}");
+            error!("add_and_activate_connection() failed: {e}");
             return Err(e.into());
         }
     }
@@ -495,11 +496,11 @@ async fn build_and_activate_new(
         .await?;
 
     let initial_state = dev_proxy.state().await?;
-    eprintln!("Dev state after build_and_activate_new(): {initial_state:?}");
-    eprintln!("Waiting for connection to complete...");
+    debug!("Dev state after build_and_activate_new(): {initial_state:?}");
+    debug!("Waiting for connection to complete...");
     wait_for_connection_state(&dev_proxy).await?;
 
-    eprintln!("---Connection request for '{ssid}' submitted successfully---");
+    info!("Connection request for '{ssid}' submitted successfully");
 
     Ok(())
 }
@@ -514,15 +515,15 @@ async fn scan_and_resolve_ap(
     ssid: &str,
 ) -> Result<OwnedObjectPath> {
     match wifi.request_scan(HashMap::new()).await {
-        Ok(_) => eprintln!("Scan requested successfully"),
-        Err(e) => eprintln!("Scan request failed: {e}"),
+        Ok(_) => debug!("Scan requested successfully"),
+        Err(e) => warn!("Scan request failed: {e}"),
     }
 
     Delay::new(timeouts::scan_wait()).await;
-    eprintln!("Scan wait complete");
+    debug!("Scan wait complete");
 
     let ap = find_ap(conn, wifi, ssid).await?;
-    eprintln!("Matched target SSID '{ssid}'");
+    debug!("Matched target SSID '{ssid}'");
     Ok(ap)
 }
 

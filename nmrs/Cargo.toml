@@ -10,6 +10,7 @@ keywords = ["networkmanager", "dbus", "wifi", "linux", "networking"]
 categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
+log = "0.4.29"
 zbus = "5.11.0"
 zvariant = "5.7.0"
 serde = { version = "1", features = ["derive"] }

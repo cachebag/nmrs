@@ -3,6 +3,7 @@
 //! Provides helpers for converting between Wi-Fi data representations:
 //! frequency to channel, signal strength to visual bars, SSID bytes to strings.
 
+use log::warn;
 use std::str;
 
 use crate::constants::{frequency, signal_strength, wifi_mode};
@@ -65,7 +66,7 @@ pub(crate) fn decode_ssid_or_hidden(bytes: &[u8]) -> String {
     str::from_utf8(bytes)
         .map(|s| s.to_string())
         .unwrap_or_else(|e| {
-            eprintln!("Warning: Invalid UTF-8 in SSID during comparison. {e}");
+            warn!("Invalid UTF-8 in SSID during comparison: {e}");
             String::new()
         })
 }
@@ -78,7 +79,7 @@ pub(crate) fn decode_ssid_or_empty(bytes: &[u8]) -> String {
     str::from_utf8(bytes)
         .map(|s| s.to_string())
         .unwrap_or_else(|e| {
-            eprintln!("Warning: Invalid UTF-8 in SSID during comparison: {e}");
+            warn!("Invalid UTF-8 in SSID during comparison: {e}");
             String::new()
         })
 }
@@ -97,7 +98,7 @@ macro_rules! try_log {
         match $result {
             Ok(value) => value,
             Err(e) => {
-                eprintln!("Warning: {}: {:?}", $context, e);
+                log::warn!("{}: {:?}", $context, e);
                 return None;
             }
         }
