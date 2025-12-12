@@ -9,8 +9,9 @@
 - **nmrs-gui**: Renamed crate from `nmrs-ui` to `nmrs-gui`
 
 ### Added
-- Core: `StateReason` enum and `reason_to_error()` for mapping NetworkManager failure codes to typed errors ([#82](https://github.com/cachebag/nmrs/issues/82))
+- Core: `StateReason` enum and `reason_to_error()` for mapping NetworkManager failure codes to typed errors ([#82](https://github.com/cachebag/nmrs/issues/82), [#85](https://github.com/cachebag/nmrs/issues/85))
 - Core: Comprehensive documentation across all modules ([#82](https://github.com/cachebag/nmrs/issues/82))
+- Core: Logging support via `log` crate facade ([#87](https://github.com/cachebag/nmrs/issues/87))
 - UI: Pre-defined themes (Catppuccin, Dracula, Gruvbox, Nord, Tokyo) ([#106](https://github.com/cachebag/nmrs/issues/106))
 - CLI: `--version` flag with build hash extraction ([#108](https://github.com/cachebag/nmrs/issues/108))
 
@@ -18,11 +19,14 @@
 - Core: Decomposed `connect()` into smaller helper functions ([#81](https://github.com/cachebag/nmrs/issues/81))
 - Core: Extracted disconnect + wait logic to unified helper ([#79](https://github.com/cachebag/nmrs/issues/79))
 - Core: Unified state polling logic ([#80](https://github.com/cachebag/nmrs/issues/80))
+- Core: Eliminated network lookup duplication via shared helper function ([#83](https://github.com/cachebag/nmrs/issues/83))
+- Core: Replaced `eprintln!` with structured logging (`debug!`, `info!`, `warn!`, `error!`) ([#87](https://github.com/cachebag/nmrs/issues/87))
 
 ### Fixed
-- Core: Auth error mapping now properly distinguishes supplicant failures, DHCP errors, and timeouts ([#82](https://github.com/cachebag/nmrs/issues/82), [#116](https://github.com/cachebag/nmrs/issues/116))
+- Core: Auth error mapping now properly distinguishes supplicant failures, DHCP errors, and timeouts ([#82](https://github.com/cachebag/nmrs/issues/82), [#85](https://github.com/cachebag/nmrs/issues/85), [#116](https://github.com/cachebag/nmrs/issues/116))
 - Core: `bitrate` property now fetches real connection speeds ([#110](https://github.com/cachebag/nmrs/issues/110))
 - UI: Re-aligned refresh button ([#111](https://github.com/cachebag/nmrs/issues/111))
+- UI: Show connection status when connecting with saved credentials ([#61](https://github.com/cachebag/nmrs/issues/61))
 
 ## [0.3.0-beta] - 2025-12-08
 ### Fixed
