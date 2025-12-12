@@ -1,4 +1,4 @@
-# nmrs 🦀
+# <p align="center"> nmrs 🦀 
 
 [![Crates.io](https://img.shields.io/crates/v/nmrs)](https://crates.io/crates/nmrs)
 [![Documentation](https://docs.rs/nmrs/badge.svg)](https://docs.rs/nmrs)
@@ -6,34 +6,57 @@
 [![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml)
 [![License](https://img.shields.io/crates/l/nmrs)](LICENSE)
 
-**Rust bindings for NetworkManager via D-Bus**
+A Rust API for [NetworkManager](https://networkmanager.dev/) over [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html). The goal is to provide a safe and simple high-level API for managing Wi-Fi connections on Linux systems, built on [`zbus`](https://docs.rs/zbus) for reliable D-Bus communication.
 
-A high-level, async API for managing Wi-Fi connections on Linux systems. Built on `zbus` for reliable D-Bus communication with NetworkManager.
+The project is divided into the following crates:
 
-## Library Usage
+* `nmrs`: The core library providing NetworkManager bindings and Wi-Fi management API.
+* `nmrs-gui`: A Wayland-compatible GTK4 graphical interface for NetworkManager.
 
-Add to your `Cargo.toml`:
+## Getting Started
 
-```toml
-[dependencies]
-nmrs = "0.4.0"
-tokio = { version = "1.48.0", features = ["full"] }
-```
+The best way to get started with `nmrs` is the [API documentation](https://docs.rs/nmrs), which includes examples for common operations like scanning networks, connecting to Wi-Fi, and managing connection profiles.
 
-### Example
+## Sample usage
+We'll create a simple example that scans for available networks and connects to one. Note that these examples require NetworkManager to be running on your Linux system with D-Bus access, obviously.
 
-```rust
-use nmrs::{NetworkManager, WifiSecurity};
+### Listing Networks
+
+Scan for and display available Wi-Fi networks:
+
+```rust,no_run
+use nmrs::NetworkManager;
 
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
-    // List available networks
+    // Scan for networks
     let networks = nm.list_networks().await?;
+    
     for net in networks {
-        println!("{} - Signal: {}%", net.ssid, net.strength.unwrap_or(0));
+        println!(
+            "{} - Signal: {}%, Security: {:?}",
+            net.ssid,
+            net.strength.unwrap_or(0),
+            net.security
+        );
     }
+    
+    Ok(())
+}
+```
+
+### Now let's connect to a network...
+
+Connect to a WPA-PSK protected network:
+
+```rust,no_run
+use nmrs::{NetworkManager, WifiSecurity};
+
+#[tokio::main]
+async fn main() -> nmrs::Result<()> {
+    let nm = NetworkManager::new().await?;
     
     // Connect to a network
     nm.connect("MyNetwork", WifiSecurity::WpaPsk {
@@ -49,25 +72,36 @@ async fn main() -> nmrs::Result<()> {
 }
 ```
 
-### Features
+### Error Handling
 
-- **Network Management**: Connect to WPA-PSK, WPA-EAP, and open networks
-- **Discovery**: Scan and list available access points
-- **Profile Management**: Query, create, and delete saved connections
-- **Status Monitoring**: Get current connection state and signal strength
-- **Typed Errors**: Structured error types with NetworkManager state reasons
-- **Async/Await**: Fully asynchronous API using `tokio` or `async-std`
+All operations return `Result<T, ConnectionError>` with specific error variants:
 
-[View full API documentation →](https://docs.rs/nmrs)
+```rust,no_run
+use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 
----
+#[tokio::main]
+async fn main() -> nmrs::Result<()> {
+    let nm = NetworkManager::new().await?;
+    
+    match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+        psk: "wrong_password".into()
+    }).await {
+        Ok(_) => println!("Connected successfully"),
+        Err(ConnectionError::AuthFailed) => eprintln!("Authentication failed - wrong password"),
+        Err(ConnectionError::NotFound) => eprintln!("Network not found or out of range"),
+        Err(ConnectionError::Timeout) => eprintln!("Connection timed out"),
+        Err(e) => eprintln!("Error: {}", e),
+    }
+    
+    Ok(())
+}
+```
+# <p align="center"> GUI Application </p>
 
-## GUI Application
-
-This repository also includes `nmrs-gui`, a Wayland compatible `NetworkManager` frontend built with GTK4.
+This repository also includes `nmrs-gui`, a Wayland-compatible NetworkManager frontend built with GTK4.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/276b448d-8a7d-4b66-9318-160b2c966571" width="100%">
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/fc0fc636-2fa3-4d80-b43e-71f830b10053" />
 </p>
 
 ### Installation
@@ -106,9 +140,74 @@ windowrulev2 = float, class:^(org\.nmrs\.ui)$
 
 Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-defined themes you can pick from in the interface itself.
 
----
+<details>
+<summary><strong>Roadmap / Implementation Status</strong></summary>
 
-### Contributing
+### Devices
+
+- [x] Generic  
+- [x] Wireless  
+- [ ] Any  
+- [ ] Wired  
+- [ ] ADSL  
+- [ ] Bluetooth  
+- [ ] Bond  
+- [ ] Bridge  
+- [ ] Dummy  
+- [ ] HSR *(NetworkManager ≥ 1.46)*  
+- [ ] Infiniband  
+- [ ] IP Tunnel  
+- [ ] IPVLAN *(NetworkManager ≥ 1.52)*  
+- [ ] Lowpan  
+- [ ] Loopback  
+- [ ] MACsec  
+- [ ] MACVLAN  
+- [ ] Modem  
+- [ ] OLPC Mesh  
+- [ ] OVS Bridge  
+- [ ] OVS Interface  
+- [ ] OVS Port  
+- [ ] PPP  
+- [ ] Statistics  
+- [ ] Team  
+- [ ] TUN/TAP  
+- [ ] VETH  
+- [ ] VLAN  
+- [ ] VRF  
+- [ ] VXLAN  
+- [ ] Wi-Fi P2P  
+- [ ] WiMAX  
+- [ ] WireGuard  
+- [ ] WPAN  
+
+### Configurations
+
+- [x] IPv4  
+- [x] IPv6  
+- [x] DHCPv4  
+- [x] DHCPv6  
+
+### Core Interfaces
+
+- [x] NetworkManager *(partial)*  
+- [x] Device  
+- [x] Access Point  
+- [x] Active Connection  
+- [x] Settings  
+- [x] Settings Connection  
+- [ ] Agent Manager  
+- [ ] Checkpoint  
+- [ ] DNS Manager  
+- [ ] PPP  
+- [ ] Secret Agent  
+- [ ] VPN Connection  
+- [ ] VPN Plugin  
+- [ ] Wi-Fi P2P  
+- [ ] WiMAX NSP  
+
+</details>
+
+## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
@@ -116,3 +215,6 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for 
 ## License
 
 MIT License. See [LICENSE](./LICENSE) for details.
+
+## Existing crates
+I'm mainly trying to pick up off of where [networkmanager-rs](https://github.com/zibebe/networkmanager-rs) left off.
