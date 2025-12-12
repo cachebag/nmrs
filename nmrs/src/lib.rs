@@ -38,16 +38,12 @@
 //! # Logging
 //!
 //! This crate uses the [`log`](https://docs.rs/log) facade for logging. To see
-//! log output, add a logging implementation like `env_logger`:
-//!
-//! ```no_run
-//! fn main() {
-//!     env_logger::init();
-//!     // ...
-//! }
+//! log output, add a logging implementation like `env_logger`. For example:
+
+//! ```no_run,ignore
+//! env_logger::init();
+//! // ...
 //! ```
-//!
-//! Then run with `RUST_LOG=nmrs=debug` to see debug output.
 
 // Internal implementation modules
 mod connection;

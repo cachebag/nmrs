@@ -5,8 +5,11 @@
 
 use log::warn;
 use std::str;
+use zbus::Connection;
 
-use crate::constants::{frequency, signal_strength, wifi_mode};
+use crate::Result;
+use crate::constants::{device_type, frequency, signal_strength, wifi_mode};
+use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 
 /// Converts a Wi-Fi frequency in MHz to a channel number.
 ///
@@ -88,6 +91,52 @@ pub(crate) fn decode_ssid_or_empty(bytes: &[u8]) -> String {
 /// This is safer than unwrap_or(0) as it makes the default explicit.
 pub(crate) fn strength_or_zero(strength: Option<u8>) -> u8 {
     strength.unwrap_or(0)
+}
+
+/// This helper iterates through all WiFi access points and calls the provided async function.
+///
+/// Loops through devices, filters for WiFi, and invokes `func` with each access point proxy.
+/// The function is awaited immediately in the loop to avoid lifetime issues.
+pub(crate) async fn for_each_access_point<F, T>(conn: &Connection, mut func: F) -> Result<Vec<T>>
+where
+    F: for<'a> FnMut(
+        &'a NMAccessPointProxy<'a>,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Option<T>>> + 'a>,
+    >,
+{
+    let nm = NMProxy::new(conn).await?;
+    let devices = nm.get_devices().await?;
+
+    let mut results = Vec::new();
+
+    for dp in devices {
+        let d_proxy = NMDeviceProxy::builder(conn)
+            .path(dp.clone())?
+            .build()
+            .await?;
+
+        if d_proxy.device_type().await? != device_type::WIFI {
+            continue;
+        }
+
+        let wifi = NMWirelessProxy::builder(conn)
+            .path(dp.clone())?
+            .build()
+            .await?;
+
+        for ap_path in wifi.get_all_access_points().await? {
+            let ap = NMAccessPointProxy::builder(conn)
+                .path(ap_path)?
+                .build()
+                .await?;
+            if let Some(result) = func(&ap).await? {
+                results.push(result);
+            }
+        }
+    }
+
+    Ok(results)
 }
 
 /// Macro to convert Result to Option with error logging.
