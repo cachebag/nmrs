@@ -35,6 +35,17 @@
 //! specific variants for common failures like authentication errors, timeouts,
 //! and missing devices.
 //!
+//! # Signal-Based State Monitoring
+//!
+//! This crate uses D-Bus signals for efficient state monitoring instead of polling.
+//! When connecting to a network, the library subscribes to NetworkManager's
+//! `StateChanged` signals to detect connection success or failure immediately,
+//! rather than polling device state in a loop. This provides:
+//!
+//! - Faster response times (immediate notification vs polling delay)
+//! - Lower CPU usage (no spinning loops)
+//! - Better error messages with specific failure reasons
+//!
 //! # Logging
 //!
 //! This crate uses the [`log`](https://docs.rs/log) facade for logging. To see
@@ -63,8 +74,9 @@ pub mod wifi_builders;
 
 // Re-exported public API
 pub use models::{
-    ConnectionError, ConnectionOptions, Device, DeviceState, DeviceType, EapMethod, EapOptions,
-    Network, NetworkInfo, Phase2, StateReason, WifiSecurity, reason_to_error,
+    ActiveConnectionState, ConnectionError, ConnectionOptions, ConnectionStateReason, Device,
+    DeviceState, DeviceType, EapMethod, EapOptions, Network, NetworkInfo, Phase2, StateReason,
+    WifiSecurity, connection_state_reason_to_error, reason_to_error,
 };
 pub use network_manager::NetworkManager;
 

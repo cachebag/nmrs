@@ -15,9 +15,7 @@ pub mod device_type {
 pub mod device_state {
     pub const UNAVAILABLE: u32 = 20;
     pub const DISCONNECTED: u32 = 30;
-    pub const CONFIG: u32 = 50;
     pub const ACTIVATED: u32 = 100;
-    pub const FAILED: u32 = 120;
 }
 
 /// WiFi security flag constants
@@ -34,39 +32,41 @@ pub mod wifi_mode {
     pub const AP: u32 = 3;
 }
 
-/// Timeout and delay constants (in milliseconds)
+/// Timeout constants for signal-based waiting.
+///
+/// These timeouts are used with D-Bus signal monitoring instead of polling.
+/// They define how long to wait for state transitions before giving up.
 pub mod timeouts {
     use std::time::Duration;
 
-    pub const DISCONNECT_POLL_INTERVAL_MS: u64 = 300;
-    pub const DISCONNECT_FINAL_DELAY_MS: u64 = 500;
-    pub const CONNECTION_POLL_INTERVAL_MS: u64 = 500;
-    pub const SCAN_WAIT_SECONDS: u64 = 3;
+    /// Maximum time to wait for Wi-Fi device to become ready (60 seconds).
+    ///
+    /// Used after enabling Wi-Fi to wait for the hardware to initialize.
+    const WIFI_READY_TIMEOUT_SECS: u64 = 60;
 
-    pub fn disconnect_poll_interval() -> Duration {
-        Duration::from_millis(DISCONNECT_POLL_INTERVAL_MS)
+    /// Time to wait after requesting a scan before checking results (2 seconds).
+    ///
+    /// While we could use signals for scan completion, a short delay is
+    /// sufficient for now, and simpler for most use cases.
+    const SCAN_WAIT_SECS: u64 = 2;
+
+    /// Brief delay after state transitions to allow NetworkManager to stabilize.
+    const STABILIZATION_DELAY_MS: u64 = 100;
+
+    /// Returns the Wi-Fi ready timeout duration.
+    pub fn wifi_ready_timeout() -> Duration {
+        Duration::from_secs(WIFI_READY_TIMEOUT_SECS)
     }
 
-    pub fn disconnect_final_delay() -> Duration {
-        Duration::from_millis(DISCONNECT_FINAL_DELAY_MS)
-    }
-
-    pub fn connection_poll_interval() -> Duration {
-        Duration::from_millis(CONNECTION_POLL_INTERVAL_MS)
-    }
-
+    /// Returns the scan wait duration.
     pub fn scan_wait() -> Duration {
-        Duration::from_secs(SCAN_WAIT_SECONDS)
+        Duration::from_secs(SCAN_WAIT_SECS)
     }
-}
 
-/// Retry count constants
-pub mod retries {
-    pub const DISCONNECT_MAX_RETRIES: u32 = 10;
-    pub const CONNECTION_MAX_RETRIES: u32 = 40;
-    pub const CONNECTION_CONFIG_STUCK_THRESHOLD: u32 = 15;
-    pub const CONNECTION_STUCK_CHECK_START: u32 = 10;
-    pub const WIFI_READY_MAX_RETRIES: u32 = 20;
+    /// Returns a brief stabilization delay.
+    pub fn stabilization_delay() -> Duration {
+        Duration::from_millis(STABILIZATION_DELAY_MS)
+    }
 }
 
 /// Signal strength thresholds for bar display

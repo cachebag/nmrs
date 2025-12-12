@@ -1,16 +1,16 @@
-use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
+use tokio::time::sleep;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
 use crate::Result;
 use crate::connection_settings::{delete_connection, get_saved_connection_path};
-use crate::constants::{device_state, device_type, retries, timeouts};
+use crate::constants::{device_state, device_type, timeouts};
 use crate::models::{ConnectionError, ConnectionOptions, WifiSecurity};
 use crate::network_info::current_ssid;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
-use crate::state_wait::wait_for_connection_state;
+use crate::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
 use crate::utils::decode_ssid_or_empty;
 use crate::wifi_builders::build_wifi_connection;
 
@@ -76,14 +76,10 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
             build_and_activate_new(conn, &nm, &wifi_device, &specific_object, ssid, creds).await?;
         }
     }
-    let dev_proxy = NMDeviceProxy::builder(conn)
-        .path(wifi_device.clone())?
-        .build()
-        .await?;
-    debug!("Waiting for connection to complete...");
-    wait_for_connection_state(&dev_proxy).await?;
 
-    info!("Connection request for '{ssid}' submitted successfully");
+    // Connection activation is now handled within connect_via_saved() and
+    // build_and_activate_new() using signal-based monitoring
+    info!("Successfully connected to '{ssid}'");
 
     Ok(())
 }
@@ -219,8 +215,10 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
 
 /// Disconnects a Wi-Fi device and waits for it to reach disconnected state.
 ///
-/// Calls the Disconnect method on the device and polls until the device
-/// state becomes Disconnected or Unavailable, or the retry limit is reached.
+/// Calls the Disconnect method on the device and waits for the `StateChanged`
+/// signal to indicate the device has reached Disconnected or Unavailable state.
+/// This is more efficient than polling and responds immediately when the
+/// device disconnects.
 pub(crate) async fn disconnect_wifi_and_wait(
     conn: &Connection,
     dev_path: &OwnedObjectPath,
@@ -230,6 +228,13 @@ pub(crate) async fn disconnect_wifi_and_wait(
         .build()
         .await?;
 
+    // Check if already disconnected
+    let current_state = dev.state().await?;
+    if current_state == device_state::DISCONNECTED || current_state == device_state::UNAVAILABLE {
+        debug!("Device already disconnected");
+        return Ok(());
+    }
+
     let raw: zbus::proxy::Proxy = zbus::proxy::Builder::new(conn)
         .destination("org.freedesktop.NetworkManager")?
         .path(dev_path.clone())?
@@ -237,26 +242,16 @@ pub(crate) async fn disconnect_wifi_and_wait(
         .build()
         .await?;
 
+    debug!("Sending disconnect request");
     let _ = raw.call_method("Disconnect", &()).await;
 
-    for _ in 0..retries::DISCONNECT_MAX_RETRIES {
-        Delay::new(timeouts::disconnect_poll_interval()).await;
-        match dev.state().await {
-            Ok(s) if s == device_state::DISCONNECTED || s == device_state::UNAVAILABLE => {
-                break;
-            }
-            Ok(_) => continue,
-            Err(e) => return Err(e.into()),
-        }
-    }
+    // Wait for disconnect using signal-based monitoring
+    wait_for_device_disconnect(&dev).await?;
 
-    Delay::new(timeouts::disconnect_final_delay()).await;
+    // Brief stabilization delay
+    sleep(timeouts::stabilization_delay()).await;
 
-    match dev.state().await {
-        Ok(s) if s == device_state::DISCONNECTED || s == device_state::UNAVAILABLE => Ok(()),
-        Ok(s) => Err(ConnectionError::Stuck(format!("{s}"))),
-        Err(e) => Err(e.into()),
-    }
+    Ok(())
 }
 
 /// Finds the first Wi-Fi device on the system.
@@ -333,10 +328,10 @@ async fn ensure_disconnected(
 
 /// Attempts to connect using a saved connection profile.
 ///
-/// Activates the saved connection. If activation succeeds but the device
-/// ends up in a disconnected state (indicating invalid saved settings),
-/// deletes the saved connection and creates a fresh one with the provided
-/// credentials.
+/// Activates the saved connection and monitors the activation state using
+/// D-Bus signals. If activation fails (device disconnects or enters failed
+/// state), deletes the saved connection and creates a fresh one with the
+/// provided credentials.
 ///
 /// This handles cases where saved passwords are outdated or corrupted.
 async fn connect_via_saved(
@@ -359,38 +354,38 @@ async fn connect_via_saved(
                 active_conn.as_str()
             );
 
-            Delay::new(timeouts::disconnect_final_delay()).await;
+            // Wait for connection activation using signal-based monitoring
+            match wait_for_connection_activation(conn, &active_conn).await {
+                Ok(()) => {
+                    debug!("Saved connection activated successfully");
+                }
+                Err(e) => {
+                    warn!("Saved connection activation failed: {e}");
+                    warn!("Deleting saved connection and retrying with fresh credentials");
 
-            let dev_check = NMDeviceProxy::builder(conn)
-                .path(wifi_device.clone())?
-                .build()
-                .await?;
+                    let _ = nm.deactivate_connection(active_conn).await;
+                    let _ = delete_connection(conn, saved.clone()).await;
 
-            let check_state = dev_check.state().await?;
+                    let opts = ConnectionOptions {
+                        autoconnect: true,
+                        autoconnect_priority: None,
+                        autoconnect_retries: None,
+                    };
 
-            if check_state == device_state::DISCONNECTED {
-                warn!("Connection activated but device stuck in Disconnected state");
-                warn!("Saved connection has invalid settings, deleting and retrying");
+                    let settings = build_wifi_connection(ap.as_str(), creds, &opts);
 
-                let _ = nm.deactivate_connection(active_conn).await;
+                    debug!("Creating fresh connection with corrected settings");
+                    let (_, new_active_conn) = nm
+                        .add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
+                        .await
+                        .map_err(|e| {
+                            error!("Fresh connection also failed: {e}");
+                            e
+                        })?;
 
-                let _ = delete_connection(conn, saved.clone()).await;
-
-                let opts = ConnectionOptions {
-                    autoconnect: true,
-                    autoconnect_priority: None,
-                    autoconnect_retries: None,
-                };
-
-                let settings = build_wifi_connection(ap.as_str(), creds, &opts);
-
-                debug!("Creating fresh connection with corrected settings");
-                nm.add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
-                    .await
-                    .map_err(|e| {
-                        error!("Fresh connection also failed: {e}");
-                        e
-                    })?;
+                    // Wait for the fresh connection to activate
+                    wait_for_connection_activation(conn, &new_active_conn).await?;
+                }
             }
         }
 
@@ -408,12 +403,16 @@ async fn connect_via_saved(
 
             let settings = build_wifi_connection(ap.as_str(), creds, &opts);
 
-            nm.add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
+            let (_, active_conn) = nm
+                .add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
                 .await
                 .map_err(|e| {
                     error!("Fresh connection also failed: {e}");
                     e
                 })?;
+
+            // Wait for the fresh connection to activate
+            wait_for_connection_activation(conn, &active_conn).await?;
         }
     }
 
@@ -424,7 +423,8 @@ async fn connect_via_saved(
 ///
 /// Builds connection settings from the provided credentials, ensures the
 /// device is disconnected, then calls AddAndActivateConnection to create
-/// and activate the connection in one step.
+/// and activate the connection in one step. Monitors activation using
+/// D-Bus signals for immediate feedback on success or failure.
 async fn build_and_activate_new(
     conn: &Connection,
     nm: &NMProxy<'_>,
@@ -445,38 +445,39 @@ async fn build_and_activate_new(
 
     ensure_disconnected(conn, nm, wifi_device).await?;
 
-    match nm
+    let (_, active_conn) = match nm
         .add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
         .await
     {
-        Ok(_) => debug!("add_and_activate_connection() succeeded"),
+        Ok(paths) => {
+            debug!(
+                "add_and_activate_connection() succeeded, active connection: {}",
+                paths.1.as_str()
+            );
+            paths
+        }
         Err(e) => {
             error!("add_and_activate_connection() failed: {e}");
             return Err(e.into());
         }
-    }
+    };
 
-    Delay::new(timeouts::disconnect_poll_interval()).await;
+    debug!("Waiting for connection activation using signal monitoring...");
 
-    let dev_proxy = NMDeviceProxy::builder(conn)
-        .path(wifi_device.clone())?
-        .build()
-        .await?;
+    // Wait for connection activation using the ActiveConnection signals
+    wait_for_connection_activation(conn, &active_conn).await?;
 
-    let initial_state = dev_proxy.state().await?;
-    debug!("Dev state after build_and_activate_new(): {initial_state:?}");
-    debug!("Waiting for connection to complete...");
-    wait_for_connection_state(&dev_proxy).await?;
-
-    info!("Connection request for '{ssid}' submitted successfully");
+    info!("Connection to '{ssid}' activated successfully");
 
     Ok(())
 }
 
 /// Triggers a Wi-Fi scan and finds the target access point.
 ///
-/// Requests a scan, waits for it to complete, then searches for an
-/// access point matching the target SSID.
+/// Requests a scan, waits briefly for results, then searches for an
+/// access point matching the target SSID. The wait time is shorter than
+/// polling-based approaches since we just need the scan to populate
+/// initial results.
 async fn scan_and_resolve_ap(
     conn: &Connection,
     wifi: &NMWirelessProxy<'_>,
@@ -487,7 +488,8 @@ async fn scan_and_resolve_ap(
         Err(e) => warn!("Scan request failed: {e}"),
     }
 
-    Delay::new(timeouts::scan_wait()).await;
+    // Brief wait for scan results to populate
+    sleep(timeouts::scan_wait()).await;
     debug!("Scan wait complete");
 
     let ap = find_ap(conn, wifi, ssid).await?;

@@ -1,14 +1,17 @@
 //! Network device enumeration and control.
 //!
 //! Provides functions for listing network devices, checking Wi-Fi state,
-//! and enabling/disabling Wi-Fi.
+//! and enabling/disabling Wi-Fi. Uses D-Bus signals for efficient state
+//! monitoring instead of polling.
 
+use log::debug;
 use zbus::Connection;
 
 use crate::Result;
-use crate::constants::{retries, timeouts};
-use crate::models::{ConnectionError, Device, DeviceState, DeviceType};
+use crate::constants::device_type;
+use crate::models::{ConnectionError, Device, DeviceState};
 use crate::proxies::{NMDeviceProxy, NMProxy};
+use crate::state_wait::wait_for_wifi_device_ready;
 
 /// Lists all network devices managed by NetworkManager.
 ///
@@ -47,25 +50,43 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
 
 /// Waits for a Wi-Fi device to become ready for operations.
 ///
-/// Polls until a Wi-Fi device reaches either Disconnected or Activated state,
-/// indicating it's ready for scanning or connection operations. This is useful
-/// after enabling Wi-Fi, as the device may take time to initialize.
+/// Uses D-Bus signals to efficiently wait until a Wi-Fi device reaches
+/// either Disconnected or Activated state, indicating it's ready for
+/// scanning or connection operations. This is useful after enabling Wi-Fi,
+/// as the device may take time to initialize.
 ///
 /// Returns `WifiNotReady` if no Wi-Fi device becomes ready within the timeout.
 pub(crate) async fn wait_for_wifi_ready(conn: &Connection) -> Result<()> {
-    for _ in 0..retries::WIFI_READY_MAX_RETRIES {
-        let devices = list_devices(conn).await?;
-        for dev in devices {
-            if dev.device_type == DeviceType::Wifi
-                && (dev.state == DeviceState::Disconnected || dev.state == DeviceState::Activated)
-            {
-                return Ok(());
-            }
+    let nm = NMProxy::new(conn).await?;
+    let devices = nm.get_devices().await?;
+
+    // Find the Wi-Fi device
+    for dev_path in devices {
+        let dev = NMDeviceProxy::builder(conn)
+            .path(dev_path.clone())?
+            .build()
+            .await?;
+
+        if dev.device_type().await? != device_type::WIFI {
+            continue;
         }
-        futures_timer::Delay::new(timeouts::scan_wait()).await;
+
+        debug!("Found Wi-Fi device, waiting for it to become ready");
+
+        // Check current state first
+        let current_state = dev.state().await?;
+        let state = DeviceState::from(current_state);
+
+        if state == DeviceState::Disconnected || state == DeviceState::Activated {
+            debug!("Wi-Fi device already ready");
+            return Ok(());
+        }
+
+        // Wait for device to become ready using signal-based monitoring
+        return wait_for_wifi_device_ready(&dev).await;
     }
 
-    Err(ConnectionError::WifiNotReady)
+    Err(ConnectionError::NoWifiDevice)
 }
 
 /// Enables or disables Wi-Fi globally.
