@@ -86,17 +86,9 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
 
     // Deduplicate: use (SSID, frequency) as key, keep strongest signal
     for (ssid, frequency, new_net) in all_networks {
-        let strength = new_net.strength.unwrap_or(0);
         networks
             .entry((ssid, frequency))
-            .and_modify(|n| {
-                if strength > n.strength.unwrap_or(0) {
-                    *n = new_net.clone();
-                }
-                if new_net.secured {
-                    n.secured = true;
-                }
-            })
+            .and_modify(|n| n.merge_ap(&new_net))
             .or_insert(new_net);
     }
 
