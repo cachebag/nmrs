@@ -1,8 +1,9 @@
-# nmrs
+# nmrs 🦀
 
 [![Crates.io](https://img.shields.io/crates/v/nmrs)](https://crates.io/crates/nmrs)
 [![Documentation](https://docs.rs/nmrs/badge.svg)](https://docs.rs/nmrs)
 [![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/ci.yml)
+[![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml)
 [![License](https://img.shields.io/crates/l/nmrs)](LICENSE)
 
 **Rust bindings for NetworkManager via D-Bus**
