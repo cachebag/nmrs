@@ -62,7 +62,7 @@ pub fn build_ui(app: &Application) {
     let vbox_clone = vbox.clone();
 
     glib::MainContext::default().spawn_local(async move {
-        match nmrs_core::NetworkManager::new().await {
+        match nmrs::NetworkManager::new().await {
             Ok(nm) => {
                 let nm = Rc::new(nm);
 

@@ -1,8 +1,8 @@
 use glib::clone;
 use gtk::prelude::*;
 use gtk::{Align, Box, Button, Image, Label, Orientation};
-use nmrs_core::NetworkManager;
-use nmrs_core::models::NetworkInfo;
+use nmrs::NetworkManager;
+use nmrs::models::NetworkInfo;
 use std::cell::RefCell;
 use std::rc::Rc;
 

@@ -1,10 +1,9 @@
 /target
 .direnv/
-nmrs/
-nmrs/*.tar.gz
-nmrs/*.tar.gz.*
+nmrs-aur/
+nmrs-aur/*.tar.gz
+nmrs-aur/*.tar.gz.*
 RELEASE_NOTES.md
 __pycache__/
 *.pyc
 vendor/
-

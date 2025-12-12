@@ -1,4 +1,4 @@
-use nmrs_core::{
+use nmrs::{
     ConnectionError, DeviceState, DeviceType, NetworkManager, StateReason, WifiSecurity,
     reason_to_error,
 };

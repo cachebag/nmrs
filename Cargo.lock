@@ -930,8 +930,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "nmrs-core"
-version = "0.3.0"
+name = "nmrs"
+version = "0.4.0"
 dependencies = [
  "futures-timer",
  "serde",
@@ -943,8 +943,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "nmrs-ui"
-version = "0.3.0"
+name = "nmrs-gui"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -952,7 +952,7 @@ dependencies = [
  "fs2",
  "glib",
  "gtk4",
- "nmrs-core",
+ "nmrs",
  "tokio",
 ]
 
