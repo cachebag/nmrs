@@ -13,13 +13,10 @@ pub mod device_type {
 
 /// NetworkManager device state constants
 pub mod device_state {
-    // pub const UNMANAGED: u32 = 10;
     pub const UNAVAILABLE: u32 = 20;
     pub const DISCONNECTED: u32 = 30;
-    // pub const PREPARE: u32 = 40;
     pub const CONFIG: u32 = 50;
     pub const ACTIVATED: u32 = 100;
-    // pub const DEACTIVATING: u32 = 110;
     pub const FAILED: u32 = 120;
 }
 
@@ -45,7 +42,6 @@ pub mod timeouts {
     pub const DISCONNECT_FINAL_DELAY_MS: u64 = 500;
     pub const CONNECTION_POLL_INTERVAL_MS: u64 = 500;
     pub const SCAN_WAIT_SECONDS: u64 = 3;
-    pub const FORGET_POLL_INTERVAL_MS: u64 = 200;
 
     pub fn disconnect_poll_interval() -> Duration {
         Duration::from_millis(DISCONNECT_POLL_INTERVAL_MS)
@@ -62,10 +58,6 @@ pub mod timeouts {
     pub fn scan_wait() -> Duration {
         Duration::from_secs(SCAN_WAIT_SECONDS)
     }
-
-    pub fn forget_poll_interval() -> Duration {
-        Duration::from_millis(FORGET_POLL_INTERVAL_MS)
-    }
 }
 
 /// Retry count constants
@@ -74,7 +66,6 @@ pub mod retries {
     pub const CONNECTION_MAX_RETRIES: u32 = 40;
     pub const CONNECTION_CONFIG_STUCK_THRESHOLD: u32 = 15;
     pub const CONNECTION_STUCK_CHECK_START: u32 = 10;
-    pub const FORGET_MAX_RETRIES: u32 = 20;
     pub const WIFI_READY_MAX_RETRIES: u32 = 20;
 }
 
