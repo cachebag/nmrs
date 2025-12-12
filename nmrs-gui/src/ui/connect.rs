@@ -3,6 +3,7 @@ use gtk::{
     ApplicationWindow, Box as GtkBox, Dialog, Entry, EventControllerKey, Label, Orientation,
     prelude::*,
 };
+use log::{debug, error};
 use nmrs::{
     NetworkManager,
     models::{EapMethod, EapOptions, Phase2, WifiSecurity},
@@ -23,7 +24,7 @@ pub fn connect_modal(
         if let Some(current) = nm.current_ssid().await
             && current == ssid_owned
         {
-            println!("Already connected to {current}, skipping modal");
+            debug!("Already connected to {current}, skipping modal");
             return;
         }
 
@@ -128,17 +129,17 @@ fn draw_connect_modal(
                     WifiSecurity::WpaPsk { psk: pwd }
                 };
 
-                println!("Calling nm.connect() for '{ssid}'");
+                debug!("Calling nm.connect() for '{ssid}'");
                 match nm.connect(&ssid, creds).await {
                     Ok(_) => {
-                        println!("nm.connect() succeeded!");
+                        debug!("nm.connect() succeeded!");
                         status.set_text("✓ Connected!");
                         on_success();
                         glib::timeout_future_seconds(1).await;
                         dialog.close();
                     }
                     Err(err) => {
-                        eprintln!("nm.connect() failed: {err}");
+                        error!("nm.connect() failed: {err}");
                         let err_str = err.to_string().to_lowercase();
                         if err_str.contains("authentication")
                             || err_str.contains("supplicant")
