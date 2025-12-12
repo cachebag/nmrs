@@ -426,9 +426,7 @@ async fn connect_via_saved(
 
         Err(e) => {
             warn!("activate_connection() failed: {e}");
-            warn!(
-                "Saved connection may be corrupted, deleting and retrying with fresh connection"
-            );
+            warn!("Saved connection may be corrupted, deleting and retrying with fresh connection");
 
             let _ = delete_connection(conn, saved.clone()).await;
 

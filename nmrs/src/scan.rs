@@ -9,8 +9,8 @@ use zbus::Connection;
 use crate::Result;
 use crate::constants::{device_type, security_flags};
 use crate::models::Network;
-use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
-use crate::utils::{decode_ssid_or_hidden, strength_or_zero};
+use crate::proxies::{NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::utils::{decode_ssid_or_hidden, for_each_access_point};
 
 /// Triggers a Wi-Fi scan on all wireless devices.
 ///
@@ -51,30 +51,10 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
 /// When multiple access points share the same SSID and frequency (e.g., mesh
 /// networks), the one with the strongest signal is returned.
 pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
-    let nm = NMProxy::new(conn).await?;
-    let devices = nm.get_devices().await?;
-
     let mut networks: HashMap<(String, u32), Network> = HashMap::new();
 
-    for dp in devices {
-        let d_proxy = NMDeviceProxy::builder(conn)
-            .path(dp.clone())?
-            .build()
-            .await?;
-        if d_proxy.device_type().await? != 2 {
-            continue;
-        }
-
-        let wifi = NMWirelessProxy::builder(conn)
-            .path(dp.clone())?
-            .build()
-            .await?;
-
-        for ap_path in wifi.get_all_access_points().await? {
-            let ap = NMAccessPointProxy::builder(conn)
-                .path(ap_path.clone())?
-                .build()
-                .await?;
+    let all_networks = for_each_access_point(conn, |ap| {
+        Box::pin(async move {
             let ssid_bytes = ap.ssid().await?;
             let ssid = decode_ssid_or_hidden(&ssid_bytes);
             let strength = ap.strength().await?;
@@ -88,8 +68,8 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
             let is_psk = (wpa & security_flags::PSK) != 0 || (rsn & security_flags::PSK) != 0;
             let is_eap = (wpa & security_flags::EAP) != 0 || (rsn & security_flags::EAP) != 0;
 
-            let new_net = Network {
-                device: dp.to_string(),
+            let network = Network {
+                device: String::new(),
                 ssid: ssid.clone(),
                 bssid: Some(bssid),
                 strength: Some(strength),
@@ -99,21 +79,26 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
                 is_eap,
             };
 
-            // Use (SSID, frequency) as key to separate 2.4GHz and 5GHz
-            networks
-                .entry((ssid.clone(), frequency))
-                .and_modify(|n| {
-                    if strength > strength_or_zero(n.strength) {
-                        *n = new_net.clone();
-                    }
-                    if new_net.secured {
-                        n.secured = true;
-                    }
-                })
-                .or_insert(new_net);
-        }
+            Ok(Some((ssid, frequency, network)))
+        })
+    })
+    .await?;
+
+    // Deduplicate: use (SSID, frequency) as key, keep strongest signal
+    for (ssid, frequency, new_net) in all_networks {
+        let strength = new_net.strength.unwrap_or(0);
+        networks
+            .entry((ssid, frequency))
+            .and_modify(|n| {
+                if strength > n.strength.unwrap_or(0) {
+                    *n = new_net.clone();
+                }
+                if new_net.secured {
+                    n.secured = true;
+                }
+            })
+            .or_insert(new_net);
     }
 
-    let result: Vec<Network> = networks.into_values().collect();
-    Ok(result)
+    Ok(networks.into_values().collect())
 }
