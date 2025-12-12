@@ -59,7 +59,12 @@ jobs:
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$LATEST_TAG" ]; then
             echo "Checking against baseline: $LATEST_TAG"
-            cargo semver-checks check-release --package nmrs --baseline-rev "$LATEST_TAG"
+            # Check if the package exists in the baseline (handle renames)
+            if git show "$LATEST_TAG:nmrs/Cargo.toml" >/dev/null 2>&1; then
+              cargo semver-checks check-release --package nmrs --baseline-rev "$LATEST_TAG"
+            else
+              echo "Package 'nmrs' not found in baseline $LATEST_TAG (likely renamed), skipping semver check"
+            fi
           else
             echo "No previous tags found, skipping semver check for nmrs"
           fi
@@ -68,7 +73,12 @@ jobs:
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$LATEST_TAG" ]; then
             echo "Checking against baseline: $LATEST_TAG"
-            cargo semver-checks check-release --package nmrs-gui --baseline-rev "$LATEST_TAG" || true
+            # Check if the package exists in the baseline (handle renames)
+            if git show "$LATEST_TAG:nmrs-gui/Cargo.toml" >/dev/null 2>&1; then
+              cargo semver-checks check-release --package nmrs-gui --baseline-rev "$LATEST_TAG" || true
+            else
+              echo "Package 'nmrs-gui' not found in baseline $LATEST_TAG (likely renamed), skipping semver check"
+            fi
           else
             echo "No previous tags found, skipping semver check for nmrs-gui"
           fi

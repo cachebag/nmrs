@@ -1,93 +1,117 @@
-[![Version](https://img.shields.io/github/v/release/cachebag/nmrs?include_prereleases&label=version&color=blue)](https://github.com/cachebag/nmrs/releases) <br>
-[![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/ci.yml) <br>
-[![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml) <br>
-[![License](https://img.shields.io/github/license/cachebag/nmrs?color=red)](LICENSE) <br>
+# nmrs
 
-<h1 align="center">nmrs 🦀</h1>
+[![Crates.io](https://img.shields.io/crates/v/nmrs)](https://crates.io/crates/nmrs)
+[![Documentation](https://docs.rs/nmrs/badge.svg)](https://docs.rs/nmrs)
+[![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/nmrs)](LICENSE)
 
-<div align="center">
-  <h3>Wayland-native frontend for NetworkManager. Provides a GTK4 UI and a D-Bus proxy core, built in Rust.</h3>
-</div>
+**Rust bindings for NetworkManager via D-Bus**
 
-<!-- Top image -->
+A high-level, async API for managing Wi-Fi connections on Linux systems. Built on `zbus` for reliable D-Bus communication with NetworkManager.
+
+## Library Usage
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+nmrs = "0.4.0"
+tokio = { version = "1.48.0", features = ["full"] }
+```
+
+### Example
+
+```rust
+use nmrs::{NetworkManager, WifiSecurity};
+
+#[tokio::main]
+async fn main() -> nmrs::Result<()> {
+    let nm = NetworkManager::new().await?;
+    
+    // List available networks
+    let networks = nm.list_networks().await?;
+    for net in networks {
+        println!("{} - Signal: {}%", net.ssid, net.strength.unwrap_or(0));
+    }
+    
+    // Connect to a network
+    nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+        psk: "password123".into()
+    }).await?;
+    
+    // Check current connection
+    if let Some(ssid) = nm.current_ssid().await {
+        println!("Connected to: {}", ssid);
+    }
+    
+    Ok(())
+}
+```
+
+### Features
+
+- **Network Management**: Connect to WPA-PSK, WPA-EAP, and open networks
+- **Discovery**: Scan and list available access points
+- **Profile Management**: Query, create, and delete saved connections
+- **Status Monitoring**: Get current connection state and signal strength
+- **Typed Errors**: Structured error types with NetworkManager state reasons
+- **Async/Await**: Fully asynchronous API using `tokio` or `async-std`
+
+[View full API documentation →](https://docs.rs/nmrs)
+
+---
+
+## GUI Application
+
+This repository also includes `nmrs-gui`, a Wayland compatible `NetworkManager` frontend built with GTK4.
+
 <p align="center">
   <img src="https://github.com/user-attachments/assets/276b448d-8a7d-4b66-9318-160b2c966571" width="100%">
 </p>
 
-<!-- Bottom row of two images using table (GitHub safe) -->
-<table align="center">
-<tr>
-<td align="center">
-<img src="https://github.com/user-attachments/assets/3e0a898f-fec6-4cec-9c22-fec819695fb2" height="420">
-</td>
-<td align="center">
-<img src="https://github.com/user-attachments/assets/c51f40ae-f1e5-4c39-a583-bdc82c980f53" height="420">
-</td>
-</tr>
-</table>
+### Installation
 
-# 
+**Arch Linux (AUR)**
 
-## Install
-Via `yay`
 ```bash
 yay -S nmrs
-```
-or `paru`
-```bash
+# or
 paru -S nmrs
 ```
 
-**Wire into `waybar`**
-```config
+**Nix**
+
+```bash
+nix-shell -p nmrs
+```
+
+### Configuration
+
+**Waybar Integration**
+
+```json
 "network": {
-    "tooltip": false,
-    "format-wifi":📡 "{essid}",
-    "format-ethernet": "",
     "on-click": "nmrs"
-  },
-```
-
-**For tiling window managers to avoid automatic tiling (Hyprland, Sway, i3, etc.)**
-
- ```
- windowrulev2 = float, class:^(org\.nmrs\.ui)$
- ```
- Adjust class if your compositor reports a different one via `hyprctl clients`.
-
-#
-
-## Styling
-`nmrs` produces a default style in your configuration directory (e.g. `~/.config/nmrs/style.css`)
-
-You can override this by editing that file.
-
-Example:
-```css
-/* Global overrides */
-* {
-    font-family: "Inter", "Sans";
-    color: #ebdbb2; /* Gruvbox light text */
-}
-
-window, .network-page {
-    background: #1d2021; /* Gruvbox dark background */
-}
-
-/* Replace all labels with a distinct color */
-label {
-    color: #d5c4a1 !important; /* Gruvbox faded text */
 }
 ```
 
-See `nmrs-gui/src/style.css` for any custom widget labels I currently use.
+**Tiling Window Managers** (Hyprland, Sway, i3)
 
-#
+```
+windowrulev2 = float, class:^(org\.nmrs\.ui)$
+```
 
-This project is still in development. If you would like to contribute, please read the [contribution guide](./CONTRIBUTING.md).
+**Custom Styling**
+
+Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-defined themes you can pick from in the interface itself.
+
+---
+
+### Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
 
 ## License
 
-This project is licensed under the MIT License.  
-See the [LICENSE](./LICENSE) file for details.
-
+MIT License. See [LICENSE](./LICENSE) for details.

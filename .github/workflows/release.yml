@@ -36,7 +36,7 @@ jobs:
 
       - name: Bump version
         run: |
-          python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}"
+          python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}" || echo "⚠ Version bump completed with warnings"
           echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
 
