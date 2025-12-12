@@ -1,22 +1,37 @@
 use futures_timer::Delay;
 use std::collections::HashMap;
-use zbus::{Connection, Result};
+use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
+use crate::Result;
 use crate::connection_settings::{delete_connection, get_saved_connection_path};
 use crate::constants::{device_state, device_type, retries, timeouts};
-use crate::models::{ConnectionOptions, WifiSecurity};
+use crate::models::{ConnectionError, ConnectionOptions, WifiSecurity};
 use crate::network_info::current_ssid;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::state_wait::wait_for_connection_state;
 use crate::utils::decode_ssid_or_empty;
 use crate::wifi_builders::build_wifi_connection;
 
+/// Decision on whether to reuse a saved connection or create a fresh one.
 enum SavedDecision {
+    /// Reuse the saved connection at this path.
     UseSaved(OwnedObjectPath),
+    /// Delete any saved connection and create a new one with fresh credentials.
     RebuildFresh,
 }
 
+/// Connects to a Wi-Fi network.
+///
+/// This is the main entry point for establishing a Wi-Fi connection. The flow:
+/// 1. Check for an existing saved connection for this SSID
+/// 2. Decide whether to reuse it or create fresh (based on credentials)
+/// 3. Find the Wi-Fi device and target access point
+/// 4. Either activate the saved connection or create and activate a new one
+/// 5. Wait for the connection to reach the activated state
+///
+/// If a saved connection exists but fails, it will be deleted and a fresh
+/// connection will be attempted with the provided credentials.
 pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) -> Result<()> {
     println!(
         "Connecting to '{}' | secured={} is_psk={} is_eap={}",
@@ -72,7 +87,14 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
     Ok(())
 }
 
-pub(crate) async fn forget(conn: &Connection, ssid: &str) -> zbus::Result<()> {
+/// Forgets (deletes) all saved connections for a network.
+///
+/// If currently connected to this network, disconnects first, then deletes
+/// all saved connection profiles matching the SSID. Matches are found by
+/// both the connection ID and the wireless SSID bytes.
+///
+/// Returns `NoSavedConnection` if no matching connections were found.
+pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
     use std::collections::HashMap;
     use zvariant::{OwnedObjectPath, Value};
 
@@ -220,12 +242,14 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> zbus::Result<()> {
         Ok(())
     } else {
         eprintln!("No saved connections found for '{ssid}'");
-        Err(zbus::Error::Failure(format!(
-            "No saved connection for {ssid}"
-        )))
+        Err(ConnectionError::NoSavedConnection)
     }
 }
 
+/// Disconnects a Wi-Fi device and waits for it to reach disconnected state.
+///
+/// Calls the Disconnect method on the device and polls until the device
+/// state becomes Disconnected or Unavailable, or the retry limit is reached.
 pub(crate) async fn disconnect_wifi_device(
     conn: &Connection,
     dev_path: &OwnedObjectPath,
@@ -251,7 +275,7 @@ pub(crate) async fn disconnect_wifi_device(
                 break;
             }
             Ok(_) => continue,
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.into()),
         }
     }
 
@@ -259,11 +283,15 @@ pub(crate) async fn disconnect_wifi_device(
 
     match dev.state().await {
         Ok(s) if s == device_state::DISCONNECTED || s == device_state::UNAVAILABLE => Ok(()),
-        Ok(s) => Err(zbus::Error::Failure(format!("device stuck in state {s}"))),
-        Err(e) => Err(e),
+        Ok(s) => Err(ConnectionError::Stuck(format!("{s}"))),
+        Err(e) => Err(e.into()),
     }
 }
 
+/// Finds the first Wi-Fi device on the system.
+///
+/// Iterates through all NetworkManager devices and returns the first one
+/// with device type `WIFI`. Returns `NoWifiDevice` if none found.
 async fn find_wifi_device(conn: &Connection, nm: &NMProxy<'_>) -> Result<OwnedObjectPath> {
     let devices = nm.get_devices().await?;
 
@@ -276,9 +304,14 @@ async fn find_wifi_device(conn: &Connection, nm: &NMProxy<'_>) -> Result<OwnedOb
             return Ok(dp);
         }
     }
-    Err(zbus::Error::Failure("no Wi-Fi device found".into()))
+    Err(ConnectionError::NoWifiDevice)
 }
 
+/// Finds an access point by SSID.
+///
+/// Searches through all visible access points on the wireless device
+/// and returns the path of the first one matching the target SSID.
+/// Returns `NotFound` if no matching access point is visible.
 async fn find_ap(
     conn: &Connection,
     wifi: &NMWirelessProxy<'_>,
@@ -300,11 +333,13 @@ async fn find_ap(
         }
     }
 
-    Err(zbus::Error::Failure(format!(
-        "Network '{target_ssid}' not found"
-    )))
+    Err(ConnectionError::NotFound)
 }
 
+/// Ensures the Wi-Fi device is disconnected before attempting a new connection.
+///
+/// If currently connected to any network, deactivates all active connections
+/// and waits for the device to reach disconnected state.
 async fn ensure_disconnected(
     conn: &Connection,
     nm: &NMProxy<'_>,
@@ -325,6 +360,14 @@ async fn ensure_disconnected(
     Ok(())
 }
 
+/// Attempts to connect using a saved connection profile.
+///
+/// Activates the saved connection. If activation succeeds but the device
+/// ends up in a disconnected state (indicating invalid saved settings),
+/// deletes the saved connection and creates a fresh one with the provided
+/// credentials.
+///
+/// This handles cases where saved passwords are outdated or corrupted.
 async fn connect_via_saved(
     conn: &Connection,
     nm: &NMProxy<'_>,
@@ -408,6 +451,11 @@ async fn connect_via_saved(
     Ok(())
 }
 
+/// Creates a new connection profile and activates it.
+///
+/// Builds connection settings from the provided credentials, ensures the
+/// device is disconnected, then calls AddAndActivateConnection to create
+/// and activate the connection in one step.
 async fn build_and_activate_new(
     conn: &Connection,
     nm: &NMProxy<'_>,
@@ -435,7 +483,7 @@ async fn build_and_activate_new(
         Ok(_) => eprintln!("add_and_activate_connection() succeeded"),
         Err(e) => {
             eprintln!("add_and_activate_connection() failed: {e}");
-            return Err(e);
+            return Err(e.into());
         }
     }
 
@@ -456,6 +504,10 @@ async fn build_and_activate_new(
     Ok(())
 }
 
+/// Triggers a Wi-Fi scan and finds the target access point.
+///
+/// Requests a scan, waits for it to complete, then searches for an
+/// access point matching the target SSID.
 async fn scan_and_resolve_ap(
     conn: &Connection,
     wifi: &NMWirelessProxy<'_>,
@@ -474,6 +526,15 @@ async fn scan_and_resolve_ap(
     Ok(ap)
 }
 
+/// Decides whether to use a saved connection or create a fresh one.
+///
+/// Decision logic:
+/// - If a saved connection exists and credentials are empty PSK, use saved
+///   (user wants to connect with stored password)
+/// - If a saved connection exists but new PSK credentials provided, rebuild
+///   (user is updating the password)
+/// - If no saved connection and PSK is empty, error (can't connect without password)
+/// - Otherwise, create a fresh connection
 fn decide_saved_connection(
     saved: Option<OwnedObjectPath>,
     creds: &WifiSecurity,
@@ -494,9 +555,7 @@ fn decide_saved_connection(
         && let WifiSecurity::WpaPsk { psk } = creds
         && psk.trim().is_empty()
     {
-        return Err(zbus::Error::Failure(
-            "No saved connection and psk is empty".into(),
-        ));
+        return Err(ConnectionError::NoSavedConnection);
     }
 
     Ok(SavedDecision::RebuildFresh)

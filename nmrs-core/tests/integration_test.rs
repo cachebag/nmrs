@@ -1,4 +1,7 @@
-use nmrs_core::{DeviceState, DeviceType, NetworkManager, WifiSecurity};
+use nmrs_core::{
+    ConnectionError, DeviceState, DeviceType, NetworkManager, StateReason, WifiSecurity,
+    reason_to_error,
+};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -693,4 +696,72 @@ async fn test_concurrent_operations() {
     assert!(wifi_enabled_result.is_ok(), "wifi_enabled should succeed");
     // networks_result may fail if WiFi is not ready, which is acceptable
     let _ = networks_result;
+}
+
+/// Test that reason_to_error maps auth failures correctly
+#[test]
+fn reason_to_error_auth_mapping() {
+    // Supplicant failed (code 9) should map to AuthFailed
+    assert!(matches!(reason_to_error(9), ConnectionError::AuthFailed));
+
+    // Supplicant disconnected (code 7) should map to AuthFailed
+    assert!(matches!(reason_to_error(7), ConnectionError::AuthFailed));
+
+    // DHCP failed (code 17) should map to DhcpFailed
+    assert!(matches!(reason_to_error(17), ConnectionError::DhcpFailed));
+
+    // SSID not found (code 70) should map to NotFound
+    assert!(matches!(reason_to_error(70), ConnectionError::NotFound));
+}
+
+/// Test StateReason conversions
+#[test]
+fn state_reason_conversion() {
+    assert_eq!(StateReason::from(9), StateReason::SupplicantFailed);
+    assert_eq!(StateReason::from(70), StateReason::SsidNotFound);
+    assert_eq!(StateReason::from(999), StateReason::Other(999));
+}
+
+/// Test ConnectionError display formatting
+#[test]
+fn connection_error_display() {
+    let auth_err = ConnectionError::AuthFailed;
+    assert_eq!(format!("{}", auth_err), "authentication failed");
+
+    let not_found_err = ConnectionError::NotFound;
+    assert_eq!(format!("{}", not_found_err), "network not found");
+
+    let timeout_err = ConnectionError::Timeout;
+    assert_eq!(format!("{}", timeout_err), "connection timeout");
+
+    let stuck_err = ConnectionError::Stuck("config".into());
+    assert_eq!(
+        format!("{}", stuck_err),
+        "connection stuck in state: config"
+    );
+}
+
+/// Test forgetting a network returns NoSavedConnection error
+#[tokio::test]
+async fn forget_returns_no_saved_connection_error() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_wifi!(&nm);
+
+    let result = nm.forget("__NONEXISTENT_TEST_SSID__").await;
+
+    match result {
+        Err(ConnectionError::NoSavedConnection) => {
+            // Expected error type
+        }
+        Err(e) => {
+            panic!("Expected NoSavedConnection error, got: {}", e);
+        }
+        Ok(_) => {
+            panic!("Expected error, got success");
+        }
+    }
 }

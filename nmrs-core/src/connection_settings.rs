@@ -1,11 +1,26 @@
+//! Saved connection profile management.
+//!
+//! Provides functions for querying and deleting saved NetworkManager
+//! connection profiles. Saved connections persist across reboots and
+//! store credentials for automatic reconnection.
+
 use std::collections::HashMap;
-use zbus::{Connection, Result};
+use zbus::Connection;
 use zvariant::{OwnedObjectPath, Value};
 
+use crate::Result;
+
+/// Finds the D-Bus path of a saved connection by SSID.
+///
+/// Iterates through all saved connections in NetworkManager's settings
+/// and returns the path of the first one whose connection ID matches
+/// the given SSID.
+///
+/// Returns `None` if no saved connection exists for this SSID.
 pub(crate) async fn get_saved_connection_path(
     conn: &Connection,
     ssid: &str,
-) -> zbus::Result<Option<OwnedObjectPath>> {
+) -> Result<Option<OwnedObjectPath>> {
     let settings = zbus::proxy::Proxy::new(
         conn,
         "org.freedesktop.NetworkManager",
@@ -41,12 +56,17 @@ pub(crate) async fn get_saved_connection_path(
     Ok(None)
 }
 
-pub(crate) async fn has_saved_connection(conn: &Connection, ssid: &str) -> zbus::Result<bool> {
+/// Checks whether a saved connection exists for the given SSID.
+pub(crate) async fn has_saved_connection(conn: &Connection, ssid: &str) -> Result<bool> {
     get_saved_connection_path(conn, ssid)
         .await
         .map(|p| p.is_some())
 }
 
+/// Deletes a saved connection by its D-Bus path.
+///
+/// Calls the Delete method on the connection settings object.
+/// This permanently removes the saved connection from NetworkManager.
 pub(crate) async fn delete_connection(conn: &Connection, conn_path: OwnedObjectPath) -> Result<()> {
     let cproxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
         .destination("org.freedesktop.NetworkManager")?

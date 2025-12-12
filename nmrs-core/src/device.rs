@@ -1,9 +1,19 @@
-use zbus::{Connection, Result};
+//! Network device enumeration and control.
+//!
+//! Provides functions for listing network devices, checking Wi-Fi state,
+//! and enabling/disabling Wi-Fi.
 
+use zbus::Connection;
+
+use crate::Result;
 use crate::constants::{retries, timeouts};
-use crate::models::{Device, DeviceState, DeviceType};
+use crate::models::{ConnectionError, Device, DeviceState, DeviceType};
 use crate::proxies::{NMDeviceProxy, NMProxy};
 
+/// Lists all network devices managed by NetworkManager.
+///
+/// Returns information about each device including its interface name,
+/// type (Ethernet, Wi-Fi, etc.), current state, and driver.
 pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
     let proxy = NMProxy::new(conn).await?;
     let paths = proxy.get_devices().await?;
@@ -35,6 +45,13 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
     Ok(devices)
 }
 
+/// Waits for a Wi-Fi device to become ready for operations.
+///
+/// Polls until a Wi-Fi device reaches either Disconnected or Activated state,
+/// indicating it's ready for scanning or connection operations. This is useful
+/// after enabling Wi-Fi, as the device may take time to initialize.
+///
+/// Returns `WifiNotReady` if no Wi-Fi device becomes ready within the timeout.
 pub(crate) async fn wait_for_wifi_ready(conn: &Connection) -> Result<()> {
     for _ in 0..retries::WIFI_READY_MAX_RETRIES {
         let devices = list_devices(conn).await?;
@@ -48,17 +65,21 @@ pub(crate) async fn wait_for_wifi_ready(conn: &Connection) -> Result<()> {
         futures_timer::Delay::new(timeouts::scan_wait()).await;
     }
 
-    Err(zbus::Error::Failure(
-        "Wi-Fi device never became ready".into(),
-    ))
+    Err(ConnectionError::WifiNotReady)
 }
 
+/// Enables or disables Wi-Fi globally.
+///
+/// This is equivalent to the Wi-Fi toggle in system settings.
+/// When disabled, all Wi-Fi connections are terminated and
+/// no scanning occurs.
 pub(crate) async fn set_wifi_enabled(conn: &Connection, value: bool) -> Result<()> {
     let nm = NMProxy::new(conn).await?;
-    nm.set_wireless_enabled(value).await
+    Ok(nm.set_wireless_enabled(value).await?)
 }
 
+/// Returns whether Wi-Fi is currently enabled.
 pub(crate) async fn wifi_enabled(conn: &Connection) -> Result<bool> {
     let nm = NMProxy::new(conn).await?;
-    nm.wireless_enabled().await
+    Ok(nm.wireless_enabled().await?)
 }
