@@ -126,10 +126,14 @@ impl NetworkRowController {
                     let have = nm_c.has_saved_connection(&ssid_c).await.unwrap_or(false);
 
                     if have {
+                        status_c.set_text(&format!("Connecting to {}...", ssid_c));
                         window_c.set_sensitive(false);
                         let creds = WifiSecurity::WpaPsk { psk: "".into() };
                         match nm_c.connect(&ssid_c, creds).await {
-                            Ok(_) => on_success_c(),
+                            Ok(_) => {
+                                status_c.set_text("");
+                                on_success_c();
+                            }
                             Err(e) => status_c.set_text(&format!("Failed to connect: {e}")),
                         }
                         window_c.set_sensitive(true);
@@ -143,10 +147,14 @@ impl NetworkRowController {
                         );
                     }
                 } else {
+                    status_c.set_text(&format!("Connecting to {}...", ssid_c));
                     window_c.set_sensitive(false);
                     let creds = WifiSecurity::Open;
                     match nm_c.connect(&ssid_c, creds).await {
-                        Ok(_) => on_success_c(),
+                        Ok(_) => {
+                            status_c.set_text("");
+                            on_success_c();
+                        }
                         Err(e) => status_c.set_text(&format!("Failed to connect: {e}")),
                     }
                     window_c.set_sensitive(true);
