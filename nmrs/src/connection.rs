@@ -128,37 +128,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                 && decode_ssid_or_empty(&bytes) == ssid
             {
                 debug!("Disconnecting from active network: {ssid}");
-                let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-                    .destination("org.freedesktop.NetworkManager")?
-                    .path(dev_path.clone())?
-                    .interface("org.freedesktop.NetworkManager.Device")?
-                    .build()
-                    .await?;
-
-                match dev_proxy.call_method("Disconnect", &()).await {
-                    Ok(_) => debug!("Disconnect call succeeded"),
-                    Err(e) => warn!("Disconnect call failed: {e}"),
-                }
-
-                debug!("About to enter wait loop...");
-                for i in 0..retries::FORGET_MAX_RETRIES {
-                    Delay::new(timeouts::forget_poll_interval()).await;
-                    match dev.state().await {
-                        Ok(current_state) => {
-                            debug!("Wait loop {i}: device state = {current_state}");
-                            if current_state == device_state::DISCONNECTED
-                                || current_state == device_state::UNAVAILABLE
-                            {
-                                debug!("Device reached disconnected state");
-                                break;
-                            }
-                        }
-                        Err(e) => {
-                            warn!("Failed to get device state in wait loop {i}: {e}");
-                            break;
-                        }
-                    }
-                }
+                disconnect_wifi_and_wait(conn, dev_path).await?;
                 debug!("Wait loop completed");
             }
         }
@@ -251,7 +221,7 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
 ///
 /// Calls the Disconnect method on the device and polls until the device
 /// state becomes Disconnected or Unavailable, or the retry limit is reached.
-pub(crate) async fn disconnect_wifi_device(
+pub(crate) async fn disconnect_wifi_and_wait(
     conn: &Connection,
     dev_path: &OwnedObjectPath,
 ) -> Result<()> {
@@ -355,7 +325,7 @@ async fn ensure_disconnected(
             }
         }
 
-        disconnect_wifi_device(conn, wifi_device).await?;
+        disconnect_wifi_and_wait(conn, wifi_device).await?;
     }
 
     Ok(())
