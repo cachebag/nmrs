@@ -425,6 +425,20 @@ impl WifiSecurity {
     }
 }
 
+impl Network {
+    pub fn merge_ap(&mut self, other: &Network) {
+        if other.strength.unwrap_or(0) > self.strength.unwrap_or(0) {
+            self.strength = other.strength;
+            self.frequency = other.frequency;
+            self.bssid = other.bssid.clone();
+        }
+
+        self.secured |= other.secured;
+        self.is_psk |= other.is_psk;
+        self.is_eap |= other.is_eap;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
