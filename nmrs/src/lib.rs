@@ -62,6 +62,7 @@ mod connection_settings;
 mod constants;
 mod device;
 mod network_info;
+mod network_monitor;
 mod proxies;
 mod scan;
 mod state_wait;

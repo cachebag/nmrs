@@ -312,7 +312,7 @@ pub async fn refresh_networks(
     is_scanning.set(false);
 }
 
-fn clear_children(container: &gtk::Box) {
+pub fn clear_children(container: &gtk::Box) {
     let mut child = container.first_child();
     while let Some(widget) = child {
         child = widget.next_sibling();

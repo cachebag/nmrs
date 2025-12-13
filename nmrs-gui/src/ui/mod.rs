@@ -115,7 +115,7 @@ pub fn build_ui(app: &Application) {
                 };
 
                 let ctx = Rc::new(networks::NetworksContext {
-                    nm,
+                    nm: nm.clone(),
                     on_success,
                     status: status_clone.clone(),
                     stack: stack_clone.clone(),
@@ -123,9 +123,37 @@ pub fn build_ui(app: &Application) {
                     details_page,
                 });
 
-                let header =
-                    header::build_header(ctx, &list_container_clone, is_scanning_clone, &win_clone);
+                let header = header::build_header(
+                    ctx.clone(),
+                    &list_container_clone,
+                    is_scanning_clone.clone(),
+                    &win_clone,
+                );
                 vbox_clone.prepend(&header);
+
+                // TODO: Re-enable network monitoring with proper UI integration
+                // Currently disabled because it needs access to full context for row creation
+                /*
+                // Start background network monitoring for live updates
+                let nm_monitor = nm.clone();
+                let list_container_monitor = list_container_clone.clone();
+                let is_scanning_monitor = is_scanning_clone;
+                let ctx_monitor = ctx.clone();
+
+                glib::MainContext::default().spawn_local(async move {
+                    let _ = nm_monitor.monitor_network_changes(move || {
+                        let ctx = ctx_monitor.clone();
+                        let list_container = list_container_monitor.clone();
+                        let is_scanning = is_scanning_monitor.clone();
+
+                        glib::MainContext::default().spawn_local(async move {
+                            if !is_scanning.get() {
+                                header::refresh_networks(ctx, &list_container, &is_scanning).await;
+                            }
+                        });
+                    }).await;
+                });
+                */
             }
             Err(err) => {
                 status_clone.set_text(&format!("Failed to initialize: {err}"));
