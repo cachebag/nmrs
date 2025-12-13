@@ -11,13 +11,13 @@ categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
 log = "0.4.29"
-zbus = "5.11.0"
-zvariant = "5.7.0"
+zbus = "5.12.0"
+zvariant = "5.8.0"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"
 uuid = { version = "1.19.0", features = ["v4"] }
 futures = "0.3.31"
-futures-timer = "3.0"
+futures-timer = "3.0.3"
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
