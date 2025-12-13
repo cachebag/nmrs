@@ -655,16 +655,18 @@ async fn test_multiple_scan_requests() {
 
     // Request multiple scans
     for i in 0..3 {
+        nm.wait_for_wifi_ready().await.expect("WiFi not ready");
+
         let result = nm.scan_networks().await;
         match result {
-            Ok(_) => {
-                eprintln!("Scan {} succeeded", i + 1);
-                sleep(Duration::from_secs(1)).await;
-            }
-            Err(e) => {
-                eprintln!("Scan {} failed: {}", i + 1, e);
-            }
+            Ok(_) => eprintln!("Scan {} succeeded", i + 1),
+            Err(e) => eprintln!("Scan {} failed: {}", i + 1, e),
         }
+
+        nm.wait_for_wifi_ready()
+            .await
+            .expect("WiFi did not recover");
+        sleep(Duration::from_secs(3)).await;
     }
 
     // List networks after multiple scans
