@@ -70,7 +70,7 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
 
             let network = Network {
                 device: String::new(),
-                ssid: ssid.clone(),
+                ssid: ssid.to_string(),
                 bssid: Some(bssid),
                 strength: Some(strength),
                 frequency: Some(frequency),
@@ -87,7 +87,7 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
     // Deduplicate: use (SSID, frequency) as key, keep strongest signal
     for (ssid, frequency, new_net) in all_networks {
         networks
-            .entry((ssid, frequency))
+            .entry((ssid.to_string(), frequency))
             .and_modify(|n| n.merge_ap(&new_net))
             .or_insert(new_net);
     }
