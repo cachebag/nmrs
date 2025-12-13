@@ -5,6 +5,7 @@
 
 use log::warn;
 use std::str;
+use std::borrow::Cow;
 use zbus::Connection;
 
 use crate::Result;
@@ -61,17 +62,18 @@ pub(crate) fn mode_to_string(m: u32) -> &'static str {
 
 /// Decode SSID bytes, defaulting to "<Hidden Network>" if empty or invalid UTF-8.
 /// This is safer than unwrap_or and logs the error.
-pub(crate) fn decode_ssid_or_hidden(bytes: &[u8]) -> String {
+pub(crate) fn decode_ssid_or_hidden(bytes: &[u8]) -> Cow<'static, str> {
     if bytes.is_empty() {
-        return String::new();
+        return Cow::Borrowed("<Hidden Network>");
     }
 
-    str::from_utf8(bytes)
-        .map(|s| s.to_string())
-        .unwrap_or_else(|e| {
+    match str::from_utf8(bytes) {
+        Ok(s) => Cow::Owned(s.to_owned()),
+        Err(e) => {
             warn!("Invalid UTF-8 in SSID during comparison: {e}");
-            String::new()
-        })
+            Cow::Borrowed("<Hidden Network>")
+        }
+    }
 }
 
 /// Decode SSID bytes for comparison purposes, defaulting to empty string if invalid.
