@@ -6,12 +6,14 @@ use crate::connection_settings::{get_saved_connection_path, has_saved_connection
 use crate::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
 use crate::models::{Device, Network, NetworkInfo, WifiSecurity};
 use crate::network_info::{current_connection_info, current_ssid, show_details};
+use crate::network_monitor;
 use crate::scan::{list_networks, scan_networks};
 
 /// High-level interface to NetworkManager over D-Bus.
 ///
 /// Provides methods for listing devices, scanning networks, connecting,
 /// and managing saved connections.
+#[derive(Clone)]
 pub struct NetworkManager {
     conn: Connection,
 }
@@ -97,5 +99,40 @@ impl NetworkManager {
     /// If currently connected to this network, disconnects first.
     pub async fn forget(&self, ssid: &str) -> Result<()> {
         forget(&self.conn, ssid).await
+    }
+
+    /// Monitors Wi-Fi network changes in real-time.
+    ///
+    /// Subscribes to D-Bus signals for access point additions and removals
+    /// on all Wi-Fi devices. Invokes the callback whenever the network list
+    /// changes, enabling live UI updates without polling.
+    ///
+    /// This function runs indefinitely until an error occurs. Run it in a
+    /// background task.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use nmrs::NetworkManager;
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    ///
+    /// // Spawn monitoring task
+    /// glib::MainContext::default().spawn_local({
+    ///     let nm = nm.clone();
+    ///     async move {
+    ///         nm.monitor_network_changes(|| {
+    ///             println!("Networks changed!");
+    ///         }).await
+    ///     }
+    /// });
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn monitor_network_changes<F>(&self, callback: F) -> Result<()>
+    where
+        F: Fn() + 'static,
+    {
+        network_monitor::monitor_network_changes(&self.conn, callback).await
     }
 }
