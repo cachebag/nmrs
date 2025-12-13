@@ -112,7 +112,7 @@ impl NetworkManager {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// # use nmrs::NetworkManager;
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;

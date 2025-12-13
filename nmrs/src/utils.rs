@@ -4,8 +4,8 @@
 //! frequency to channel, signal strength to visual bars, SSID bytes to strings.
 
 use log::warn;
-use std::str;
 use std::borrow::Cow;
+use std::str;
 use zbus::Connection;
 
 use crate::Result;
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn test_decode_ssid_or_hidden() {
         assert_eq!(decode_ssid_or_hidden(b"MyNetwork"), "MyNetwork");
-        assert_eq!(decode_ssid_or_hidden(b""), "");
+        assert_eq!(decode_ssid_or_hidden(b""), "<Hidden Network>");
         assert_eq!(decode_ssid_or_hidden(b"Test_SSID-123"), "Test_SSID-123");
     }
 
