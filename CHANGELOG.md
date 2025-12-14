@@ -9,12 +9,14 @@
 - Core: `ActiveConnectionState` and `ConnectionStateReason` enums for detailed connection status tracking ([#46](https://github.com/cachebag/nmrs/issues/46))
 - Core: `monitor_network_changes()` API for real-time network list updates via D-Bus signals
 - Core: `NetworkManager` is now `Clone`
+- Core+GUI: Full support for Ethernet devices ([#88](https://github.com/cachebag/nmrs/issues/88))
 
 ### Fixed
 - Core: `forget()` now verifies device is disconnected before deleting saved connections ([#124](https://github.com/cachebag/nmrs/issues/124))
 - Core: `list_networks()` preserves security flags when deduplicating APs ([#123](https://github.com/cachebag/nmrs/issues/123))
 - Core: Fixed race condition in signal subscription where rapid state changes could be missed
 - GUI: Fixed UI freeze when connecting/forgetting networks
+- GUI: Supply option to provide cert paths for WPA-EAP connections [#56](https://github.com/cachebag/nmrs/issues/56)
 
 ## [0.4.0-beta] - 2025-12-11
 ### **Breaking Changes**
