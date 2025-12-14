@@ -6,6 +6,8 @@ use nmrs::models::NetworkInfo;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+type OnSuccessCallback = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
+
 pub struct NetworkPage {
     root: gtk::Box,
 
@@ -22,6 +24,7 @@ pub struct NetworkPage {
     security: gtk::Label,
 
     current_ssid: Rc<RefCell<String>>,
+    on_success: OnSuccessCallback,
 }
 
 impl NetworkPage {
@@ -59,20 +62,26 @@ impl NetworkPage {
         forget_btn.set_cursor_from_name(Some("pointer"));
 
         let current_ssid = Rc::new(RefCell::new(String::new()));
+        let on_success_callback: OnSuccessCallback = Rc::new(RefCell::new(None));
 
         {
             let stack_clone = stack.clone();
             let current_ssid_clone = current_ssid.clone();
+            let on_success_clone = on_success_callback.clone();
 
             forget_btn.connect_clicked(move |_| {
                 let stack = stack_clone.clone();
                 let ssid = current_ssid_clone.borrow().clone();
+                let on_success = on_success_clone.clone();
 
                 glib::MainContext::default().spawn_local(async move {
                     if let Ok(nm) = NetworkManager::new().await
                         && nm.forget(&ssid).await.is_ok()
                     {
                         stack.set_visible_child_name("networks");
+                        if let Some(callback) = on_success.borrow().as_ref() {
+                            callback();
+                        }
                     }
                 });
             });
@@ -138,7 +147,12 @@ impl NetworkPage {
             rate,
             security,
             current_ssid,
+            on_success: on_success_callback,
         }
+    }
+
+    pub fn set_on_success(&self, callback: Rc<dyn Fn()>) {
+        *self.on_success.borrow_mut() = Some(callback);
     }
 
     fn add_row(parent: &gtk::Box, key_text: &str, val_widget: &gtk::Label) {

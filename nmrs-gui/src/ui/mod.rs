@@ -137,13 +137,15 @@ pub fn build_ui(app: &Application) {
 
                 let ctx = Rc::new(networks::NetworksContext {
                     nm: nm.clone(),
-                    on_success,
+                    on_success: on_success.clone(),
                     status: status_clone.clone(),
                     stack: stack_clone.clone(),
                     parent_window: win_clone.clone(),
-                    details_page,
+                    details_page: details_page.clone(),
                     wired_details_page,
                 });
+
+                details_page.set_on_success(on_success);
 
                 let header = header::build_header(
                     ctx.clone(),
@@ -153,49 +155,53 @@ pub fn build_ui(app: &Application) {
                 );
                 vbox_clone.prepend(&header);
 
-                // Start background device monitoring for live updates (wired devices)
-                // Uses debouncing to avoid too many rapid refreshes
                 {
                     let nm_device_monitor = nm.clone();
                     let list_container_device = list_container_clone.clone();
                     let is_scanning_device = is_scanning_clone.clone();
                     let ctx_device = ctx.clone();
+                    let pending_device_refresh = Rc::new(std::cell::RefCell::new(false));
 
                     glib::MainContext::default().spawn_local(async move {
-                        // eprintln!("Starting device state monitoring...");
                         loop {
                             let ctx_device_clone = ctx_device.clone();
                             let list_container_clone = list_container_device.clone();
                             let is_scanning_clone = is_scanning_device.clone();
+                            let pending_device_refresh_clone = pending_device_refresh.clone();
 
                             let result = nm_device_monitor
                                 .monitor_device_changes(move || {
-                                    // eprintln!("Device state change detected!");
                                     let ctx = ctx_device_clone.clone();
                                     let list_container = list_container_clone.clone();
                                     let is_scanning = is_scanning_clone.clone();
+                                    let pending_refresh = pending_device_refresh_clone.clone();
+
+                                    if pending_refresh.replace(true) {
+                                        return;
+                                    }
 
                                     glib::MainContext::default().spawn_local(async move {
-                                        if !is_scanning.get() {
-                                            // eprintln!("Refreshing UI after device change");
+                                        glib::timeout_future_seconds(3).await;
+                                        *pending_refresh.borrow_mut() = false;
+
+                                        let current_page = ctx.stack.visible_child_name();
+                                        let on_networks_page =
+                                            current_page.as_deref() == Some("networks");
+
+                                        if !is_scanning.get() && on_networks_page {
                                             header::refresh_networks_no_scan(
                                                 ctx,
                                                 &list_container,
                                                 &is_scanning,
                                             )
                                             .await;
-                                        } else {
-                                            // eprintln!("Skipping refresh (scan in progress)");
                                         }
                                     });
                                 })
                                 .await;
 
-                            match result {
-                                Ok(_) => eprintln!("Device monitoring ended normally"),
-                                Err(e) => {
-                                    eprintln!("Device monitoring error: {}, restarting in 5s...", e)
-                                }
+                            if let Err(e) = result {
+                                eprintln!("Device monitoring error: {}, restarting in 5s...", e)
                             }
                             glib::timeout_future_seconds(5).await;
                         }
@@ -207,52 +213,48 @@ pub fn build_ui(app: &Application) {
                     let list_container_network = list_container_clone.clone();
                     let is_scanning_network = is_scanning_clone.clone();
                     let ctx_network = ctx.clone();
-
-                    let last_refresh = Rc::new(std::cell::RefCell::new(
-                        std::time::Instant::now() - std::time::Duration::from_secs(10),
-                    ));
+                    let pending_network_refresh = Rc::new(std::cell::RefCell::new(false));
 
                     glib::MainContext::default().spawn_local(async move {
                         loop {
                             let ctx_network_clone = ctx_network.clone();
                             let list_container_clone = list_container_network.clone();
                             let is_scanning_clone = is_scanning_network.clone();
-                            let last_refresh_clone = last_refresh.clone();
+                            let pending_network_refresh_clone = pending_network_refresh.clone();
 
                             let result = nm_network_monitor
                                 .monitor_network_changes(move || {
                                     let ctx = ctx_network_clone.clone();
                                     let list_container = list_container_clone.clone();
                                     let is_scanning = is_scanning_clone.clone();
-                                    let last_refresh = last_refresh_clone.clone();
+                                    let pending_refresh = pending_network_refresh_clone.clone();
+
+                                    if pending_refresh.replace(true) {
+                                        return;
+                                    }
 
                                     glib::MainContext::default().spawn_local(async move {
-                                        if !is_scanning.get() {
-                                            let now = std::time::Instant::now();
-                                            let should_refresh = now
-                                                .duration_since(*last_refresh.borrow())
-                                                >= std::time::Duration::from_secs(3);
+                                        glib::timeout_future_seconds(8).await;
+                                        *pending_refresh.borrow_mut() = false;
 
-                                            if should_refresh {
-                                                *last_refresh.borrow_mut() = now;
-                                                header::refresh_networks_no_scan(
-                                                    ctx,
-                                                    &list_container,
-                                                    &is_scanning,
-                                                )
-                                                .await;
-                                            }
+                                        let current_page = ctx.stack.visible_child_name();
+                                        let on_networks_page =
+                                            current_page.as_deref() == Some("networks");
+
+                                        if !is_scanning.get() && on_networks_page {
+                                            header::refresh_networks_no_scan(
+                                                ctx,
+                                                &list_container,
+                                                &is_scanning,
+                                            )
+                                            .await;
                                         }
                                     });
                                 })
                                 .await;
 
-                            match result {
-                                Ok(_) => eprintln!("Network monitoring ended normally"),
-                                Err(e) => eprintln!(
-                                    "Network monitoring error: {}, restarting in 5s...",
-                                    e
-                                ),
+                            if let Err(e) = result {
+                                eprintln!("Network monitoring error: {}, restarting in 5s...", e)
                             }
                             glib::timeout_future_seconds(5).await;
                         }
