@@ -127,7 +127,7 @@ where
             .build()
             .await?;
 
-        for ap_path in wifi.get_all_access_points().await? {
+        for ap_path in wifi.access_points().await? {
             let ap = NMAccessPointProxy::builder(conn)
                 .path(ap_path)?
                 .build()

@@ -13,9 +13,6 @@ use zvariant::OwnedObjectPath;
     default_service = "org.freedesktop.NetworkManager"
 )]
 pub trait NMWireless {
-    /// Returns paths to all visible access points.
-    fn get_all_access_points(&self) -> Result<Vec<OwnedObjectPath>>;
-
     /// Requests a Wi-Fi scan. Options are usually empty.
     fn request_scan(&self, options: HashMap<String, zvariant::Value<'_>>) -> Result<()>;
 
@@ -27,11 +24,28 @@ pub trait NMWireless {
     #[zbus(signal)]
     fn access_point_removed(&self, path: OwnedObjectPath);
 
-    /// Path to the currently connected access point ("/" if none).
+    /// The operating mode of the wireless device
     #[zbus(property)]
-    fn active_access_point(&self) -> Result<OwnedObjectPath>;
+    fn mode(&self) -> Result<u32>;
 
     /// Current connection bitrate in Kbit/s.
     #[zbus(property)]
     fn bitrate(&self) -> Result<u32>;
+
+    /// List of object paths of access point visible to this wireless device.
+    #[zbus(property)]
+    fn access_points(&self) -> Result<Vec<OwnedObjectPath>>;
+
+    /// Path to the currently connected access point ("/" if none).
+    #[zbus(property)]
+    fn active_access_point(&self) -> Result<OwnedObjectPath>;
+
+    /// The capabilities of the wireless device.
+    #[zbus(property)]
+    fn wireless_capabilities(&self) -> Result<u32>;
+
+    /// The timestamp (in CLOCK_BOOTTIME milliseconds) for the last finished network scan.
+    /// A value of -1 means the device never scanned for access points.
+    #[zbus(property)]
+    fn last_scan(&self) -> Result<i64>;
 }

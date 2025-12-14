@@ -220,6 +220,7 @@ pub enum StateReason {
     Other(u32),
 }
 
+/// Represents a Wi-Fi network discovered during a scan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Network {
     pub device: String,
@@ -232,6 +233,7 @@ pub struct Network {
     pub is_eap: bool,
 }
 
+/// Detailed information about a connected Wi-Fi network.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkInfo {
     pub ssid: String,
@@ -246,26 +248,38 @@ pub struct NetworkInfo {
     pub status: String,
 }
 
+/// Represents a network device managed by NetworkManager.
 #[derive(Debug, Clone)]
 pub struct Device {
     pub path: String,
     pub interface: String,
+    pub identity: DeviceIdentity,
     pub device_type: DeviceType,
     pub state: DeviceState,
     pub managed: Option<bool>,
     pub driver: Option<String>,
 }
 
+/// Represents the identity of a network device.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DeviceIdentity {
+    pub permanent_mac: String,
+    pub current_mac: String,
+}
+
+/// EAP (Extensible Authentication Protocol) method options for Wi-Fi connections.
 pub enum EapMethod {
     Peap, // PEAPv0/EAP-MSCHAPv2
     Ttls, // EAP-TTLS
 }
 
+/// Phase 2 authentication methods for EAP connections.
 pub enum Phase2 {
     Mschapv2,
     Pap,
 }
 
+/// EAP options for WPA-EAP Wi-Fi connections.
 pub struct EapOptions {
     pub identity: String,
     pub password: String,
@@ -277,18 +291,21 @@ pub struct EapOptions {
     pub phase2: Phase2,
 }
 
+/// Connection options for saved NetworkManager connections.
 pub struct ConnectionOptions {
     pub autoconnect: bool,
     pub autoconnect_priority: Option<i32>,
     pub autoconnect_retries: Option<i32>,
 }
 
+/// Wi-Fi connection security types.
 pub enum WifiSecurity {
     Open,
     WpaPsk { psk: String },
     WpaEap { opts: EapOptions },
 }
 
+/// Errors that can occur during network operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceType {
     Ethernet,
@@ -298,6 +315,7 @@ pub enum DeviceType {
     Other(u32),
 }
 
+/// NetworkManager device states.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceState {
     Unmanaged,
@@ -371,6 +389,7 @@ pub enum ConnectionError {
     InvalidUtf8(#[from] std::str::Utf8Error),
 }
 
+/// NetworkManager device state reason codes.
 impl From<u32> for StateReason {
     fn from(code: u32) -> Self {
         match code {
@@ -428,6 +447,7 @@ impl From<u32> for StateReason {
     }
 }
 
+/// Display implementation for StateReason.
 impl Display for StateReason {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

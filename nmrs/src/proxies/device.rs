@@ -49,6 +49,13 @@ pub trait NMDevice {
     #[zbus(property)]
     fn state_reason(&self) -> Result<(u32, u32)>;
 
+    /// Hardware (MAC) address of the device.
+    #[zbus(property)]
+    fn hw_address(&self) -> Result<String>;
+
+    #[zbus(property)]
+    fn perm_hw_address(&self) -> Result<String>;
+
     /// Signal emitted when device state changes.
     ///
     /// The method is named `device_state_changed` to avoid conflicts with the
