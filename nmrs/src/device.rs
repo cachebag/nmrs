@@ -9,7 +9,7 @@ use zbus::Connection;
 
 use crate::Result;
 use crate::constants::device_type;
-use crate::models::{ConnectionError, Device, DeviceState};
+use crate::models::{ConnectionError, Device, DeviceIdentity, DeviceState};
 use crate::proxies::{NMDeviceProxy, NMProxy};
 use crate::state_wait::wait_for_wifi_device_ready;
 
@@ -30,6 +30,8 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
 
         let interface = d_proxy.interface().await?;
         let raw_type = d_proxy.device_type().await?;
+        let perm_mac = d_proxy.perm_hw_address().await?;
+        let current_mac = d_proxy.hw_address().await?;
         let device_type = raw_type.into();
         let raw_state = d_proxy.state().await?;
         let state = raw_state.into();
@@ -39,6 +41,10 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
         devices.push(Device {
             path: p.to_string(),
             interface,
+            identity: DeviceIdentity {
+                permanent_mac: perm_mac,
+                current_mac,
+            },
             device_type,
             state,
             managed,

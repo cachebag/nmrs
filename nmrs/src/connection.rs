@@ -297,7 +297,7 @@ async fn find_ap(
     wifi: &NMWirelessProxy<'_>,
     target_ssid: &str,
 ) -> Result<OwnedObjectPath> {
-    let access_points = wifi.get_all_access_points().await?;
+    let access_points = wifi.access_points().await?;
 
     for ap_path in access_points {
         let ap = NMAccessPointProxy::builder(conn)
