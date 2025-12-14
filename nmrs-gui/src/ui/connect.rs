@@ -1,7 +1,7 @@
 use glib::Propagation;
 use gtk::{
-    ApplicationWindow, Box as GtkBox, Dialog, Entry, EventControllerKey, Label, Orientation,
-    prelude::*,
+    ApplicationWindow, Box as GtkBox, Button, CheckButton, Dialog, Entry, EventControllerKey,
+    FileChooserAction, FileChooserDialog, Label, Orientation, ResponseType, prelude::*,
 };
 use log::{debug, error};
 use nmrs::{
@@ -74,6 +74,32 @@ fn draw_connect_modal(
     vbox.append(&label);
     vbox.append(&entry);
 
+    let (cert_entry, use_system_certs, browse_btn) = if is_eap {
+        let cert_label = Label::new(Some("CA Certificate (optional):"));
+        cert_label.set_margin_top(8);
+        let cert_entry = Entry::new();
+        cert_entry.add_css_class("pw-entry");
+        cert_entry.set_placeholder_text(Some("/path/to/ca-cert.pem"));
+
+        let cert_hbox = GtkBox::new(Orientation::Horizontal, 8);
+        let browse_btn = Button::with_label("Browse...");
+        browse_btn.add_css_class("cert-browse-btn");
+        cert_hbox.append(&cert_entry);
+        cert_hbox.append(&browse_btn);
+
+        vbox.append(&cert_label);
+        vbox.append(&cert_hbox);
+
+        let system_certs_check = CheckButton::with_label("Use system CA certificates");
+        system_certs_check.set_active(true);
+        system_certs_check.set_margin_top(4);
+        vbox.append(&system_certs_check);
+
+        (Some(cert_entry), Some(system_certs_check), Some(browse_btn))
+    } else {
+        (None, None, None)
+    };
+
     content_area.append(&vbox);
 
     let dialog_rc = Rc::new(dialog);
@@ -84,11 +110,47 @@ fn draw_connect_modal(
     status_label.add_css_class("status-label");
     vbox.append(&status_label);
 
+    if let Some(browse_btn) = browse_btn {
+        let cert_entry_for_browse = cert_entry.clone();
+        let dialog_weak = dialog_rc.downgrade();
+        browse_btn.connect_clicked(move |_| {
+            if let Some(parent_dialog) = dialog_weak.upgrade() {
+                let file_dialog = FileChooserDialog::new(
+                    Some("Select CA Certificate"),
+                    Some(&parent_dialog),
+                    FileChooserAction::Open,
+                    &[
+                        ("Cancel", ResponseType::Cancel),
+                        ("Open", ResponseType::Accept),
+                    ],
+                );
+
+                let cert_entry = cert_entry_for_browse.clone();
+                file_dialog.connect_response(move |dialog, response| {
+                    if response == ResponseType::Accept
+                        && let Some(file) = dialog.file()
+                        && let Some(path) = file.path()
+                    {
+                        cert_entry
+                            .as_ref()
+                            .unwrap()
+                            .set_text(&path.to_string_lossy());
+                    }
+                    dialog.close();
+                });
+
+                file_dialog.show();
+            }
+        });
+    }
+
     {
         let dialog_rc = dialog_rc.clone();
         let status_label = status_label.clone();
         let refresh_callback = on_connection_success.clone();
         let nm = nm.clone();
+        let cert_entry_clone = cert_entry.clone();
+        let use_system_certs_clone = use_system_certs.clone();
 
         entry.connect_activate(move |entry| {
             let pwd = entry.text().to_string();
@@ -97,6 +159,21 @@ fn draw_connect_modal(
                 .as_ref()
                 .map(|e| e.text().to_string())
                 .unwrap_or_default();
+
+            let cert_path = cert_entry_clone.as_ref().and_then(|e| {
+                let text = e.text().to_string();
+                if text.trim().is_empty() {
+                    None
+                } else {
+                    Some(text)
+                }
+            });
+
+            let use_system_ca = use_system_certs_clone
+                .as_ref()
+                .map(|cb| cb.is_active())
+                .unwrap_or(true);
+
             let ssid = ssid_owned.clone();
             let dialog = dialog_rc.clone();
             let status = status_label.clone();
@@ -119,8 +196,8 @@ fn draw_connect_modal(
                             password: pwd,
                             anonymous_identity: None,
                             domain_suffix_match: None,
-                            ca_cert_path: None,
-                            system_ca_certs: true,
+                            ca_cert_path: cert_path,
+                            system_ca_certs: use_system_ca,
                             method: EapMethod::Peap,
                             phase2: Phase2::Mschapv2,
                         },

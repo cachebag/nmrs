@@ -23,7 +23,7 @@ pub(crate) fn channel_from_freq(mhz: u32) -> Option<u16> {
         }
         frequency::BAND_2_4_CH14 => Some(14),
         frequency::BAND_5_START..=frequency::BAND_5_END => {
-            Some(((mhz - frequency::BAND_5_START) / frequency::CHANNEL_SPACING) as u16)
+            Some(((mhz - 5000) / frequency::CHANNEL_SPACING) as u16)
         }
         frequency::BAND_6_START..=frequency::BAND_6_END => {
             Some(((mhz - frequency::BAND_6_START) / frequency::CHANNEL_SPACING + 1) as u16)

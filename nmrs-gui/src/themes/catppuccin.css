@@ -349,3 +349,16 @@ popover row label {
   margin-bottom: 4px;
 }
 
+.cert-browse-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.cert-browse-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-color-hover);
+}
+
