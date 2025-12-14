@@ -285,3 +285,30 @@ popover row label {
   color: var(--text-primary);
 }
 
+/* Wired device styles */
+.wired-section-header,
+.wireless-section-header {
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.8px;
+  opacity: 0.8;
+}
+
+.wired-devices-list {
+  background: var(--bg-primary);
+  margin-bottom: 8px;
+}
+
+.wired-icon {
+  color: var(--success-color);
+  opacity: 0.8;
+  margin-left: 6px;
+}
+
+.device-separator {
+  background: var(--border-color);
+  opacity: 0.5;
+}
+

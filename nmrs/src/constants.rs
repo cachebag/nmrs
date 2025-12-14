@@ -5,7 +5,7 @@
 
 /// NetworkManager device type constants.
 pub mod device_type {
-    // pub const ETHERNET: u32 = 1;
+    pub const ETHERNET: u32 = 1;
     pub const WIFI: u32 = 2;
     // pub const WIFI_P2P: u32 = 30;
     // pub const LOOPBACK: u32 = 32;
@@ -83,8 +83,8 @@ pub mod frequency {
     pub const BAND_2_4_START: u32 = 2412;
     pub const BAND_2_4_END: u32 = 2472;
     pub const BAND_2_4_CH14: u32 = 2484;
-    pub const BAND_5_START: u32 = 5000;
-    pub const BAND_5_END: u32 = 5900;
+    pub const BAND_5_START: u32 = 5150;
+    pub const BAND_5_END: u32 = 5925;
     pub const BAND_6_START: u32 = 5955;
     pub const BAND_6_END: u32 = 7115;
     pub const CHANNEL_SPACING: u32 = 5;

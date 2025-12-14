@@ -49,4 +49,16 @@ pub trait NM {
 
     /// Deactivates an active connection.
     fn deactivate_connection(&self, active_connection: OwnedObjectPath) -> zbus::Result<()>;
+
+    /// Signal emitted when a device is added to NetworkManager.
+    #[zbus(signal, name = "DeviceAdded")]
+    fn device_added(&self, device: OwnedObjectPath);
+
+    /// Signal emitted when a device is removed from NetworkManager.
+    #[zbus(signal, name = "DeviceRemoved")]
+    fn device_removed(&self, device: OwnedObjectPath);
+
+    /// Signal emitted when any device changes state.
+    #[zbus(signal, name = "StateChanged")]
+    fn state_changed(&self, state: u32);
 }

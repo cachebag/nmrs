@@ -60,6 +60,28 @@ fn base_connection_section(
     s
 }
 
+/// Builds the `connection` section for Ethernet connections.
+fn base_ethernet_connection_section(
+    connection_id: &str,
+    opts: &ConnectionOptions,
+) -> HashMap<&'static str, Value<'static>> {
+    let mut s = HashMap::new();
+    s.insert("type", Value::from("802-3-ethernet"));
+    s.insert("id", Value::from(connection_id.to_string()));
+    s.insert("uuid", Value::from(uuid::Uuid::new_v4().to_string()));
+    s.insert("autoconnect", Value::from(opts.autoconnect));
+
+    if let Some(p) = opts.autoconnect_priority {
+        s.insert("autoconnect-priority", Value::from(p));
+    }
+
+    if let Some(r) = opts.autoconnect_retries {
+        s.insert("autoconnect-retries", Value::from(r));
+    }
+
+    s
+}
+
 /// Builds the `802-11-wireless-security` section for WPA-PSK networks.
 ///
 /// Uses WPA2 (RSN) with CCMP encryption. The `psk-flags` of 0 means the
@@ -188,6 +210,44 @@ pub fn build_wifi_connection(
             conn.insert("802-1x", e1x);
         }
     }
+
+    conn
+}
+
+/// Builds a complete Ethernet connection settings dictionary.
+///
+/// Constructs all required sections for NetworkManager. The returned dictionary
+/// can be passed directly to `AddAndActivateConnection`.
+///
+/// # Sections Created
+///
+/// - `connection`: Always present (type: "802-3-ethernet")
+/// - `802-3-ethernet`: Ethernet-specific settings (currently empty, can be extended)
+/// - `ipv4` / `ipv6`: Always present (set to "auto" for DHCP)
+pub fn build_ethernet_connection(
+    connection_id: &str,
+    opts: &ConnectionOptions,
+) -> HashMap<&'static str, HashMap<&'static str, Value<'static>>> {
+    let mut conn: HashMap<&'static str, HashMap<&'static str, Value<'static>>> = HashMap::new();
+
+    // Base connection section
+    conn.insert(
+        "connection",
+        base_ethernet_connection_section(connection_id, opts),
+    );
+
+    // Ethernet section (minimal - can be extended for MAC address, MTU, etc.)
+    let ethernet = HashMap::new();
+    conn.insert("802-3-ethernet", ethernet);
+
+    // Add IPv4 and IPv6 configuration
+    let mut ipv4 = HashMap::new();
+    ipv4.insert("method", Value::from("auto"));
+    conn.insert("ipv4", ipv4);
+
+    let mut ipv6 = HashMap::new();
+    ipv6.insert("method", Value::from("auto"));
+    conn.insert("ipv6", ipv6);
 
     conn
 }
