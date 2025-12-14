@@ -1,3 +1,21 @@
+/*
+ * Dracula Theme for nmrs-gui
+ * 
+ * Customizable CSS Variables:
+ * --bg-primary: Main background color
+ * --bg-secondary: Secondary elements (headerbar, cards)
+ * --bg-tertiary: Hover states
+ * --text-primary: Primary text color
+ * --text-secondary: Secondary text (labels, headers)
+ * --text-tertiary: Tertiary text (back button, toggle)
+ * --border-color: Default border color
+ * --border-color-hover: Border color on hover
+ * --accent-color: Accent color (selected items, switches)
+ * --success-color: Success indicators (connected, good signal)
+ * --warning-color: Warning indicators (okay signal)
+ * --error-color: Error indicators (poor signal)
+ */
+
 /* Light theme */
 window.light-theme {
   --bg-primary: #f8f8f2;
@@ -265,3 +283,69 @@ popover row:selected {
 popover row label {
   color: var(--text-primary);
 }
+
+/* Wired Device Styles */
+.wired-section-header {
+  color: var(--text-secondary);
+}
+
+.wireless-section-header {
+  color: var(--text-secondary);
+}
+
+.wired-devices-list {
+  background: var(--bg-primary);
+  border: none;
+}
+
+.wired-device-row {
+  padding: 6px 10px;
+  margin: 2px 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.wired-device-row:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color-hover);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.wired-device-row.connected {
+  background: color-mix(in srgb, var(--success-color) 15%, transparent);
+  border-color: color-mix(in srgb, var(--success-color) 30%, transparent);
+}
+
+.wired-device-row.connected:hover {
+  background: color-mix(in srgb, var(--success-color) 20%, transparent);
+  border-color: color-mix(in srgb, var(--success-color) 40%, transparent);
+}
+
+.wired-device-row label {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.device-separator {
+  background: var(--border-color);
+  opacity: 0.3;
+}
+
+.wired-page {
+  background: var(--bg-primary);
+  padding: 16px 20px;
+  color: var(--text-primary);
+  border: none;
+}
+
+.wired-device-icon {
+  color: var(--text-primary);
+}
+
+.wired-device-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
