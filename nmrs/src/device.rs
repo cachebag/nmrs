@@ -30,8 +30,16 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
 
         let interface = d_proxy.interface().await?;
         let raw_type = d_proxy.device_type().await?;
-        let perm_mac = d_proxy.perm_hw_address().await?;
-        let current_mac = d_proxy.hw_address().await?;
+        let current_mac = d_proxy
+            .hw_address()
+            .await
+            .unwrap_or_else(|_| String::from("00:00:00:00:00:00"));
+        // PermHwAddress may not be available on all systems/devices
+        // If not available, fall back to HwAddress
+        let perm_mac = d_proxy
+            .perm_hw_address()
+            .await
+            .unwrap_or_else(|_| current_mac.clone());
         let device_type = raw_type.into();
         let raw_state = d_proxy.state().await?;
         let state = raw_state.into();

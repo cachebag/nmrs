@@ -25,6 +25,7 @@ pub struct NetworksContext {
     pub stack: gtk::Stack,
     pub parent_window: gtk::ApplicationWindow,
     pub details_page: Rc<NetworkPage>,
+    pub wired_details_page: Rc<crate::ui::wired_page::WiredPage>,
 }
 
 impl NetworksContext {
@@ -34,6 +35,7 @@ impl NetworksContext {
         stack: &gtk::Stack,
         parent_window: &gtk::ApplicationWindow,
         details_page: Rc<NetworkPage>,
+        wired_details_page: Rc<crate::ui::wired_page::WiredPage>,
     ) -> Result<Self> {
         let nm = Rc::new(NetworkManager::new().await?);
 
@@ -44,6 +46,7 @@ impl NetworksContext {
             stack: stack.clone(),
             parent_window: parent_window.clone(),
             details_page,
+            wired_details_page,
         })
     }
 }
@@ -204,7 +207,7 @@ pub fn networks_view(
             row.add_css_class("connected");
         }
 
-        let display_name = match net.frequency.and_then(freq_to_band) {
+        let display_name = match net.frequency.and_then(crate::ui::freq_to_band) {
             Some(band) => format!("{} ({band})", net.ssid),
             None => net.ssid.clone(),
         };
@@ -271,15 +274,6 @@ pub fn networks_view(
     list
 }
 
-fn freq_to_band(freq: u32) -> Option<&'static str> {
-    match freq {
-        2400..=2500 => Some("2.4GHz"),
-        5000..=5900 => Some("5GHz"),
-        5901..=7125 => Some("6GHz"),
-        _ => None,
-    }
-}
-
 fn is_current_network(
     net: &models::Network,
     current_ssid: Option<&str>,
@@ -295,7 +289,7 @@ fn is_current_network(
     }
 
     if let Some(band) = current_band {
-        let net_band = net.frequency.and_then(freq_to_band);
+        let net_band = net.frequency.and_then(crate::ui::freq_to_band);
 
         return net_band == Some(band);
     }

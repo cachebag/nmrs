@@ -1,9 +1,10 @@
 use zbus::Connection;
 
 use crate::Result;
-use crate::connection::{connect, forget};
+use crate::connection::{connect, connect_wired, forget};
 use crate::connection_settings::{get_saved_connection_path, has_saved_connection};
 use crate::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
+use crate::device_monitor;
 use crate::models::{Device, Network, NetworkInfo, WifiSecurity};
 use crate::network_info::{current_connection_info, current_ssid, show_details};
 use crate::network_monitor;
@@ -25,9 +26,21 @@ impl NetworkManager {
         Ok(Self { conn })
     }
 
-    /// Lists all network devices managed by NetworkManager.
+    /// List all network devices managed by NetworkManager.
     pub async fn list_devices(&self) -> Result<Vec<Device>> {
         list_devices(&self.conn).await
+    }
+
+    /// Lists all network devices managed by NetworkManager.
+    pub async fn list_wireless_devices(&self) -> Result<Vec<Device>> {
+        let devices = list_devices(&self.conn).await?;
+        Ok(devices.into_iter().filter(|d| d.is_wireless()).collect())
+    }
+
+    /// List all wired (Ethernet) devices.
+    pub async fn list_wired_devices(&self) -> Result<Vec<Device>> {
+        let devices = list_devices(&self.conn).await?;
+        Ok(devices.into_iter().filter(|d| d.is_wired()).collect())
     }
 
     /// Lists all visible Wi-Fi networks.
@@ -44,6 +57,19 @@ impl NetworkManager {
     /// variants for specific failure reasons.
     pub async fn connect(&self, ssid: &str, creds: WifiSecurity) -> Result<()> {
         connect(&self.conn, ssid, creds).await
+    }
+
+    /// Connects to a wired (Ethernet) device.
+    ///
+    /// Finds the first available wired device and either activates an existing
+    /// saved connection or creates a new one. The connection will activate
+    /// when a cable is plugged in.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ConnectionError::NoWiredDevice` if no wired device is found.
+    pub async fn connect_wired(&self) -> Result<()> {
+        connect_wired(&self.conn).await
     }
 
     /// Returns whether Wi-Fi is currently enabled.
@@ -134,5 +160,41 @@ impl NetworkManager {
         F: Fn() + 'static,
     {
         network_monitor::monitor_network_changes(&self.conn, callback).await
+    }
+
+    /// Monitors device state changes in real-time.
+    ///
+    /// Subscribes to D-Bus signals for device state changes on all network
+    /// devices (both wired and wireless). Invokes the callback whenever a
+    /// device state changes (e.g., cable plugged in, device activated),
+    /// enabling live UI updates without polling.
+    ///
+    /// This function runs indefinitely until an error occurs. Run it in a
+    /// background task.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// # use nmrs::NetworkManager;
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    ///
+    /// // Spawn monitoring task
+    /// glib::MainContext::default().spawn_local({
+    ///     let nm = nm.clone();
+    ///     async move {
+    ///         nm.monitor_device_changes(|| {
+    ///             println!("Device state changed!");
+    ///         }).await
+    ///     }
+    /// });
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn monitor_device_changes<F>(&self, callback: F) -> Result<()>
+    where
+        F: Fn() + 'static,
+    {
+        device_monitor::monitor_device_changes(&self.conn, callback).await
     }
 }

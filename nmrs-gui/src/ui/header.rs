@@ -1,13 +1,16 @@
 use glib::clone;
 use gtk::STYLE_PROVIDER_PRIORITY_USER;
 use gtk::prelude::*;
-use gtk::{Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch, glib};
+use gtk::{Align, Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch, glib};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use nmrs::models;
+
 use crate::ui::networks;
 use crate::ui::networks::NetworksContext;
+use crate::ui::wired_devices;
 
 pub struct ThemeDef {
     pub key: &'static str,
@@ -103,6 +106,7 @@ pub fn build_header(
 
     let refresh_btn = gtk::Button::from_icon_name("view-refresh-symbolic");
     refresh_btn.add_css_class("refresh-btn");
+    refresh_btn.set_tooltip_text(Some("Refresh networks and devices"));
     header.pack_end(&refresh_btn);
     refresh_btn.connect_clicked(clone!(
         #[weak]
@@ -233,6 +237,86 @@ pub async fn refresh_networks(
     clear_children(list_container);
     ctx.status.set_text("Scanning...");
 
+    // Fetch wired devices first
+    match ctx.nm.list_wired_devices().await {
+        Ok(wired_devices) => {
+            // eprintln!("Found {} wired devices total", wired_devices.len());
+
+            let available_devices: Vec<_> = wired_devices
+                .into_iter()
+                .filter(|dev| {
+                    let show = matches!(
+                        dev.state,
+                        models::DeviceState::Activated
+                            | models::DeviceState::Disconnected
+                            | models::DeviceState::Prepare
+                            | models::DeviceState::Config
+                    );
+                    /* eprintln!(
+                        "  - {} ({}): {} -> {}",
+                        dev.interface,
+                        dev.device_type,
+                        dev.state,
+                        if show { "SHOW" } else { "HIDE" }
+                    ); */
+                    show
+                })
+                .collect();
+
+            /* eprintln!(
+                "Showing {} available wired devices",
+                available_devices.len()
+            ); */
+
+            if !available_devices.is_empty() {
+                let wired_header = Label::new(Some("Wired"));
+                wired_header.add_css_class("section-header");
+                wired_header.add_css_class("wired-section-header");
+                wired_header.set_halign(Align::Start);
+                wired_header.set_margin_top(8);
+                wired_header.set_margin_bottom(4);
+                wired_header.set_margin_start(12);
+                list_container.append(&wired_header);
+
+                // Create a wired devices context
+                let wired_ctx = wired_devices::WiredDevicesContext {
+                    nm: ctx.nm.clone(),
+                    on_success: ctx.on_success.clone(),
+                    status: ctx.status.clone(),
+                    stack: ctx.stack.clone(),
+                    parent_window: ctx.parent_window.clone(),
+                };
+                let wired_ctx = Rc::new(wired_ctx);
+
+                let wired_list = wired_devices::wired_devices_view(
+                    wired_ctx,
+                    &available_devices,
+                    ctx.wired_details_page.clone(),
+                );
+                wired_list.add_css_class("wired-devices-list");
+                list_container.append(&wired_list);
+
+                let separator = gtk::Separator::new(Orientation::Horizontal);
+                separator.add_css_class("device-separator");
+                separator.set_margin_top(12);
+                separator.set_margin_bottom(12);
+                list_container.append(&separator);
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to list wired devices: {}", e);
+        }
+    }
+
+    let wireless_header = Label::new(Some("Wireless"));
+    wireless_header.add_css_class("section-header");
+    wireless_header.add_css_class("wireless-section-header");
+    wireless_header.set_halign(Align::Start);
+    wireless_header.set_margin_top(8);
+    wireless_header.set_margin_bottom(4);
+    wireless_header.set_margin_start(12);
+    list_container.append(&wireless_header);
+
     if let Err(err) = ctx.nm.scan_networks().await {
         ctx.status.set_text(&format!("Scan failed: {err}"));
         is_scanning.set(false);
@@ -254,41 +338,19 @@ pub async fn refresh_networks(
             let current_conn = ctx.nm.current_connection_info().await;
             let (current_ssid, current_band) = if let Some((ssid, freq)) = current_conn {
                 let ssid_str = ssid.clone();
-                let band: Option<String> = freq.map(|f| {
-                    if (2400..=2500).contains(&f) {
-                        "2.4GHz".to_string()
-                    } else if (5000..=6000).contains(&f) {
-                        "5GHz".to_string()
-                    } else if (5925..=7125).contains(&f) {
-                        "6GHz".to_string()
-                    } else {
-                        "unknown".to_string()
-                    }
-                });
+                let band: Option<String> = freq
+                    .and_then(crate::ui::freq_to_band)
+                    .map(|s| s.to_string());
                 (Some(ssid_str), band)
             } else {
                 (None, None)
             };
 
-            // Sort by signal strength (descending)
             nets.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
 
-            // Deduplicate by SSID + frequency band (not exact frequency)
-            // This matches how networks are displayed (2.4GHz, 5GHz, 6GHz)
             let mut seen_combinations = HashSet::new();
             nets.retain(|net| {
-                // Normalize frequency to band, matching the display logic
-                let band = net.frequency.map(|freq| {
-                    if (2400..=2500).contains(&freq) {
-                        "2.4GHz"
-                    } else if (5000..=6000).contains(&freq) {
-                        "5GHz"
-                    } else if (5925..=7125).contains(&freq) {
-                        "6GHz"
-                    } else {
-                        "unknown"
-                    }
-                });
+                let band = net.frequency.and_then(crate::ui::freq_to_band);
                 let key = (net.ssid.clone(), band);
                 seen_combinations.insert(key)
             });
@@ -318,4 +380,139 @@ pub fn clear_children(container: &gtk::Box) {
         child = widget.next_sibling();
         container.remove(&widget);
     }
+}
+
+/// Refresh the network list WITHOUT triggering a new scan.
+/// This is useful for live updates when the network list changes
+/// (e.g., wired device state changes, AP added/removed).
+pub async fn refresh_networks_no_scan(
+    ctx: Rc<NetworksContext>,
+    list_container: &GtkBox,
+    is_scanning: &Rc<Cell<bool>>,
+) {
+    if is_scanning.get() {
+        // Don't interfere with an ongoing scan or refresh
+        return;
+    }
+
+    // Set flag to prevent concurrent refreshes
+    is_scanning.set(true);
+
+    clear_children(list_container);
+
+    // Fetch wired devices first
+    if let Ok(wired_devices) = ctx.nm.list_wired_devices().await {
+        // eprintln!("Found {} wired devices total", wired_devices.len());
+
+        // Filter out unavailable devices to reduce clutter
+        let available_devices: Vec<_> = wired_devices
+            .into_iter()
+            .filter(|dev| {
+                let show = matches!(
+                    dev.state,
+                    models::DeviceState::Activated
+                        | models::DeviceState::Disconnected
+                        | models::DeviceState::Prepare
+                        | models::DeviceState::Config
+                        | models::DeviceState::Unmanaged
+                );
+                /* eprintln!(
+                    "  - {} ({}): {} -> {}",
+                    dev.interface,
+                    dev.device_type,
+                    dev.state,
+                    if show { "SHOW" } else { "HIDE" }
+                ); */
+                show
+            })
+            .collect();
+
+        /* eprintln!(
+            "Showing {} available wired devices",
+            available_devices.len()
+        );*/
+
+        if !available_devices.is_empty() {
+            let wired_header = Label::new(Some("Wired"));
+            wired_header.add_css_class("section-header");
+            wired_header.add_css_class("wired-section-header");
+            wired_header.set_halign(Align::Start);
+            wired_header.set_margin_top(8);
+            wired_header.set_margin_bottom(4);
+            wired_header.set_margin_start(12);
+            list_container.append(&wired_header);
+
+            let wired_ctx = wired_devices::WiredDevicesContext {
+                nm: ctx.nm.clone(),
+                on_success: ctx.on_success.clone(),
+                status: ctx.status.clone(),
+                stack: ctx.stack.clone(),
+                parent_window: ctx.parent_window.clone(),
+            };
+            let wired_ctx = Rc::new(wired_ctx);
+
+            let wired_list = wired_devices::wired_devices_view(
+                wired_ctx,
+                &available_devices,
+                ctx.wired_details_page.clone(),
+            );
+            wired_list.add_css_class("wired-devices-list");
+            list_container.append(&wired_list);
+
+            let separator = gtk::Separator::new(Orientation::Horizontal);
+            separator.add_css_class("device-separator");
+            separator.set_margin_top(12);
+            separator.set_margin_bottom(12);
+            list_container.append(&separator);
+        }
+    }
+
+    let wireless_header = Label::new(Some("Wireless"));
+    wireless_header.add_css_class("section-header");
+    wireless_header.add_css_class("wireless-section-header");
+    wireless_header.set_halign(Align::Start);
+    wireless_header.set_margin_top(8);
+    wireless_header.set_margin_bottom(4);
+    wireless_header.set_margin_start(12);
+    list_container.append(&wireless_header);
+
+    match ctx.nm.list_networks().await {
+        Ok(mut nets) => {
+            let current_conn = ctx.nm.current_connection_info().await;
+            let (current_ssid, current_band) = if let Some((ssid, freq)) = current_conn {
+                let ssid_str = ssid.clone();
+                let band: Option<String> = freq
+                    .and_then(crate::ui::freq_to_band)
+                    .map(|s| s.to_string());
+                (Some(ssid_str), band)
+            } else {
+                (None, None)
+            };
+
+            nets.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
+
+            let mut seen_combinations = HashSet::new();
+            nets.retain(|net| {
+                let band = net.frequency.and_then(crate::ui::freq_to_band);
+                let key = (net.ssid.clone(), band);
+                seen_combinations.insert(key)
+            });
+
+            let list: ListBox = networks::networks_view(
+                ctx.clone(),
+                &nets,
+                current_ssid.as_deref(),
+                current_band.as_deref(),
+            );
+            list_container.append(&list);
+            ctx.stack.set_visible_child_name("networks");
+        }
+        Err(err) => {
+            ctx.status
+                .set_text(&format!("Error fetching networks: {err}"));
+        }
+    }
+
+    // Release the lock
+    is_scanning.set(false);
 }

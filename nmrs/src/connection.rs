@@ -12,7 +12,7 @@ use crate::network_info::current_ssid;
 use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
 use crate::utils::decode_ssid_or_empty;
-use crate::wifi_builders::build_wifi_connection;
+use crate::wifi_builders::{build_ethernet_connection, build_wifi_connection};
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
 enum SavedDecision {
@@ -81,6 +81,70 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
     // build_and_activate_new() using signal-based monitoring
     info!("Successfully connected to '{ssid}'");
 
+    Ok(())
+}
+
+/// Connects to a wired (Ethernet) device.
+///
+/// This is the main entry point for establishing a wired connection. The flow:
+/// 1. Find a wired device
+/// 2. Check for an existing saved connection
+/// 3. Either activate the saved connection or create and activate a new one
+/// 4. Wait for the connection to reach the activated state
+///
+/// Ethernet connections are typically simpler than Wi-Fi - no scanning or
+/// access points needed. The connection will activate when a cable is plugged in.
+pub(crate) async fn connect_wired(conn: &Connection) -> Result<()> {
+    debug!("Connecting to wired device");
+
+    let nm = NMProxy::new(conn).await?;
+
+    let wired_device = find_wired_device(conn, &nm).await?;
+    debug!("Found wired device: {}", wired_device.as_str());
+
+    // Check if already connected
+    let dev = NMDeviceProxy::builder(conn)
+        .path(wired_device.clone())?
+        .build()
+        .await?;
+    let current_state = dev.state().await?;
+    if current_state == device_state::ACTIVATED {
+        debug!("Wired device already activated, skipping connect()");
+        return Ok(());
+    }
+
+    // Check for saved connection (by interface name)
+    let interface = dev.interface().await?;
+    let saved = get_saved_connection_path(conn, &interface).await?;
+
+    // For Ethernet, we use "/" as the specific_object (no access point needed)
+    let specific_object = OwnedObjectPath::try_from("/").unwrap();
+
+    match saved {
+        Some(saved_path) => {
+            debug!("Activating saved wired connection: {}", saved_path.as_str());
+            let active_conn = nm
+                .activate_connection(saved_path, wired_device.clone(), specific_object)
+                .await?;
+            wait_for_connection_activation(conn, &active_conn).await?;
+        }
+        None => {
+            debug!("No saved connection found, creating new wired connection");
+            let opts = ConnectionOptions {
+                autoconnect: true,
+                autoconnect_priority: None,
+                autoconnect_retries: None,
+            };
+
+            let settings = build_ethernet_connection(&interface, &opts);
+            let (_, active_conn) = nm
+                .add_and_activate_connection(settings, wired_device.clone(), specific_object)
+                .await?;
+            wait_for_connection_activation(conn, &active_conn).await?;
+        }
+    }
+
+    info!("Successfully connected to wired device");
     Ok(())
 }
 
@@ -266,6 +330,28 @@ pub(crate) async fn disconnect_wifi_and_wait(
     Delay::new(timeouts::stabilization_delay()).await;
 
     Ok(())
+}
+
+/// Find the first wired (Ethernet) device on the system.
+///
+/// Iterates through all NetworkManager devices and returns the first one
+/// with device type `ETHERNET`. Returns `NoWiredDevice` if none found.
+pub(crate) async fn find_wired_device(
+    conn: &Connection,
+    nm: &NMProxy<'_>,
+) -> Result<OwnedObjectPath> {
+    let devices = nm.get_devices().await?;
+
+    for dp in devices {
+        let dev = NMDeviceProxy::builder(conn)
+            .path(dp.clone())?
+            .build()
+            .await?;
+        if dev.device_type().await? == device_type::ETHERNET {
+            return Ok(dp);
+        }
+    }
+    Err(ConnectionError::NoWiredDevice)
 }
 
 /// Finds the first Wi-Fi device on the system.

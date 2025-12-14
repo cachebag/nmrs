@@ -13,12 +13,18 @@ async fn is_networkmanager_available() -> bool {
 
 /// Check if WiFi is available
 async fn has_wifi_device(nm: &NetworkManager) -> bool {
-    match nm.list_devices().await {
-        Ok(devices) => devices
-            .iter()
-            .any(|d| matches!(d.device_type, DeviceType::Wifi)),
-        Err(_) => false,
-    }
+    nm.list_wireless_devices()
+        .await
+        .map(|d| !d.is_empty())
+        .unwrap_or(false)
+}
+
+/// Check if Ethernet is available
+async fn has_ethernet_device(nm: &NetworkManager) -> bool {
+    nm.list_wired_devices()
+        .await
+        .map(|d| !d.is_empty())
+        .unwrap_or(false)
 }
 
 /// Skip tests if NetworkManager is not available
@@ -36,6 +42,16 @@ macro_rules! require_wifi {
     ($nm:expr) => {
         if !has_wifi_device($nm).await {
             eprintln!("Skipping test: No WiFi device available");
+            return;
+        }
+    };
+}
+
+/// Skip tests if Ethernet device is not available
+macro_rules! require_ethernet {
+    ($nm:expr) => {
+        if !has_ethernet_device($nm).await {
+            eprintln!("Skipping test: No Ethernet device available");
             return;
         }
     };
@@ -764,6 +780,60 @@ async fn forget_returns_no_saved_connection_error() {
         }
         Ok(_) => {
             panic!("Expected error, got success");
+        }
+    }
+}
+
+/// Test listing wired devices
+#[tokio::test]
+async fn test_list_wired_devices() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+
+    let devices = nm
+        .list_wired_devices()
+        .await
+        .expect("Failed to list wired devices");
+
+    // Verify device structure for wired devices
+    for device in &devices {
+        assert!(!device.path.is_empty(), "Device path should not be empty");
+        assert!(
+            !device.interface.is_empty(),
+            "Device interface should not be empty"
+        );
+        assert_eq!(
+            device.device_type,
+            DeviceType::Ethernet,
+            "Device type should be Ethernet"
+        );
+    }
+}
+
+/// Test connecting to wired device
+#[tokio::test]
+async fn test_connect_wired() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+    require_ethernet!(&nm);
+
+    // Try to connect to wired device
+    let result = nm.connect_wired().await;
+
+    match result {
+        Ok(_) => {
+            // Connection succeeded or is waiting for cable
+            eprintln!("Wired connection initiated successfully");
+        }
+        Err(e) => {
+            // Connection failed - this is acceptable in test environments
+            eprintln!("Wired connection failed (may be expected): {}", e);
         }
     }
 }

@@ -2,6 +2,8 @@ pub mod connect;
 pub mod header;
 pub mod network_page;
 pub mod networks;
+pub mod wired_devices;
+pub mod wired_page;
 
 use gtk::prelude::*;
 use gtk::{
@@ -15,6 +17,15 @@ use crate::ui::header::THEMES;
 
 type Callback = Rc<dyn Fn()>;
 type CallbackCell = Rc<std::cell::RefCell<Option<Callback>>>;
+
+pub fn freq_to_band(freq: u32) -> Option<&'static str> {
+    match freq {
+        2400..=2500 => Some("2.4GHz"),
+        5150..=5925 => Some("5GHz"),
+        5926..=7125 => Some("6GHz"),
+        _ => None,
+    }
+}
 
 pub fn build_ui(app: &Application) {
     let win = ApplicationWindow::new(app);
@@ -72,6 +83,13 @@ pub fn build_ui(app: &Application) {
                 details_scroller.set_child(Some(details_page.widget()));
                 stack_clone.add_named(&details_scroller, Some("details"));
 
+                let wired_details_page = Rc::new(wired_page::WiredPage::new(&stack_clone));
+                let wired_details_scroller = ScrolledWindow::new();
+                wired_details_scroller
+                    .set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+                wired_details_scroller.set_child(Some(wired_details_page.widget()));
+                stack_clone.add_named(&wired_details_scroller, Some("wired-details"));
+
                 let on_success: Rc<dyn Fn()> = {
                     let list_container = list_container_clone.clone();
                     let is_scanning = is_scanning_clone.clone();
@@ -80,6 +98,7 @@ pub fn build_ui(app: &Application) {
                     let stack = stack_clone.clone();
                     let parent_window = win_clone.clone();
                     let details_page = details_page.clone();
+                    let wired_details_page = wired_details_page.clone();
 
                     let on_success_cell: CallbackCell = Rc::new(std::cell::RefCell::new(None));
                     let on_success_cell_clone = on_success_cell.clone();
@@ -93,6 +112,7 @@ pub fn build_ui(app: &Application) {
                         let parent_window = parent_window.clone();
                         let on_success_cell = on_success_cell.clone();
                         let details_page = details_page.clone();
+                        let wired_details_page = wired_details_page.clone();
 
                         glib::MainContext::default().spawn_local(async move {
                             let callback = on_success_cell.borrow().as_ref().map(|cb| cb.clone());
@@ -102,7 +122,8 @@ pub fn build_ui(app: &Application) {
                                 status,
                                 stack,
                                 parent_window,
-                                details_page,
+                                details_page: details_page.clone(),
+                                wired_details_page: wired_details_page.clone(),
                             });
                             header::refresh_networks(refresh_ctx, &list_container, &is_scanning)
                                 .await;
@@ -121,6 +142,7 @@ pub fn build_ui(app: &Application) {
                     stack: stack_clone.clone(),
                     parent_window: win_clone.clone(),
                     details_page,
+                    wired_details_page,
                 });
 
                 let header = header::build_header(
@@ -131,29 +153,111 @@ pub fn build_ui(app: &Application) {
                 );
                 vbox_clone.prepend(&header);
 
-                // TODO: Re-enable network monitoring with proper UI integration
-                // Currently disabled because it needs access to full context for row creation
-                /*
-                // Start background network monitoring for live updates
-                let nm_monitor = nm.clone();
-                let list_container_monitor = list_container_clone.clone();
-                let is_scanning_monitor = is_scanning_clone;
-                let ctx_monitor = ctx.clone();
+                // Start background device monitoring for live updates (wired devices)
+                // Uses debouncing to avoid too many rapid refreshes
+                {
+                    let nm_device_monitor = nm.clone();
+                    let list_container_device = list_container_clone.clone();
+                    let is_scanning_device = is_scanning_clone.clone();
+                    let ctx_device = ctx.clone();
 
-                glib::MainContext::default().spawn_local(async move {
-                    let _ = nm_monitor.monitor_network_changes(move || {
-                        let ctx = ctx_monitor.clone();
-                        let list_container = list_container_monitor.clone();
-                        let is_scanning = is_scanning_monitor.clone();
+                    glib::MainContext::default().spawn_local(async move {
+                        // eprintln!("Starting device state monitoring...");
+                        loop {
+                            let ctx_device_clone = ctx_device.clone();
+                            let list_container_clone = list_container_device.clone();
+                            let is_scanning_clone = is_scanning_device.clone();
 
-                        glib::MainContext::default().spawn_local(async move {
-                            if !is_scanning.get() {
-                                header::refresh_networks(ctx, &list_container, &is_scanning).await;
+                            let result = nm_device_monitor
+                                .monitor_device_changes(move || {
+                                    // eprintln!("Device state change detected!");
+                                    let ctx = ctx_device_clone.clone();
+                                    let list_container = list_container_clone.clone();
+                                    let is_scanning = is_scanning_clone.clone();
+
+                                    glib::MainContext::default().spawn_local(async move {
+                                        if !is_scanning.get() {
+                                            // eprintln!("Refreshing UI after device change");
+                                            header::refresh_networks_no_scan(
+                                                ctx,
+                                                &list_container,
+                                                &is_scanning,
+                                            )
+                                            .await;
+                                        } else {
+                                            // eprintln!("Skipping refresh (scan in progress)");
+                                        }
+                                    });
+                                })
+                                .await;
+
+                            match result {
+                                Ok(_) => eprintln!("Device monitoring ended normally"),
+                                Err(e) => {
+                                    eprintln!("Device monitoring error: {}, restarting in 5s...", e)
+                                }
                             }
-                        });
-                    }).await;
-                });
-                */
+                            glib::timeout_future_seconds(5).await;
+                        }
+                    });
+                }
+
+                {
+                    let nm_network_monitor = nm.clone();
+                    let list_container_network = list_container_clone.clone();
+                    let is_scanning_network = is_scanning_clone.clone();
+                    let ctx_network = ctx.clone();
+
+                    let last_refresh = Rc::new(std::cell::RefCell::new(
+                        std::time::Instant::now() - std::time::Duration::from_secs(10),
+                    ));
+
+                    glib::MainContext::default().spawn_local(async move {
+                        loop {
+                            let ctx_network_clone = ctx_network.clone();
+                            let list_container_clone = list_container_network.clone();
+                            let is_scanning_clone = is_scanning_network.clone();
+                            let last_refresh_clone = last_refresh.clone();
+
+                            let result = nm_network_monitor
+                                .monitor_network_changes(move || {
+                                    let ctx = ctx_network_clone.clone();
+                                    let list_container = list_container_clone.clone();
+                                    let is_scanning = is_scanning_clone.clone();
+                                    let last_refresh = last_refresh_clone.clone();
+
+                                    glib::MainContext::default().spawn_local(async move {
+                                        if !is_scanning.get() {
+                                            let now = std::time::Instant::now();
+                                            let should_refresh = now
+                                                .duration_since(*last_refresh.borrow())
+                                                >= std::time::Duration::from_secs(3);
+
+                                            if should_refresh {
+                                                *last_refresh.borrow_mut() = now;
+                                                header::refresh_networks_no_scan(
+                                                    ctx,
+                                                    &list_container,
+                                                    &is_scanning,
+                                                )
+                                                .await;
+                                            }
+                                        }
+                                    });
+                                })
+                                .await;
+
+                            match result {
+                                Ok(_) => eprintln!("Network monitoring ended normally"),
+                                Err(e) => eprintln!(
+                                    "Network monitoring error: {}, restarting in 5s...",
+                                    e
+                                ),
+                            }
+                            glib::timeout_future_seconds(5).await;
+                        }
+                    });
+                }
             }
             Err(err) => {
                 status_clone.set_text(&format!("Failed to initialize: {err}"));

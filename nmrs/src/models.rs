@@ -305,7 +305,7 @@ pub enum WifiSecurity {
     WpaEap { opts: EapOptions },
 }
 
-/// Errors that can occur during network operations.
+/// NetworkManager device types.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceType {
     Ethernet,
@@ -327,6 +327,16 @@ pub enum DeviceState {
     Deactivating,
     Failed,
     Other(u32),
+}
+
+impl Device {
+    pub fn is_wired(&self) -> bool {
+        matches!(self.device_type, DeviceType::Ethernet)
+    }
+
+    pub fn is_wireless(&self) -> bool {
+        matches!(self.device_type, DeviceType::Wifi)
+    }
 }
 
 /// Errors that can occur during network operations.
@@ -367,6 +377,10 @@ pub enum ConnectionError {
     /// No Wi-Fi device was found on the system.
     #[error("no Wi-Fi device found")]
     NoWifiDevice,
+
+    /// No wired (ethernet) device was found on the system.
+    #[error("no wired device was found")]
+    NoWiredDevice,
 
     /// Wi-Fi device did not become ready in time.
     #[error("Wi-Fi device not ready")]

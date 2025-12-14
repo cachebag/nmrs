@@ -25,6 +25,7 @@ mod access_point;
 mod active_connection;
 mod device;
 mod main_nm;
+mod wired;
 mod wireless;
 
 pub use access_point::NMAccessPointProxy;
