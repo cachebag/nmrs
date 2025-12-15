@@ -1,6 +1,7 @@
 # Changelog
 ## [Unreleased]
 
+## [0.5.0-beta] - 2025-12-15
 ### Changed
 - Core: Refactored connection monitoring from polling to event-driven D-Bus signals for faster response times and lower CPU usage ([#46](https://github.com/cachebag/nmrs/issues/46))
 - Core: Replaced `tokio` with `futures-timer` for runtime-agnostic async support (fixes GTK/glib compatibility)
@@ -122,10 +123,14 @@
 [0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
 [0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
 [0...v0.4.0-beta
+[0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
+[0...v0.5.0-beta
 [unreleased]: https://github...v0.4.0-beta
 [0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
 [0...v0.4.0-beta
-[unreleased]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...HEAD
+[0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
+[0...v0.5.0-beta
+[unreleased]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...HEAD
 [0.2.0-beta]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...v0.2.0-beta
 [0.1.1-beta]: https://github.com/cachebag/nmrs/compare/v0.1.0-beta...v0.1.1-beta
 [0.1.0-beta]: https://github.com/cachebag/nmrs/releases/tag/v0.1.0-beta
