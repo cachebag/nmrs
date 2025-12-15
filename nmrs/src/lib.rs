@@ -5,6 +5,8 @@
 //!
 //! # Quick Start
 //!
+//! ## WiFi Connection
+//!
 //! ```no_run
 //! use nmrs::{NetworkManager, WifiSecurity};
 //!
@@ -30,6 +32,48 @@
 //! # }
 //! ```
 //!
+//! ## VPN Connection (WireGuard)
+//!
+//! ```no_run
+//! use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+//!
+//! # async fn example() -> nmrs::Result<()> {
+//! let nm = NetworkManager::new().await?;
+//!
+//! // Configure WireGuard VPN
+//! let creds = VpnCredentials {
+//!     vpn_type: VpnType::WireGuard,
+//!     name: "MyVPN".into(),
+//!     gateway: "vpn.example.com:51820".into(),
+//!     private_key: "your_private_key".into(),
+//!     address: "10.0.0.2/24".into(),
+//!     peers: vec![WireGuardPeer {
+//!         public_key: "peer_public_key".into(),
+//!         gateway: "vpn.example.com:51820".into(),
+//!         allowed_ips: vec!["0.0.0.0/0".into()],
+//!         preshared_key: None,
+//!         persistent_keepalive: Some(25),
+//!     }],
+//!     dns: Some(vec!["1.1.1.1".into(), "8.8.8.8".into()]),
+//!     mtu: None,
+//!     uuid: None,
+//! };
+//!
+//! // Connect to VPN
+//! nm.connect_vpn(creds).await?;
+//!
+//! // List VPN connections
+//! let vpns = nm.list_vpn_connections().await?;
+//! for vpn in vpns {
+//!     println!("{}: {:?} - {:?}", vpn.name, vpn.vpn_type, vpn.state);
+//! }
+//!
+//! // Disconnect
+//! nm.disconnect_vpn("MyVPN").await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Core Concepts
 //!
 //! ## NetworkManager
@@ -37,7 +81,7 @@
 //! The main entry point is [`NetworkManager`], which provides methods for:
 //! - Listing and managing network devices
 //! - Scanning for available WiFi networks
-//! - Connecting to networks (WiFi, Ethernet)
+//! - Connecting to networks (WiFi, Ethernet, VPN)
 //! - Managing saved connection profiles
 //! - Real-time monitoring of network changes
 //!
@@ -47,6 +91,10 @@
 //! - [`Device`] - Represents a network device (WiFi, Ethernet, etc.)
 //! - [`Network`] - Represents a discovered WiFi network
 //! - [`WifiSecurity`] - Security types (Open, WPA-PSK, WPA-EAP)
+//! - [`VpnCredentials`] - VPN connection credentials
+//! - [`VpnType`] - Supported VPN types (WireGuard, etc.)
+//! - [`VpnConnection`] - Active VPN connection information
+//! - [`WireGuardPeer`] - WireGuard peer configuration
 //! - [`ConnectionError`] - Comprehensive error types
 //!
 //! ## Connection Builders
@@ -288,7 +336,8 @@ pub mod wifi_builders {
 pub use api::models::{
     ActiveConnectionState, ConnectionError, ConnectionOptions, ConnectionStateReason, Device,
     DeviceState, DeviceType, EapMethod, EapOptions, Network, NetworkInfo, Phase2, StateReason,
-    WifiSecurity, connection_state_reason_to_error, reason_to_error,
+    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnType, WifiSecurity, WireGuardPeer,
+    connection_state_reason_to_error, reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
 

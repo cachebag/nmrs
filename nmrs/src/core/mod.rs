@@ -8,3 +8,4 @@ pub(crate) mod connection_settings;
 pub(crate) mod device;
 pub(crate) mod scan;
 pub(crate) mod state_wait;
+pub(crate) mod vpn;

@@ -7,8 +7,8 @@
 //! # Available Builders
 //!
 //! - [`wifi`] - WiFi connection builders (WPA-PSK, WPA-EAP, Open)
+//! - [`vpn`] - VPN connection builders (WireGuard)
 //! - Ethernet builders (via [`build_ethernet_connection`])
-//! - VPN builders (coming in future releases)
 //!
 //! # When to Use These
 //!
