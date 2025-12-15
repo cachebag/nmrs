@@ -213,6 +213,12 @@ Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-d
 
 Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
+## Requirements
+
+- **Rust**: 1.78.0 or later (for `nmrs` library)
+- **Rust**: 1.85.1 or later (for `nmrs-gui` with GTK4)
+- **NetworkManager**: Running and accessible via D-Bus
+- **Linux**: This library is Linux-specific
 
 ## License
 
