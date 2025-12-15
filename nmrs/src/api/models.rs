@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
+use uuid::Uuid;
 
 /// NetworkManager active connection state.
 ///
@@ -156,7 +157,7 @@ pub fn connection_state_reason_to_error(code: u32) -> ConnectionError {
         ConnectionStateReason::IpConfigInvalid => ConnectionError::DhcpFailed,
 
         // All other failures
-        _ => ConnectionError::ConnectionFailed(reason),
+        _ => ConnectionError::ActivationFailed(reason),
     }
 }
 
@@ -381,12 +382,14 @@ pub struct DeviceIdentity {
 }
 
 /// EAP (Extensible Authentication Protocol) method options for Wi-Fi connections.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EapMethod {
     Peap, // PEAPv0/EAP-MSCHAPv2
     Ttls, // EAP-TTLS
 }
 
 /// Phase 2 authentication methods for EAP connections.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Phase2 {
     Mschapv2,
     Pap,
@@ -432,6 +435,7 @@ pub enum Phase2 {
 ///     phase2: Phase2::Pap,
 /// };
 /// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EapOptions {
     /// User identity (usually email or username)
     pub identity: String,
@@ -482,6 +486,7 @@ pub struct EapOptions {
 ///     autoconnect_retries: None,
 /// };
 /// ```
+#[derive(Debug, Clone)]
 pub struct ConnectionOptions {
     /// Whether to automatically connect when available
     pub autoconnect: bool,
@@ -549,6 +554,7 @@ pub struct ConnectionOptions {
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WifiSecurity {
     /// Open network (no authentication)
     Open,
@@ -562,6 +568,50 @@ pub enum WifiSecurity {
         /// EAP configuration options
         opts: EapOptions,
     },
+}
+
+/// VPN Connection type
+///
+/// Currently only WireGuard is supported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VpnType {
+    WireGuard,
+}
+
+/// VPN Credentials for establishing a VPN connection
+///
+/// Stores the necessary information to configure and connect to a VPN.
+#[derive(Debug, Clone)]
+pub struct VpnCredentials {
+    pub vpn_type: VpnType,
+    pub name: String,
+    pub gateway: String,
+    pub private_key: String,
+    pub address: String,
+    pub peers: Vec<WireGuardPeer>,
+    pub dns: Option<Vec<String>>,
+    pub mtu: Option<u32>,
+    pub uuid: Option<Uuid>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WireGuardPeer {
+    pub public_key: String,
+    pub gateway: String,          // endpoint host:port
+    pub allowed_ips: Vec<String>, // CIDRs
+    pub preshared_key: Option<String>,
+    pub persistent_keepalive: Option<u32>,
+}
+
+/// Active VPN Connection Information
+///
+/// Represents an active VPN connection managed by NetworkManager.
+#[derive(Debug, Clone)]
+pub struct VpnConnection {
+    pub name: String,
+    pub vpn_type: VpnType,
+    pub state: DeviceState,
+    pub interface: Option<String>,
 }
 
 /// NetworkManager device types.
@@ -708,15 +758,27 @@ pub enum ConnectionError {
 
     /// A general connection failure with a device state reason code.
     #[error("connection failed: {0}")]
-    Failed(StateReason),
+    DeviceFailed(StateReason),
 
     /// A connection activation failure with a connection state reason.
     #[error("connection activation failed: {0}")]
-    ConnectionFailed(ConnectionStateReason),
+    ActivationFailed(ConnectionStateReason),
 
     /// Invalid UTF-8 encountered in SSID.
     #[error("invalid UTF-8 in SSID: {0}")]
     InvalidUtf8(#[from] std::str::Utf8Error),
+
+    /// No VPN connection found
+    #[error("no VPN connection found")]
+    NoVpnConnection,
+
+    /// Invalid address
+    #[error("invalid address")]
+    InvalidAddress(String),
+
+    /// Invalid peer configuration
+    #[error("invalid peer configuration")]
+    InvalidPeers(String),
 }
 
 /// NetworkManager device state reason codes.
@@ -863,7 +925,7 @@ pub fn reason_to_error(code: u32) -> ConnectionError {
         StateReason::SsidNotFound => ConnectionError::NotFound,
 
         // All other failures
-        _ => ConnectionError::Failed(reason),
+        _ => ConnectionError::DeviceFailed(reason),
     }
 }
 
@@ -1114,7 +1176,7 @@ mod tests {
     fn reason_to_error_generic_failure() {
         // User disconnected maps to generic Failed
         match reason_to_error(2) {
-            ConnectionError::Failed(reason) => {
+            ConnectionError::DeviceFailed(reason) => {
                 assert_eq!(reason, StateReason::UserDisconnected);
             }
             _ => panic!("expected ConnectionError::Failed"),
@@ -1145,7 +1207,10 @@ mod tests {
             "connection stuck in state: config"
         );
         assert_eq!(
-            format!("{}", ConnectionError::Failed(StateReason::CarrierChanged)),
+            format!(
+                "{}",
+                ConnectionError::DeviceFailed(StateReason::CarrierChanged)
+            ),
             "connection failed: carrier changed"
         );
     }
@@ -1293,7 +1358,7 @@ mod tests {
     fn connection_state_reason_to_error_generic() {
         // Other reasons map to ConnectionFailed
         match connection_state_reason_to_error(2) {
-            ConnectionError::ConnectionFailed(reason) => {
+            ConnectionError::ActivationFailed(reason) => {
                 assert_eq!(reason, ConnectionStateReason::UserDisconnected);
             }
             _ => panic!("expected ConnectionError::ConnectionFailed"),
@@ -1305,7 +1370,7 @@ mod tests {
         assert_eq!(
             format!(
                 "{}",
-                ConnectionError::ConnectionFailed(ConnectionStateReason::NoSecrets)
+                ConnectionError::ActivationFailed(ConnectionStateReason::NoSecrets)
             ),
             "connection activation failed: no secrets (password) provided"
         );
