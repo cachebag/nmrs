@@ -197,18 +197,26 @@ match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
 All examples use Tokio, but you can use your preferred runtime:
 
 **With Tokio:**
+```rust
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
     let nm = nmrs::NetworkManager::new().await?;
     // ...
     Ok(())
-}**With async-std:**
+}
+```
+**With async-std:**
+```rust
 #[async_std::main]
 async fn main() -> nmrs::Result<()> {
     let nm = nmrs::NetworkManager::new().await?;
     // ...
     Ok(())
-}**With smol:**
+}
+```
+
+**With smol:**
+```rust
 fn main() -> nmrs::Result<()> {
     smol::block_on(async {
         let nm = nmrs::NetworkManager::new().await?;
@@ -216,6 +224,7 @@ fn main() -> nmrs::Result<()> {
         Ok(())
     })
 }
+```
 
 `nmrs` uses `zbus` for D-Bus communication, which launches a background thread to handle D-Bus message processing. This design ensures compatibility across all async runtimes without requiring manual executor management.
 
