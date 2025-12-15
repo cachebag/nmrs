@@ -150,7 +150,7 @@ Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-d
 - [x] Generic  
 - [x] Wireless  
 - [ ] Any  
-- [ ] Wired  
+- [X] Wired  
 - [ ] ADSL  
 - [ ] Bluetooth  
 - [ ] Bond  
@@ -179,7 +179,7 @@ Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-d
 - [ ] VXLAN  
 - [ ] Wi-Fi P2P  
 - [ ] WiMAX  
-- [ ] WireGuard  
+- [X] WireGuard  
 - [ ] WPAN  
 
 ### Configurations
