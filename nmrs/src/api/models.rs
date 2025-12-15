@@ -578,9 +578,46 @@ pub enum VpnType {
     WireGuard,
 }
 
-/// VPN Credentials for establishing a VPN connection
+/// VPN Credentials for establishing a VPN connection.
 ///
 /// Stores the necessary information to configure and connect to a VPN.
+/// Currently supports WireGuard VPN connections.
+///
+/// # Fields
+///
+/// - `vpn_type`: The type of VPN (currently only WireGuard)
+/// - `name`: Unique identifier for the connection
+/// - `gateway`: VPN gateway endpoint (e.g., "vpn.example.com:51820")
+/// - `private_key`: Client's WireGuard private key
+/// - `address`: Client's IP address with CIDR notation (e.g., "10.0.0.2/24")
+/// - `peers`: List of WireGuard peers to connect to
+/// - `dns`: Optional DNS servers to use (e.g., ["1.1.1.1", "8.8.8.8"])
+/// - `mtu`: Optional Maximum Transmission Unit
+/// - `uuid`: Optional UUID for the connection (auto-generated if not provided)
+///
+/// # Example
+///
+/// ```rust
+/// use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
+///
+/// let creds = VpnCredentials {
+///     vpn_type: VpnType::WireGuard,
+///     name: "HomeVPN".into(),
+///     gateway: "vpn.home.com:51820".into(),
+///     private_key: "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=".into(),
+///     address: "10.0.0.2/24".into(),
+///     peers: vec![WireGuardPeer {
+///         public_key: "server_public_key".into(),
+///         gateway: "vpn.home.com:51820".into(),
+///         allowed_ips: vec!["0.0.0.0/0".into()],
+///         preshared_key: None,
+///         persistent_keepalive: Some(25),
+///     }],
+///     dns: Some(vec!["1.1.1.1".into()]),
+///     mtu: None,
+///     uuid: None,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct VpnCredentials {
     pub vpn_type: VpnType,
@@ -594,24 +631,103 @@ pub struct VpnCredentials {
     pub uuid: Option<Uuid>,
 }
 
+/// WireGuard peer configuration.
+///
+/// Represents a single WireGuard peer (server) to connect to.
+///
+/// # Fields
+///
+/// - `public_key`: The peer's WireGuard public key
+/// - `gateway`: Peer endpoint in "host:port" format (e.g., "vpn.example.com:51820")
+/// - `allowed_ips`: List of IP ranges allowed through this peer (e.g., ["0.0.0.0/0"])
+/// - `preshared_key`: Optional pre-shared key for additional security
+/// - `persistent_keepalive`: Optional keepalive interval in seconds (e.g., 25)
+///
+/// # Example
+///
+/// ```rust
+/// use nmrs::WireGuardPeer;
+///
+/// let peer = WireGuardPeer {
+///     public_key: "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=".into(),
+///     gateway: "vpn.example.com:51820".into(),
+///     allowed_ips: vec!["0.0.0.0/0".into(), "::/0".into()],
+///     preshared_key: None,
+///     persistent_keepalive: Some(25),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct WireGuardPeer {
     pub public_key: String,
-    pub gateway: String,          // endpoint host:port
-    pub allowed_ips: Vec<String>, // CIDRs
+    pub gateway: String,
+    pub allowed_ips: Vec<String>,
     pub preshared_key: Option<String>,
     pub persistent_keepalive: Option<u32>,
 }
 
-/// Active VPN Connection Information
+/// VPN Connection information.
 ///
-/// Represents an active VPN connection managed by NetworkManager.
+/// Represents a VPN connection managed by NetworkManager, including both
+/// saved and active connections.
+///
+/// # Fields
+///
+/// - `name`: The connection name/identifier
+/// - `vpn_type`: The type of VPN (WireGuard, etc.)
+/// - `state`: Current connection state (for active connections)
+/// - `interface`: Network interface name (e.g., "wg0") when active
+///
+/// # Example
+///
+/// ```rust
+/// use nmrs::{VpnConnection, VpnType, DeviceState};
+///
+/// let vpn = VpnConnection {
+///     name: "WorkVPN".into(),
+///     vpn_type: VpnType::WireGuard,
+///     state: DeviceState::Activated,
+///     interface: Some("wg0".into()),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct VpnConnection {
     pub name: String,
     pub vpn_type: VpnType,
     pub state: DeviceState,
     pub interface: Option<String>,
+}
+
+/// Detailed VPN connection information and statistics.
+///
+/// Provides comprehensive information about an active VPN connection,
+/// including IP configuration and connection details.
+///
+/// # Example
+///
+/// ```rust
+/// use nmrs::{VpnConnectionInfo, VpnType, DeviceState};
+///
+/// let info = VpnConnectionInfo {
+///     name: "WorkVPN".into(),
+///     vpn_type: VpnType::WireGuard,
+///     state: DeviceState::Activated,
+///     interface: Some("wg0".into()),
+///     gateway: Some("vpn.example.com:51820".into()),
+///     ip4_address: Some("10.0.0.2/24".into()),
+///     ip6_address: None,
+///     dns_servers: vec!["1.1.1.1".into()],
+/// };
+/// ```
+#[derive(Debug, Clone)]
+pub struct VpnConnectionInfo {
+    pub name: String,
+    pub vpn_type: VpnType,
+    pub state: DeviceState,
+    pub interface: Option<String>,
+    pub gateway: Option<String>,
+    pub ip4_address: Option<String>,
+    pub ip6_address: Option<String>,
+    pub dns_servers: Vec<String>,
 }
 
 /// NetworkManager device types.
@@ -772,13 +888,29 @@ pub enum ConnectionError {
     #[error("no VPN connection found")]
     NoVpnConnection,
 
-    /// Invalid address
-    #[error("invalid address")]
+    /// Invalid IP address or CIDR notation
+    #[error("invalid address: {0}")]
     InvalidAddress(String),
 
-    /// Invalid peer configuration
-    #[error("invalid peer configuration")]
+    /// Invalid VPN peer configuration
+    #[error("invalid peer configuration: {0}")]
     InvalidPeers(String),
+
+    /// Invalid WireGuard private key format
+    #[error("invalid WireGuard private key: {0}")]
+    InvalidPrivateKey(String),
+
+    /// Invalid WireGuard public key format
+    #[error("invalid WireGuard public key: {0}")]
+    InvalidPublicKey(String),
+
+    /// Invalid VPN gateway format (should be host:port)
+    #[error("invalid VPN gateway: {0}")]
+    InvalidGateway(String),
+
+    /// VPN connection failed
+    #[error("VPN connection failed: {0}")]
+    VpnFailed(String),
 }
 
 /// NetworkManager device state reason codes.

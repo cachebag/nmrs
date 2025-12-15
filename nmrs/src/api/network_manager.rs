@@ -6,6 +6,8 @@ use crate::core::connection::{connect, connect_wired, forget};
 use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
 use crate::core::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
 use crate::core::scan::{list_networks, scan_networks};
+use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
+use crate::models::{VpnConnection, VpnConnectionInfo, VpnCredentials};
 use crate::monitoring::device as device_monitor;
 use crate::monitoring::info::{current_connection_info, current_ssid, show_details};
 use crate::monitoring::network as network_monitor;
@@ -155,6 +157,158 @@ impl NetworkManager {
     /// Returns `ConnectionError::NoWiredDevice` if no wired device is found.
     pub async fn connect_wired(&self) -> Result<()> {
         connect_wired(&self.conn).await
+    }
+
+    /// Connects to a VPN using the provided credentials.
+    ///
+    /// Currently supports WireGuard VPN connections. The function checks for an
+    /// existing saved VPN connection by name. If found, it activates the saved
+    /// connection. If not found, it creates a new VPN connection with the provided
+    /// credentials.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    ///
+    /// let creds = VpnCredentials {
+    ///     vpn_type: VpnType::WireGuard,
+    ///     name: "MyVPN".into(),
+    ///     gateway: "vpn.example.com:51820".into(),
+    ///     private_key: "your_private_key".into(),
+    ///     address: "10.0.0.2/24".into(),
+    ///     peers: vec![WireGuardPeer {
+    ///         public_key: "peer_public_key".into(),
+    ///         gateway: "vpn.example.com:51820".into(),
+    ///         allowed_ips: vec!["0.0.0.0/0".into()],
+    ///         preshared_key: None,
+    ///         persistent_keepalive: Some(25),
+    ///     }],
+    ///     dns: Some(vec!["1.1.1.1".into()]),
+    ///     mtu: None,
+    ///     uuid: None,
+    /// };
+    ///
+    /// nm.connect_vpn(creds).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - NetworkManager is not running or accessible
+    /// - The credentials are invalid or incomplete
+    /// - The VPN connection fails to activate
+    pub async fn connect_vpn(&self, creds: VpnCredentials) -> Result<()> {
+        connect_vpn(&self.conn, creds).await
+    }
+
+    /// Disconnects from an active VPN connection by name.
+    ///
+    /// Searches through active connections for a VPN matching the given name.
+    /// If found, deactivates the connection. If not found or already disconnected,
+    /// returns success.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.disconnect_vpn("MyVPN").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn disconnect_vpn(&self, name: &str) -> Result<()> {
+        disconnect_vpn(&self.conn, name).await
+    }
+
+    /// Lists all saved VPN connections.
+    ///
+    /// Returns a list of all VPN connection profiles saved in NetworkManager,
+    /// including their name, type, and current state. Only VPN connections with
+    /// recognized types (currently WireGuard) are returned.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let vpns = nm.list_vpn_connections().await?;
+    ///
+    /// for vpn in vpns {
+    ///     println!("{}: {:?}", vpn.name, vpn.vpn_type);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_vpn_connections(&self) -> Result<Vec<VpnConnection>> {
+        list_vpn_connections(&self.conn).await
+    }
+
+    /// Forgets (deletes) a saved VPN connection by name.
+    ///
+    /// Searches through saved connections for a VPN matching the given name.
+    /// If found, deletes the connection profile. If currently connected, the
+    /// VPN will be disconnected first before deletion.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.forget_vpn("MyVPN").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `ConnectionError::NoSavedConnection` if no VPN with the given
+    /// name is found.
+    pub async fn forget_vpn(&self, name: &str) -> Result<()> {
+        crate::core::vpn::forget_vpn(&self.conn, name).await
+    }
+
+    /// Gets detailed information about an active VPN connection.
+    ///
+    /// Retrieves comprehensive information about a VPN connection, including
+    /// IP configuration, DNS servers, gateway, interface, and connection state.
+    /// The VPN must be actively connected to retrieve this information.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let info = nm.get_vpn_info("MyVPN").await?;
+    ///
+    /// println!("VPN: {}", info.name);
+    /// println!("Interface: {:?}", info.interface);
+    /// println!("IP Address: {:?}", info.ip4_address);
+    /// println!("DNS Servers: {:?}", info.dns_servers);
+    /// println!("State: {:?}", info.state);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `ConnectionError::NoVpnConnection` if the VPN is not found
+    /// or not currently active.
+    pub async fn get_vpn_info(&self, name: &str) -> Result<VpnConnectionInfo> {
+        get_vpn_info(&self.conn, name).await
     }
 
     /// Returns whether Wi-Fi is currently enabled.
