@@ -7,6 +7,3 @@ RELEASE_NOTES.md
 __pycache__/
 *.pyc
 vendor/
-
-# Internal design documents
-docs/VPN_IMPLEMENTATION.md

@@ -1,5 +1,6 @@
 # Changelog
 ## [Unreleased]
+- Core: Full WireGuard VPN support ([#92](https://github.com/cachebag/nmrs/issues/92))
 
 ## [0.5.0-beta] - 2025-12-15
 ### Changed
