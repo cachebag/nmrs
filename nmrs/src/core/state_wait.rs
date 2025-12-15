@@ -68,7 +68,7 @@ pub(crate) async fn wait_for_connection_activation(
         }
         ActiveConnectionState::Deactivated => {
             warn!("Connection already deactivated");
-            return Err(ConnectionError::ConnectionFailed(
+            return Err(ConnectionError::ActivationFailed(
                 ConnectionStateReason::Unknown,
             ));
         }

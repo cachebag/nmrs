@@ -39,7 +39,9 @@
 //! let eth_settings = build_ethernet_connection("eth0", &opts);
 //! ```
 
+pub mod vpn;
 pub mod wifi;
 
 // Re-export builder functions for convenience
+pub use vpn::build_wireguard_connection;
 pub use wifi::{build_ethernet_connection, build_wifi_connection};

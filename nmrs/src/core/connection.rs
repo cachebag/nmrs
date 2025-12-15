@@ -610,24 +610,17 @@ fn decide_saved_connection(
     saved: Option<OwnedObjectPath>,
     creds: &WifiSecurity,
 ) -> Result<SavedDecision> {
-    if let Some(path) = saved {
-        if creds.is_psk()
-            && let WifiSecurity::WpaPsk { psk } = creds
-        {
-            if psk.trim().is_empty() {
-                return Ok(SavedDecision::UseSaved(path));
-            }
-            return Ok(SavedDecision::RebuildFresh);
+    match saved {
+        Some(_) if matches!(creds, WifiSecurity::WpaPsk { psk } if !psk.trim().is_empty()) => {
+            Ok(SavedDecision::RebuildFresh)
         }
-        return Ok(SavedDecision::UseSaved(path));
-    }
 
-    if creds.is_psk()
-        && let WifiSecurity::WpaPsk { psk } = creds
-        && psk.trim().is_empty()
-    {
-        return Err(ConnectionError::NoSavedConnection);
-    }
+        Some(path) => Ok(SavedDecision::UseSaved(path)),
 
-    Ok(SavedDecision::RebuildFresh)
+        None if matches!(creds, WifiSecurity::WpaPsk { psk } if psk.trim().is_empty()) => {
+            Err(ConnectionError::NoSavedConnection)
+        }
+
+        None => Ok(SavedDecision::RebuildFresh),
+    }
 }
