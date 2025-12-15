@@ -4,6 +4,13 @@ on:
   workflow_dispatch:
     branches: [ master ]
     inputs:
+      crate:
+        description: 'Crate to release'
+        required: true
+        type: choice
+        options:
+          - nmrs
+          - nmrs-gui
       version:
         description: 'Version to release'
         required: true
@@ -39,6 +46,7 @@ jobs:
           python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}" || echo "⚠ Version bump completed with warnings"
           echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
+          echo "CRATE=${{ github.event.inputs.crate }}" >> $GITHUB_ENV
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -84,12 +92,44 @@ jobs:
           fi
           
           git add -A
-          git commit -m "chore: bump version to ${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
-          git tag -a "v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}" -m "Release v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
+          
+          # Create crate-specific tag
+          CRATE="${{ env.CRATE }}"
+          VERSION="${{ env.VERSION }}"
+          RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
+          
+          if [ "$CRATE" = "nmrs" ]; then
+            TAG_PREFIX="nmrs-"
+            COMMIT_MSG="chore(nmrs): bump version to ${VERSION}"
+            if [ "$RELEASE_TYPE" = "beta" ]; then
+              TAG_NAME="${TAG_PREFIX}v${VERSION}-beta"
+              COMMIT_MSG="${COMMIT_MSG}-beta"
+            else
+              TAG_NAME="${TAG_PREFIX}v${VERSION}"
+            fi
+          elif [ "$CRATE" = "nmrs-gui" ]; then
+            TAG_PREFIX="gui-"
+            COMMIT_MSG="chore(nmrs-gui): bump version to ${VERSION}"
+            if [ "$RELEASE_TYPE" = "beta" ]; then
+              TAG_NAME="${TAG_PREFIX}v${VERSION}-beta"
+              COMMIT_MSG="${COMMIT_MSG}-beta"
+            else
+              TAG_NAME="${TAG_PREFIX}v${VERSION}"
+            fi
+          else
+            echo "Error: Unknown crate $CRATE"
+            exit 1
+          fi
+          
+          echo "Creating tag: $TAG_NAME"
+          git commit -m "$COMMIT_MSG"
+          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           
           # Force push to handle any race conditions (safe since we just reset)
           git push origin "$BRANCH" --force-with-lease
-          git push origin "v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
+          git push origin "$TAG_NAME"
+          
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
       - name: Extract release notes
         run: |
@@ -98,8 +138,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}
-          name: Release v${{ env.VERSION }}-${{ env.RELEASE_TYPE }}
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: ${{ env.RELEASE_TYPE == 'beta' }}
