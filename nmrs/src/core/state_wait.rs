@@ -18,19 +18,19 @@
 //! - More reliable; at least in the sense that we won't miss rapid state transitions.
 //! - Better error messages with specific failure reasons
 
-use futures::{FutureExt, StreamExt, select};
+use futures::{select, FutureExt, StreamExt};
 use futures_timer::Delay;
 use log::{debug, warn};
 use std::pin::pin;
 use std::time::Duration;
 use zbus::Connection;
 
-use crate::Result;
 use crate::api::models::{
-    ActiveConnectionState, ConnectionError, ConnectionStateReason, connection_state_reason_to_error,
+    connection_state_reason_to_error, ActiveConnectionState, ConnectionError, ConnectionStateReason,
 };
 use crate::dbus::{NMActiveConnectionProxy, NMDeviceProxy};
 use crate::types::constants::{device_state, timeouts};
+use crate::Result;
 
 /// Default timeout for connection activation (30 seconds).
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);

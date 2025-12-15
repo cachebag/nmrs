@@ -15,13 +15,13 @@ use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
-use crate::Result;
 use crate::api::models::{
     ConnectionOptions, DeviceState, VpnConnection, VpnConnectionInfo, VpnCredentials, VpnType,
 };
 use crate::builders::build_wireguard_connection;
 use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::NMProxy;
+use crate::Result;
 
 /// Connects to a VPN using WireGuard.
 ///
@@ -142,14 +142,15 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
                 Err(_) => continue,
             };
 
-        if let Some(conn_sec) = settings_map.get("connection")
-            && let Some(zvariant::Value::Str(id)) = conn_sec.get("id")
-            && id.as_str() == name
-        {
-            debug!("Found active VPN connection, deactivating: {name}");
-            let _ = nm.deactivate_connection(ac_path).await; // Ignore errors on deactivation
-            info!("Successfully disconnected VPN: {name}");
-            return Ok(());
+        if let Some(conn_sec) = settings_map.get("connection") {
+            if let Some(zvariant::Value::Str(id)) = conn_sec.get("id") {
+                if id.as_str() == name {
+                    debug!("Found active VPN connection, deactivating: {name}");
+                    let _ = nm.deactivate_connection(ac_path).await; // Ignore errors on deactivation
+                    info!("Successfully disconnected VPN: {name}");
+                    return Ok(());
+                }
+            }
         }
     }
 
@@ -192,60 +193,71 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
             .await?;
 
         // Get the connection path
-        if let Ok(conn_msg) = ac_proxy.call_method("Connection", &()).await
-            && let Ok(conn_path) = conn_msg.body().deserialize::<OwnedObjectPath>()
-        {
-            // Get connection settings to find the name
-            let cproxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-                .destination("org.freedesktop.NetworkManager")?
-                .path(conn_path)?
-                .interface("org.freedesktop.NetworkManager.Settings.Connection")?
-                .build()
-                .await?;
+        if let Ok(conn_msg) = ac_proxy.call_method("Connection", &()).await {
+            if let Ok(conn_path) = conn_msg.body().deserialize::<OwnedObjectPath>() {
+                // Get connection settings to find the name
+                let cproxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
+                    .destination("org.freedesktop.NetworkManager")?
+                    .path(conn_path)?
+                    .interface("org.freedesktop.NetworkManager.Settings.Connection")?
+                    .build()
+                    .await?;
 
-            if let Ok(msg) = cproxy.call_method("GetSettings", &()).await
-                && let Ok(settings_map) = msg
-                    .body()
-                    .deserialize::<HashMap<String, HashMap<String, zvariant::Value>>>()
-                && let Some(conn_sec) = settings_map.get("connection")
-                && let Some(zvariant::Value::Str(id)) = conn_sec.get("id")
-                && let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type")
-                && conn_type.as_str() == "vpn"
-            {
-                // Get state
-                let state = if let Ok(state_val) = ac_proxy.get_property::<u32>("State").await {
-                    DeviceState::from(state_val)
-                } else {
-                    DeviceState::Other(0)
-                };
+                if let Ok(msg) = cproxy.call_method("GetSettings", &()).await {
+                    if let Ok(settings_map) = msg
+                        .body()
+                        .deserialize::<HashMap<String, HashMap<String, zvariant::Value>>>()
+                    {
+                        if let Some(conn_sec) = settings_map.get("connection") {
+                            if let Some(zvariant::Value::Str(id)) = conn_sec.get("id") {
+                                if let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type")
+                                {
+                                    if conn_type.as_str() == "vpn" {
+                                        // Get state
+                                        let state = if let Ok(state_val) =
+                                            ac_proxy.get_property::<u32>("State").await
+                                        {
+                                            DeviceState::from(state_val)
+                                        } else {
+                                            DeviceState::Other(0)
+                                        };
 
-                // Get devices (which includes interface info)
-                let interface = if let Ok(dev_paths) = ac_proxy
-                    .get_property::<Vec<OwnedObjectPath>>("Devices")
-                    .await
-                {
-                    if let Some(dev_path) = dev_paths.first() {
-                        // Get device interface name
-                        match zbus::proxy::Builder::<zbus::Proxy>::new(conn)
-                            .destination("org.freedesktop.NetworkManager")?
-                            .path(dev_path.clone())?
-                            .interface("org.freedesktop.NetworkManager.Device")?
-                            .build()
-                            .await
-                        {
-                            Ok(dev_proxy) => {
-                                dev_proxy.get_property::<String>("Interface").await.ok()
+                                        // Get devices (which includes interface info)
+                                        let interface = if let Ok(dev_paths) = ac_proxy
+                                            .get_property::<Vec<OwnedObjectPath>>("Devices")
+                                            .await
+                                        {
+                                            if let Some(dev_path) = dev_paths.first() {
+                                                // Get device interface name
+                                                match zbus::proxy::Builder::<zbus::Proxy>::new(conn)
+                                                    .destination("org.freedesktop.NetworkManager")?
+                                                    .path(dev_path.clone())?
+                                                    .interface(
+                                                        "org.freedesktop.NetworkManager.Device",
+                                                    )?
+                                                    .build()
+                                                    .await
+                                                {
+                                                    Ok(dev_proxy) => dev_proxy
+                                                        .get_property::<String>("Interface")
+                                                        .await
+                                                        .ok(),
+                                                    Err(_) => None,
+                                                }
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            None
+                                        };
+
+                                        active_vpn_map.insert(id.to_string(), (state, interface));
+                                    }
+                                }
                             }
-                            Err(_) => None,
                         }
-                    } else {
-                        None
                     }
-                } else {
-                    None
-                };
-
-                active_vpn_map.insert(id.to_string(), (state, interface));
+                }
             }
         }
     }
@@ -264,40 +276,44 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> = body.deserialize()?;
 
-        if let Some(conn_sec) = settings_map.get("connection")
-            && let Some(zvariant::Value::Str(id)) = conn_sec.get("id")
-            && let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type")
-            && conn_type.as_str() == "vpn"
-        {
-            // Extract VPN service-type and convert to VpnType enum
-            let vpn_type = settings_map
-                .get("vpn")
-                .and_then(|vpn_sec| vpn_sec.get("service-type"))
-                .and_then(|v| match v {
-                    zvariant::Value::Str(s) => {
-                        // Match against known service types
-                        match s.as_str() {
-                            "org.freedesktop.NetworkManager.wireguard" => Some(VpnType::WireGuard),
-                            _ => None, // Unknown VPN types are skipped for now
+        if let Some(conn_sec) = settings_map.get("connection") {
+            if let Some(zvariant::Value::Str(id)) = conn_sec.get("id") {
+                if let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type") {
+                    if conn_type.as_str() == "vpn" {
+                        // Extract VPN service-type and convert to VpnType enum
+                        let vpn_type = settings_map
+                            .get("vpn")
+                            .and_then(|vpn_sec| vpn_sec.get("service-type"))
+                            .and_then(|v| match v {
+                                zvariant::Value::Str(s) => {
+                                    // Match against known service types
+                                    match s.as_str() {
+                                        "org.freedesktop.NetworkManager.wireguard" => {
+                                            Some(VpnType::WireGuard)
+                                        }
+                                        _ => None, // Unknown VPN types are skipped for now
+                                    }
+                                }
+                                _ => None,
+                            });
+
+                        // Only add VPN connections with recognized types
+                        if let Some(vpn_type) = vpn_type {
+                            let name = id.to_string();
+                            let (state, interface) = active_vpn_map
+                                .get(&name)
+                                .cloned()
+                                .unwrap_or((DeviceState::Other(0), None));
+
+                            vpn_conns.push(VpnConnection {
+                                name,
+                                vpn_type,
+                                interface,
+                                state,
+                            });
                         }
                     }
-                    _ => None,
-                });
-
-            // Only add VPN connections with recognized types
-            if let Some(vpn_type) = vpn_type {
-                let name = id.to_string();
-                let (state, interface) = active_vpn_map
-                    .get(&name)
-                    .cloned()
-                    .unwrap_or((DeviceState::Other(0), None));
-
-                vpn_conns.push(VpnConnection {
-                    name,
-                    vpn_type,
-                    interface,
-                    state,
-                });
+                }
             }
         }
     }
@@ -341,16 +357,17 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
             let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
                 body.deserialize()?;
 
-            if let Some(conn_sec) = settings_map.get("connection")
-                && let Some(zvariant::Value::Str(id)) = conn_sec.get("id")
-                && let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type")
-                && conn_type.as_str() == "vpn"
-                && id.as_str() == name
-            {
-                debug!("Found VPN connection, deleting: {name}");
-                cproxy.call_method("Delete", &()).await?;
-                info!("Successfully deleted VPN connection: {name}");
-                return Ok(());
+            if let Some(conn_sec) = settings_map.get("connection") {
+                if let Some(zvariant::Value::Str(id)) = conn_sec.get("id") {
+                    if let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type") {
+                        if conn_type.as_str() == "vpn" && id.as_str() == name {
+                            debug!("Found VPN connection, deleting: {name}");
+                            cproxy.call_method("Delete", &()).await?;
+                            info!("Successfully deleted VPN connection: {name}");
+                            return Ok(());
+                        }
+                    }
+                }
             }
         }
     }
@@ -401,140 +418,151 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> = body.deserialize()?;
 
-        if let Some(conn_sec) = settings_map.get("connection")
-            && let Some(zvariant::Value::Str(id)) = conn_sec.get("id")
-            && let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type")
-            && conn_type.as_str() == "vpn"
-            && id.as_str() == name
-        {
-            // Found the VPN connection, get details
-            let vpn_type = settings_map
-                .get("vpn")
-                .and_then(|vpn_sec| vpn_sec.get("service-type"))
-                .and_then(|v| match v {
-                    zvariant::Value::Str(s) => match s.as_str() {
-                        "org.freedesktop.NetworkManager.wireguard" => Some(VpnType::WireGuard),
-                        _ => None,
-                    },
-                    _ => None,
-                })
-                .ok_or_else(|| crate::api::models::ConnectionError::NoVpnConnection)?;
+        if let Some(conn_sec) = settings_map.get("connection") {
+            if let Some(zvariant::Value::Str(id)) = conn_sec.get("id") {
+                if let Some(zvariant::Value::Str(conn_type)) = conn_sec.get("type") {
+                    if conn_type.as_str() == "vpn" && id.as_str() == name {
+                        // Found the VPN connection, get details
+                        let vpn_type = settings_map
+                            .get("vpn")
+                            .and_then(|vpn_sec| vpn_sec.get("service-type"))
+                            .and_then(|v| match v {
+                                zvariant::Value::Str(s) => match s.as_str() {
+                                    "org.freedesktop.NetworkManager.wireguard" => {
+                                        Some(VpnType::WireGuard)
+                                    }
+                                    _ => None,
+                                },
+                                _ => None,
+                            })
+                            .ok_or_else(|| crate::api::models::ConnectionError::NoVpnConnection)?;
 
-            // Get state
-            let state_val: u32 = ac_proxy.get_property("State").await?;
-            let state = DeviceState::from(state_val);
+                        // Get state
+                        let state_val: u32 = ac_proxy.get_property("State").await?;
+                        let state = DeviceState::from(state_val);
 
-            // Get interface
-            let dev_paths: Vec<OwnedObjectPath> = ac_proxy.get_property("Devices").await?;
-            let interface = if let Some(dev_path) = dev_paths.first() {
-                let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-                    .destination("org.freedesktop.NetworkManager")?
-                    .path(dev_path.clone())?
-                    .interface("org.freedesktop.NetworkManager.Device")?
-                    .build()
-                    .await?;
+                        // Get interface
+                        let dev_paths: Vec<OwnedObjectPath> =
+                            ac_proxy.get_property("Devices").await?;
+                        let interface = if let Some(dev_path) = dev_paths.first() {
+                            let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
+                                .destination("org.freedesktop.NetworkManager")?
+                                .path(dev_path.clone())?
+                                .interface("org.freedesktop.NetworkManager.Device")?
+                                .build()
+                                .await?;
 
-                Some(dev_proxy.get_property::<String>("Interface").await?)
-            } else {
-                None
-            };
+                            Some(dev_proxy.get_property::<String>("Interface").await?)
+                        } else {
+                            None
+                        };
 
-            // Get gateway from VPN settings
-            let gateway = settings_map
-                .get("vpn")
-                .and_then(|vpn_sec| vpn_sec.get("data"))
-                .and_then(|data| match data {
-                    zvariant::Value::Dict(dict) => {
-                        // Try to find gateway/endpoint in the data
-                        for entry in dict.iter() {
-                            let (key_val, value_val) = entry;
-                            if let zvariant::Value::Str(key) = key_val
-                                && (key.as_str().contains("endpoint")
-                                    || key.as_str().contains("gateway"))
-                                && let zvariant::Value::Str(val) = value_val
+                        // Get gateway from VPN settings
+                        let gateway = settings_map
+                            .get("vpn")
+                            .and_then(|vpn_sec| vpn_sec.get("data"))
+                            .and_then(|data| match data {
+                                zvariant::Value::Dict(dict) => {
+                                    // Try to find gateway/endpoint in the data
+                                    for entry in dict.iter() {
+                                        let (key_val, value_val) = entry;
+                                        if let zvariant::Value::Str(key) = key_val {
+                                            if key.as_str().contains("endpoint")
+                                                || key.as_str().contains("gateway")
+                                            {
+                                                if let zvariant::Value::Str(val) = value_val {
+                                                    return Some(val.as_str().to_string());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    None
+                                }
+                                _ => None,
+                            });
+
+                        // Get IP4 configuration
+                        let ip4_path: OwnedObjectPath = ac_proxy.get_property("Ip4Config").await?;
+                        let (ip4_address, dns_servers) = if ip4_path.as_str() != "/" {
+                            let ip4_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
+                                .destination("org.freedesktop.NetworkManager")?
+                                .path(ip4_path)?
+                                .interface("org.freedesktop.NetworkManager.IP4Config")?
+                                .build()
+                                .await?;
+
+                            // Get address data
+                            let ip4_address = if let Ok(addr_array) = ip4_proxy
+                                .get_property::<Vec<HashMap<String, zvariant::Value>>>(
+                                    "AddressData",
+                                )
+                                .await
                             {
-                                return Some(val.as_str().to_string());
-                            }
-                        }
-                        None
+                                addr_array.first().and_then(|addr_map| {
+                                    let address =
+                                        addr_map.get("address").and_then(|v| match v {
+                                            zvariant::Value::Str(s) => Some(s.as_str().to_string()),
+                                            _ => None,
+                                        })?;
+                                    let prefix = addr_map.get("prefix").and_then(|v| match v {
+                                        zvariant::Value::U32(p) => Some(p),
+                                        _ => None,
+                                    })?;
+                                    Some(format!("{}/{}", address, prefix))
+                                })
+                            } else {
+                                None
+                            };
+
+                            // Get DNS servers
+                            let dns_servers = if let Ok(dns_array) =
+                                ip4_proxy.get_property::<Vec<u32>>("Nameservers").await
+                            {
+                                dns_array
+                                    .iter()
+                                    .map(|ip| {
+                                        format!(
+                                            "{}.{}.{}.{}",
+                                            ip & 0xFF,
+                                            (ip >> 8) & 0xFF,
+                                            (ip >> 16) & 0xFF,
+                                            (ip >> 24) & 0xFF
+                                        )
+                                    })
+                                    .collect()
+                            } else {
+                                vec![]
+                            };
+
+                            (ip4_address, dns_servers)
+                        } else {
+                            (None, vec![])
+                        };
+
+                        // Get IP6 configuration
+                        // Note: IPv6 address parsing is not yet implemented.
+                        // This is a known limitation documented in VpnConnectionInfo.
+                        let ip6_path: OwnedObjectPath = ac_proxy.get_property("Ip6Config").await?;
+                        let ip6_address = if ip6_path.as_str() != "/" {
+                            // TODO: Implement IPv6 address parsing
+                            None
+                        } else {
+                            None
+                        };
+
+                        return Ok(VpnConnectionInfo {
+                            name: id.to_string(),
+                            vpn_type,
+                            state,
+                            interface,
+                            gateway,
+                            ip4_address,
+                            ip6_address,
+                            dns_servers,
+                        });
                     }
-                    _ => None,
-                });
-
-            // Get IP4 configuration
-            let ip4_path: OwnedObjectPath = ac_proxy.get_property("Ip4Config").await?;
-            let (ip4_address, dns_servers) = if ip4_path.as_str() != "/" {
-                let ip4_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-                    .destination("org.freedesktop.NetworkManager")?
-                    .path(ip4_path)?
-                    .interface("org.freedesktop.NetworkManager.IP4Config")?
-                    .build()
-                    .await?;
-
-                // Get address data
-                let ip4_address = if let Ok(addr_array) = ip4_proxy
-                    .get_property::<Vec<HashMap<String, zvariant::Value>>>("AddressData")
-                    .await
-                {
-                    addr_array.first().and_then(|addr_map| {
-                        let address = addr_map.get("address").and_then(|v| match v {
-                            zvariant::Value::Str(s) => Some(s.as_str().to_string()),
-                            _ => None,
-                        })?;
-                        let prefix = addr_map.get("prefix").and_then(|v| match v {
-                            zvariant::Value::U32(p) => Some(p),
-                            _ => None,
-                        })?;
-                        Some(format!("{}/{}", address, prefix))
-                    })
-                } else {
-                    None
-                };
-
-                // Get DNS servers
-                let dns_servers = if let Ok(dns_array) =
-                    ip4_proxy.get_property::<Vec<u32>>("Nameservers").await
-                {
-                    dns_array
-                        .iter()
-                        .map(|ip| {
-                            format!(
-                                "{}.{}.{}.{}",
-                                ip & 0xFF,
-                                (ip >> 8) & 0xFF,
-                                (ip >> 16) & 0xFF,
-                                (ip >> 24) & 0xFF
-                            )
-                        })
-                        .collect()
-                } else {
-                    vec![]
-                };
-
-                (ip4_address, dns_servers)
-            } else {
-                (None, vec![])
-            };
-
-            // Get IP6 configuration (similar to IP4, but simpler for now)
-            let ip6_path: OwnedObjectPath = ac_proxy.get_property("Ip6Config").await?;
-            let ip6_address = if ip6_path.as_str() != "/" {
-                // TODO: Implement IPv6 address parsing
-                None
-            } else {
-                None
-            };
-
-            return Ok(VpnConnectionInfo {
-                name: id.to_string(),
-                vpn_type,
-                state,
-                interface,
-                gateway,
-                ip4_address,
-                ip6_address,
-                dns_servers,
-            });
+                }
+            }
         }
     }
 

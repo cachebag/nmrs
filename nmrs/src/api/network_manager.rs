@@ -1,6 +1,5 @@
 use zbus::Connection;
 
-use crate::Result;
 use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
 use crate::core::connection::{connect, connect_wired, forget};
 use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
@@ -11,6 +10,7 @@ use crate::models::{VpnConnection, VpnConnectionInfo, VpnCredentials};
 use crate::monitoring::device as device_monitor;
 use crate::monitoring::info::{current_connection_info, current_ssid, show_details};
 use crate::monitoring::network as network_monitor;
+use crate::Result;
 
 /// High-level interface to NetworkManager over D-Bus.
 ///
@@ -332,11 +332,13 @@ impl NetworkManager {
     }
 
     /// Returns the SSID of the currently connected network, if any.
+    #[must_use]
     pub async fn current_ssid(&self) -> Option<String> {
         current_ssid(&self.conn).await
     }
 
     /// Returns the SSID and frequency of the current connection, if any.
+    #[must_use]
     pub async fn current_connection_info(&self) -> Option<(String, Option<u32>)> {
         current_connection_info(&self.conn).await
     }

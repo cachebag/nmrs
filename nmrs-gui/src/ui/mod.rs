@@ -7,8 +7,8 @@ pub mod wired_page;
 
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box as GtkBox, Label, Orientation,
-    STYLE_PROVIDER_PRIORITY_USER, ScrolledWindow, Spinner, Stack,
+    Application, ApplicationWindow, Box as GtkBox, Label, Orientation, ScrolledWindow, Spinner,
+    Stack, STYLE_PROVIDER_PRIORITY_USER,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -32,20 +32,20 @@ pub fn build_ui(app: &Application) {
     win.set_title(Some(""));
     win.set_default_size(100, 600);
 
-    if let Some(key) = crate::theme_config::load_theme()
-        && let Some(theme) = THEMES.iter().find(|t| t.key == key.as_str())
-    {
-        let provider = gtk::CssProvider::new();
-        provider.load_from_data(theme.css);
+    if let Some(key) = crate::theme_config::load_theme() {
+        if let Some(theme) = THEMES.iter().find(|t| t.key == key.as_str()) {
+            let provider = gtk::CssProvider::new();
+            provider.load_from_data(theme.css);
 
-        let display = gtk::prelude::RootExt::display(&win);
-        gtk::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            STYLE_PROVIDER_PRIORITY_USER,
-        );
+            let display = gtk::prelude::RootExt::display(&win);
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &provider,
+                STYLE_PROVIDER_PRIORITY_USER,
+            );
 
-        win.add_css_class("dark-theme");
+            win.add_css_class("dark-theme");
+        }
     }
 
     let vbox = GtkBox::new(Orientation::Vertical, 0);

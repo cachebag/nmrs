@@ -1,12 +1,12 @@
 use glib::Propagation;
 use gtk::{
-    ApplicationWindow, Box as GtkBox, Button, CheckButton, Dialog, Entry, EventControllerKey,
-    FileChooserAction, FileChooserDialog, Label, Orientation, ResponseType, prelude::*,
+    prelude::*, ApplicationWindow, Box as GtkBox, Button, CheckButton, Dialog, Entry,
+    EventControllerKey, FileChooserAction, FileChooserDialog, Label, Orientation, ResponseType,
 };
 use log::{debug, error};
 use nmrs::{
-    NetworkManager,
     models::{EapMethod, EapOptions, Phase2, WifiSecurity},
+    NetworkManager,
 };
 use std::rc::Rc;
 
@@ -21,11 +21,11 @@ pub fn connect_modal(
     let parent_weak = parent.downgrade();
 
     glib::MainContext::default().spawn_local(async move {
-        if let Some(current) = nm.current_ssid().await
-            && current == ssid_owned
-        {
-            debug!("Already connected to {current}, skipping modal");
-            return;
+        if let Some(current) = nm.current_ssid().await {
+            if current == ssid_owned {
+                debug!("Already connected to {current}, skipping modal");
+                return;
+            }
         }
 
         if let Some(parent) = parent_weak.upgrade() {
@@ -127,14 +127,15 @@ fn draw_connect_modal(
 
                 let cert_entry = cert_entry_for_browse.clone();
                 file_dialog.connect_response(move |dialog, response| {
-                    if response == ResponseType::Accept
-                        && let Some(file) = dialog.file()
-                        && let Some(path) = file.path()
-                    {
-                        cert_entry
-                            .as_ref()
-                            .unwrap()
-                            .set_text(&path.to_string_lossy());
+                    if response == ResponseType::Accept {
+                        if let Some(file) = dialog.file() {
+                            if let Some(path) = file.path() {
+                                cert_entry
+                                    .as_ref()
+                                    .unwrap()
+                                    .set_text(&path.to_string_lossy());
+                            }
+                        }
                     }
                     dialog.close();
                 });

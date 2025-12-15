@@ -8,10 +8,10 @@ use log::{debug, warn};
 use std::pin::Pin;
 use zbus::Connection;
 
-use crate::Result;
 use crate::api::models::ConnectionError;
 use crate::dbus::{NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::types::constants::device_type;
+use crate::Result;
 
 /// Monitors access point changes on all Wi-Fi devices.
 ///

@@ -702,6 +702,11 @@ pub struct VpnConnection {
 /// Provides comprehensive information about an active VPN connection,
 /// including IP configuration and connection details.
 ///
+/// # Limitations
+///
+/// - `ip6_address`: IPv6 address parsing is not currently implemented and will
+///   always return `None`. IPv4 addresses are fully supported.
+///
 /// # Example
 ///
 /// ```rust
@@ -714,7 +719,7 @@ pub struct VpnConnection {
 ///     interface: Some("wg0".into()),
 ///     gateway: Some("vpn.example.com:51820".into()),
 ///     ip4_address: Some("10.0.0.2/24".into()),
-///     ip6_address: None,
+///     ip6_address: None,  // IPv6 not yet implemented
 ///     dns_servers: vec!["1.1.1.1".into()],
 /// };
 /// ```
@@ -726,6 +731,7 @@ pub struct VpnConnectionInfo {
     pub interface: Option<String>,
     pub gateway: Option<String>,
     pub ip4_address: Option<String>,
+    /// IPv6 address (currently always `None` - IPv6 parsing not yet implemented)
     pub ip6_address: Option<String>,
     pub dns_servers: Vec<String>,
 }

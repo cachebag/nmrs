@@ -1,8 +1,8 @@
 use glib::clone;
 use gtk::prelude::*;
 use gtk::{Align, Box, Button, Image, Label, Orientation};
-use nmrs::NetworkManager;
 use nmrs::models::NetworkInfo;
+use nmrs::NetworkManager;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -75,12 +75,12 @@ impl NetworkPage {
                 let on_success = on_success_clone.clone();
 
                 glib::MainContext::default().spawn_local(async move {
-                    if let Ok(nm) = NetworkManager::new().await
-                        && nm.forget(&ssid).await.is_ok()
-                    {
-                        stack.set_visible_child_name("networks");
-                        if let Some(callback) = on_success.borrow().as_ref() {
-                            callback();
+                    if let Ok(nm) = NetworkManager::new().await {
+                        if nm.forget(&ssid).await.is_ok() {
+                            stack.set_visible_child_name("networks");
+                            if let Some(callback) = on_success.borrow().as_ref() {
+                                callback();
+                            }
                         }
                     }
                 });

@@ -1,7 +1,7 @@
 //! A Rust library for managing network connections via NetworkManager.
 //!
 //! This crate provides a high-level async API for NetworkManager over D-Bus,
-//! enabling easy management of WiFi, Ethernet, and (future) VPN connections on Linux.
+//! enabling easy management of WiFi, Ethernet, and VPN connections on Linux.
 //!
 //! # Quick Start
 //!
@@ -323,21 +323,12 @@ pub mod models {
     pub use crate::api::models::*;
 }
 
-// Deprecated: Use `builders::wifi` instead
-#[deprecated(
-    since = "0.6.0",
-    note = "Use `builders::wifi` module instead. This alias will be removed in 1.0.0"
-)]
-pub mod wifi_builders {
-    pub use crate::api::builders::wifi::*;
-}
-
 // Re-export commonly used types at crate root for convenience
 pub use api::models::{
-    ActiveConnectionState, ConnectionError, ConnectionOptions, ConnectionStateReason, Device,
-    DeviceState, DeviceType, EapMethod, EapOptions, Network, NetworkInfo, Phase2, StateReason,
-    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnType, WifiSecurity, WireGuardPeer,
-    connection_state_reason_to_error, reason_to_error,
+    connection_state_reason_to_error, reason_to_error, ActiveConnectionState, ConnectionError,
+    ConnectionOptions, ConnectionStateReason, Device, DeviceState, DeviceType, EapMethod,
+    EapOptions, Network, NetworkInfo, Phase2, StateReason, VpnConnection, VpnConnectionInfo,
+    VpnCredentials, VpnType, WifiSecurity, WireGuardPeer,
 };
 pub use api::network_manager::NetworkManager;
 

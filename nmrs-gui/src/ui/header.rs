@@ -1,7 +1,7 @@
 use glib::clone;
-use gtk::STYLE_PROVIDER_PRIORITY_USER;
 use gtk::prelude::*;
-use gtk::{Align, Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch, glib};
+use gtk::STYLE_PROVIDER_PRIORITY_USER;
+use gtk::{glib, Align, Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -65,10 +65,10 @@ pub fn build_header(
     let names: Vec<&str> = THEMES.iter().map(|t| t.name).collect();
     let dropdown = gtk::DropDown::from_strings(&names);
 
-    if let Some(saved) = crate::theme_config::load_theme()
-        && let Some(idx) = THEMES.iter().position(|t| t.key == saved.as_str())
-    {
-        dropdown.set_selected(idx as u32);
+    if let Some(saved) = crate::theme_config::load_theme() {
+        if let Some(idx) = THEMES.iter().position(|t| t.key == saved.as_str()) {
+            dropdown.set_selected(idx as u32);
+        }
     }
 
     dropdown.set_valign(gtk::Align::Center);

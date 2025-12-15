@@ -46,11 +46,12 @@ pub(crate) async fn get_saved_connection_path(
         let body = msg.body();
         let all: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
 
-        if let Some(conn_section) = all.get("connection")
-            && let Some(Value::Str(id)) = conn_section.get("id")
-            && id == ssid
-        {
-            return Ok(Some(cpath));
+        if let Some(conn_section) = all.get("connection") {
+            if let Some(Value::Str(id)) = conn_section.get("id") {
+                if id == ssid {
+                    return Ok(Some(cpath));
+                }
+            }
         }
     }
 
