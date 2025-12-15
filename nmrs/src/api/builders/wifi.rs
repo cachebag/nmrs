@@ -13,11 +13,10 @@
 //! - `802-1x`: Enterprise authentication settings (for WPA-EAP)
 //! - `ipv4` / `ipv6`: IP configuration (usually "auto" for DHCP)
 
-use models::ConnectionOptions;
 use std::collections::HashMap;
 use zvariant::Value;
 
-use crate::models::{self, EapMethod};
+use crate::api::models::{self, ConnectionOptions, EapMethod};
 
 /// Converts a string to bytes for SSID encoding.
 fn bytes(val: &str) -> Vec<u8> {

@@ -1,13 +1,9 @@
-//! A Rust library for managing Wi-Fi connections via NetworkManager.
+//! A Rust library for managing network connections via NetworkManager.
 //!
-//! This crate provides a high-level async API for common Wi-Fi operations:
+//! This crate provides a high-level async API for NetworkManager over D-Bus,
+//! enabling easy management of WiFi, Ethernet, and (future) VPN connections on Linux.
 //!
-//! - Listing network devices and visible networks
-//! - Connecting to open, WPA-PSK, and WPA-EAP networks
-//! - Managing saved connection profiles
-//! - Enabling/disabling Wi-Fi
-//!
-//! # Example
+//! # Quick Start
 //!
 //! ```no_run
 //! use nmrs::{NetworkManager, WifiSecurity};
@@ -18,69 +14,297 @@
 //! // List visible networks
 //! let networks = nm.list_networks().await?;
 //! for net in &networks {
-//!     println!("{} ({}%)", net.ssid, net.strength.unwrap_or(0));
+//!     println!("{} - Signal: {}%", net.ssid, net.strength.unwrap_or(0));
 //! }
 //!
 //! // Connect to a network
 //! nm.connect("MyNetwork", WifiSecurity::WpaPsk {
 //!     psk: "password123".into()
 //! }).await?;
+//!
+//! // Check current connection
+//! if let Some(ssid) = nm.current_ssid().await {
+//!     println!("Connected to: {}", ssid);
+//! }
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! # Error Handling
+//! # Core Concepts
 //!
-//! All operations return `Result<T, ConnectionError>`. The error type provides
-//! specific variants for common failures like authentication errors, timeouts,
-//! and missing devices.
+//! ## NetworkManager
 //!
-//! # Signal-Based State Monitoring
+//! The main entry point is [`NetworkManager`], which provides methods for:
+//! - Listing and managing network devices
+//! - Scanning for available WiFi networks
+//! - Connecting to networks (WiFi, Ethernet)
+//! - Managing saved connection profiles
+//! - Real-time monitoring of network changes
+//!
+//! ## Models
+//!
+//! The [`models`] module contains all types, enums, and errors:
+//! - [`Device`] - Represents a network device (WiFi, Ethernet, etc.)
+//! - [`Network`] - Represents a discovered WiFi network
+//! - [`WifiSecurity`] - Security types (Open, WPA-PSK, WPA-EAP)
+//! - [`ConnectionError`] - Comprehensive error types
+//!
+//! ## Connection Builders
+//!
+//! The [`builders`] module provides functions to construct connection settings
+//! for different network types. These are typically used internally but exposed
+//! for advanced use cases.
+//!
+//! # Examples
+//!
+//! ## Connecting to Different Network Types
+//!
+//! ```no_run
+//! use nmrs::{NetworkManager, WifiSecurity, EapOptions, EapMethod, Phase2};
+//!
+//! # async fn example() -> nmrs::Result<()> {
+//! let nm = NetworkManager::new().await?;
+//!
+//! // Open network
+//! nm.connect("OpenWiFi", WifiSecurity::Open).await?;
+//!
+//! // WPA-PSK (password-protected)
+//! nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+//!     psk: "my_password".into()
+//! }).await?;
+//!
+//! // WPA-EAP (Enterprise)
+//! nm.connect("CorpWiFi", WifiSecurity::WpaEap {
+//!     opts: EapOptions {
+//!         identity: "user@company.com".into(),
+//!         password: "password".into(),
+//!         anonymous_identity: None,
+//!         domain_suffix_match: Some("company.com".into()),
+//!         ca_cert_path: None,
+//!         system_ca_certs: true,
+//!         method: EapMethod::Peap,
+//!         phase2: Phase2::Mschapv2,
+//!     }
+//! }).await?;
+//!
+//! // Ethernet (auto-connects when cable is plugged in)
+//! nm.connect_wired().await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Error Handling
+//!
+//! All operations return [`Result<T>`], which is an alias for `Result<T, ConnectionError>`.
+//! The [`ConnectionError`] type provides specific variants for different failure modes:
+//!
+//! ```no_run
+//! use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
+//!
+//! # async fn example() -> nmrs::Result<()> {
+//! let nm = NetworkManager::new().await?;
+//!
+//! match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+//!     psk: "wrong_password".into()
+//! }).await {
+//!     Ok(_) => println!("Connected successfully"),
+//!     Err(ConnectionError::AuthFailed) => {
+//!         eprintln!("Wrong password!");
+//!     }
+//!     Err(ConnectionError::NotFound) => {
+//!         eprintln!("Network not found or out of range");
+//!     }
+//!     Err(ConnectionError::Timeout) => {
+//!         eprintln!("Connection timed out");
+//!     }
+//!     Err(ConnectionError::DhcpFailed) => {
+//!         eprintln!("Failed to obtain IP address");
+//!     }
+//!     Err(e) => eprintln!("Error: {}", e),
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Device Management
+//!
+//! ```no_run
+//! use nmrs::NetworkManager;
+//!
+//! # async fn example() -> nmrs::Result<()> {
+//! let nm = NetworkManager::new().await?;
+//!
+//! // List all devices
+//! let devices = nm.list_devices().await?;
+//! for device in devices {
+//!     println!("{}: {} ({})",
+//!         device.interface,
+//!         device.device_type,
+//!         device.state
+//!     );
+//! }
+//!
+//! // Enable/disable WiFi
+//! nm.set_wifi_enabled(false).await?;
+//! nm.set_wifi_enabled(true).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Real-Time Monitoring
+//!
+//! Monitor network and device changes in real-time using D-Bus signals:
+//!
+//! ```ignore
+//! use nmrs::NetworkManager;
+//!
+//! # async fn example() -> nmrs::Result<()> {
+//! let nm = NetworkManager::new().await?;
+//!
+//! // Monitor network changes (new networks, signal changes, etc.)
+//! nm.monitor_network_changes(|| {
+//!     println!("Networks changed! Refresh your UI.");
+//! }).await?;
+//!
+//! // Monitor device state changes (cable plugged in, device activated, etc.)
+//! nm.monitor_device_changes(|| {
+//!     println!("Device state changed!");
+//! }).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Architecture
 //!
 //! This crate uses D-Bus signals for efficient state monitoring instead of polling.
-//! When connecting to a network, the library subscribes to NetworkManager's
-//! `StateChanged` signals to detect connection success or failure immediately,
-//! rather than polling device state in a loop. This provides:
+//! When connecting to a network, it subscribes to NetworkManager's `StateChanged`
+//! signals to detect connection success or failure immediately. This provides:
 //!
-//! - Faster response times (immediate notification vs polling delay)
-//! - Lower CPU usage (no spinning loops)
-//! - Better error messages with specific failure reasons
+//! - **Faster response times** - Immediate notification vs polling delay
+//! - **Lower CPU usage** - No spinning loops
+//! - **Better error messages** - Specific failure reasons from NetworkManager
 //!
 //! # Logging
 //!
-//! This crate uses the [`log`](https://docs.rs/log) facade for logging. To see
-//! log output, add a logging implementation like `env_logger`. For example:
-
+//! This crate uses the [`log`](https://docs.rs/log) facade. To see log output,
+//! add a logging implementation like `env_logger`:
+//!
 //! ```no_run,ignore
 //! env_logger::init();
-//! // ...
 //! ```
+//!
+//! # Feature Flags
+//!
+//! This crate currently has no optional features. All functionality is enabled by default.
+//!
+//! # Platform Support
+//!
+//! This crate is Linux-only and requires:
+//! - NetworkManager running and accessible via D-Bus
+//! - Appropriate permissions to manage network connections
 
-// Internal implementation modules
-mod connection;
-mod connection_settings;
-mod constants;
-mod device;
-mod device_monitor;
-mod network_info;
-mod network_monitor;
-mod proxies;
-mod scan;
-mod state_wait;
-mod utils;
+// Internal modules (not exposed in public API)
+mod api;
+mod core;
+mod dbus;
+mod monitoring;
+mod types;
+mod util;
 
-// Public API modules
-pub mod models;
-pub mod network_manager;
-pub mod wifi_builders;
+// ============================================================================
+// Public API
+// ============================================================================
 
-// Re-exported public API
-pub use models::{
+/// Connection builders for WiFi, Ethernet, and VPN connections.
+///
+/// This module provides functions to construct NetworkManager connection settings
+/// dictionaries. These are primarily used internally but exposed for advanced use cases.
+///
+/// # Examples
+///
+/// ```rust
+/// use nmrs::builders::build_wifi_connection;
+/// use nmrs::{WifiSecurity, ConnectionOptions};
+///
+/// let opts = ConnectionOptions {
+///     autoconnect: true,
+///     autoconnect_priority: None,
+///     autoconnect_retries: None,
+/// };
+///
+/// let settings = build_wifi_connection(
+///     "MyNetwork",
+///     &WifiSecurity::Open,
+///     &opts
+/// );
+/// ```
+pub mod builders {
+    pub use crate::api::builders::*;
+}
+
+/// Types, enums, and errors for NetworkManager operations.
+///
+/// This module contains all the public types used throughout the crate:
+///
+/// # Core Types
+/// - [`NetworkManager`] - Main API entry point
+/// - [`Device`] - Network device representation
+/// - [`Network`] - WiFi network representation
+/// - [`NetworkInfo`] - Detailed network information
+///
+/// # Configuration
+/// - [`WifiSecurity`] - WiFi security types (Open, WPA-PSK, WPA-EAP)
+/// - [`EapOptions`] - Enterprise authentication options
+/// - [`ConnectionOptions`] - Connection settings (autoconnect, priority, etc.)
+///
+/// # Enums
+/// - [`DeviceType`] - Device types (Ethernet, WiFi, etc.)
+/// - [`DeviceState`] - Device states (Disconnected, Activated, etc.)
+/// - [`EapMethod`] - EAP authentication methods
+/// - [`Phase2`] - Phase 2 authentication for EAP
+///
+/// # Errors
+/// - [`ConnectionError`] - Comprehensive error type for all operations
+/// - [`StateReason`] - Device state change reasons
+/// - [`ConnectionStateReason`] - Connection state change reasons
+///
+/// # Helper Functions
+/// - [`reason_to_error`] - Convert device state reason to error
+/// - [`connection_state_reason_to_error`] - Convert connection state reason to error
+pub mod models {
+    pub use crate::api::models::*;
+}
+
+// Deprecated: Use `builders::wifi` instead
+#[deprecated(
+    since = "0.6.0",
+    note = "Use `builders::wifi` module instead. This alias will be removed in 1.0.0"
+)]
+pub mod wifi_builders {
+    pub use crate::api::builders::wifi::*;
+}
+
+// Re-export commonly used types at crate root for convenience
+pub use api::models::{
     ActiveConnectionState, ConnectionError, ConnectionOptions, ConnectionStateReason, Device,
     DeviceState, DeviceType, EapMethod, EapOptions, Network, NetworkInfo, Phase2, StateReason,
     WifiSecurity, connection_state_reason_to_error, reason_to_error,
 };
-pub use network_manager::NetworkManager;
+pub use api::network_manager::NetworkManager;
 
 /// A specialized `Result` type for network operations.
+///
+/// This is an alias for `Result<T, ConnectionError>` and is used throughout
+/// the crate for all fallible operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use nmrs::Result;
+///
+/// async fn connect_to_wifi() -> Result<()> {
+///     // Your code here
+///     Ok(())
+/// }
+/// ```
 pub type Result<T> = std::result::Result<T, ConnectionError>;

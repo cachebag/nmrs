@@ -1,19 +1,104 @@
 use zbus::Connection;
 
 use crate::Result;
-use crate::connection::{connect, connect_wired, forget};
-use crate::connection_settings::{get_saved_connection_path, has_saved_connection};
-use crate::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
-use crate::device_monitor;
-use crate::models::{Device, Network, NetworkInfo, WifiSecurity};
-use crate::network_info::{current_connection_info, current_ssid, show_details};
-use crate::network_monitor;
-use crate::scan::{list_networks, scan_networks};
+use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
+use crate::core::connection::{connect, connect_wired, forget};
+use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
+use crate::core::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
+use crate::core::scan::{list_networks, scan_networks};
+use crate::monitoring::device as device_monitor;
+use crate::monitoring::info::{current_connection_info, current_ssid, show_details};
+use crate::monitoring::network as network_monitor;
 
 /// High-level interface to NetworkManager over D-Bus.
 ///
-/// Provides methods for listing devices, scanning networks, connecting,
-/// and managing saved connections.
+/// This is the main entry point for managing network connections on Linux systems.
+/// It provides a safe, async Rust API over NetworkManager's D-Bus interface.
+///
+/// # Creating an Instance
+///
+/// ```no_run
+/// use nmrs::NetworkManager;
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Capabilities
+///
+/// - **Device Management**: List devices, enable/disable WiFi
+/// - **Network Scanning**: Discover available WiFi networks
+/// - **Connection Management**: Connect to WiFi, Ethernet networks
+/// - **Profile Management**: Save, retrieve, and delete connection profiles
+/// - **Real-Time Monitoring**: Subscribe to network and device state changes
+///
+/// # Examples
+///
+/// ## Basic WiFi Connection
+///
+/// ```no_run
+/// use nmrs::{NetworkManager, WifiSecurity};
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// // Scan and list networks
+/// let networks = nm.list_networks().await?;
+/// for net in &networks {
+///     println!("{}: {}%", net.ssid, net.strength.unwrap_or(0));
+/// }
+///
+/// // Connect to a network
+/// nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+///     psk: "password".into()
+/// }).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Device Management
+///
+/// ```no_run
+/// use nmrs::NetworkManager;
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// // List all network devices
+/// let devices = nm.list_devices().await?;
+///
+/// // Control WiFi
+/// nm.set_wifi_enabled(false).await?;  // Disable WiFi
+/// nm.set_wifi_enabled(true).await?;   // Enable WiFi
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Connection Profiles
+///
+/// ```no_run
+/// use nmrs::NetworkManager;
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// // Check for saved connection
+/// if nm.has_saved_connection("MyNetwork").await? {
+///     println!("Connection profile exists");
+///     
+///     // Delete it
+///     nm.forget("MyNetwork").await?;
+/// }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Thread Safety
+///
+/// `NetworkManager` is `Clone` and can be safely shared across async tasks.
+/// Each clone shares the same underlying D-Bus connection.
 #[derive(Clone)]
 pub struct NetworkManager {
     conn: Connection,

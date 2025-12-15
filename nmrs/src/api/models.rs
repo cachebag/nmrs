@@ -221,42 +221,155 @@ pub enum StateReason {
 }
 
 /// Represents a Wi-Fi network discovered during a scan.
+///
+/// This struct contains information about a WiFi network that was discovered
+/// by NetworkManager during a scan operation.
+///
+/// # Examples
+///
+/// ```no_run
+/// use nmrs::NetworkManager;
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// // Scan for networks
+/// nm.scan_networks().await?;
+/// let networks = nm.list_networks().await?;
+///
+/// for net in networks {
+///     println!("SSID: {}", net.ssid);
+///     println!("  Signal: {}%", net.strength.unwrap_or(0));
+///     println!("  Secured: {}", net.secured);
+///     
+///     if let Some(freq) = net.frequency {
+///         let band = if freq > 5000 { "5GHz" } else { "2.4GHz" };
+///         println!("  Band: {}", band);
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Network {
+    /// Device interface name (e.g., "wlan0")
     pub device: String,
+    /// Network SSID (name)
     pub ssid: String,
+    /// Access point MAC address (BSSID)
     pub bssid: Option<String>,
+    /// Signal strength (0-100)
     pub strength: Option<u8>,
+    /// Frequency in MHz (e.g., 2437 for channel 6)
     pub frequency: Option<u32>,
+    /// Whether the network requires authentication
     pub secured: bool,
+    /// Whether the network uses WPA-PSK authentication
     pub is_psk: bool,
+    /// Whether the network uses WPA-EAP (Enterprise) authentication
     pub is_eap: bool,
 }
 
-/// Detailed information about a connected Wi-Fi network.
+/// Detailed information about a Wi-Fi network.
+///
+/// Contains comprehensive information about a WiFi network, including
+/// connection status, signal quality, and technical details.
+///
+/// # Examples
+///
+/// ```no_run
+/// use nmrs::NetworkManager;
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+/// let networks = nm.list_networks().await?;
+///
+/// if let Some(network) = networks.first() {
+///     let info = nm.show_details(network).await?;
+///     
+///     println!("Network: {}", info.ssid);
+///     println!("Signal: {} {}", info.strength, info.bars);
+///     println!("Security: {}", info.security);
+///     println!("Status: {}", info.status);
+///     
+///     if let Some(rate) = info.rate_mbps {
+///         println!("Speed: {} Mbps", rate);
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkInfo {
+    /// Network SSID (name)
     pub ssid: String,
+    /// Access point MAC address (BSSID)
     pub bssid: String,
+    /// Signal strength (0-100)
     pub strength: u8,
+    /// Frequency in MHz
     pub freq: Option<u32>,
+    /// WiFi channel number
     pub channel: Option<u16>,
+    /// Operating mode (e.g., "infrastructure")
     pub mode: String,
+    /// Connection speed in Mbps
     pub rate_mbps: Option<u32>,
+    /// Visual signal strength representation (e.g., "▂▄▆█")
     pub bars: String,
+    /// Security type description
     pub security: String,
+    /// Connection status
     pub status: String,
 }
 
 /// Represents a network device managed by NetworkManager.
+///
+/// A device can be a WiFi adapter, Ethernet interface, or other network hardware.
+///
+/// # Examples
+///
+/// ```no_run
+/// use nmrs::NetworkManager;
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+/// let devices = nm.list_devices().await?;
+///
+/// for device in devices {
+///     println!("Interface: {}", device.interface);
+///     println!("  Type: {}", device.device_type);
+///     println!("  State: {}", device.state);
+///     println!("  MAC: {}", device.identity.current_mac);
+///     
+///     if device.is_wireless() {
+///         println!("  This is a WiFi device");
+///     } else if device.is_wired() {
+///         println!("  This is an Ethernet device");
+///     }
+///     
+///     if let Some(driver) = &device.driver {
+///         println!("  Driver: {}", driver);
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct Device {
+    /// D-Bus object path
     pub path: String,
+    /// Interface name (e.g., "wlan0", "eth0")
     pub interface: String,
+    /// Device hardware identity (MAC addresses)
     pub identity: DeviceIdentity,
+    /// Type of device (WiFi, Ethernet, etc.)
     pub device_type: DeviceType,
+    /// Current device state
     pub state: DeviceState,
+    /// Whether NetworkManager manages this device
     pub managed: Option<bool>,
+    /// Kernel driver name
     pub driver: Option<String>,
 }
 
@@ -279,30 +392,176 @@ pub enum Phase2 {
     Pap,
 }
 
-/// EAP options for WPA-EAP Wi-Fi connections.
+/// EAP options for WPA-EAP (Enterprise) Wi-Fi connections.
+///
+/// Configuration for 802.1X authentication, commonly used in corporate
+/// and educational networks.
+///
+/// # Examples
+///
+/// ## PEAP with MSCHAPv2 (Common Corporate Setup)
+///
+/// ```rust
+/// use nmrs::{EapOptions, EapMethod, Phase2};
+///
+/// let opts = EapOptions {
+///     identity: "employee@company.com".into(),
+///     password: "my_password".into(),
+///     anonymous_identity: Some("anonymous@company.com".into()),
+///     domain_suffix_match: Some("company.com".into()),
+///     ca_cert_path: None,
+///     system_ca_certs: true,  // Use system certificate store
+///     method: EapMethod::Peap,
+///     phase2: Phase2::Mschapv2,
+/// };
+/// ```
+///
+/// ## TTLS with PAP (Alternative Setup)
+///
+/// ```rust
+/// use nmrs::{EapOptions, EapMethod, Phase2};
+///
+/// let opts = EapOptions {
+///     identity: "student@university.edu".into(),
+///     password: "password".into(),
+///     anonymous_identity: None,
+///     domain_suffix_match: None,
+///     ca_cert_path: Some("file:///etc/ssl/certs/university-ca.pem".into()),
+///     system_ca_certs: false,
+///     method: EapMethod::Ttls,
+///     phase2: Phase2::Pap,
+/// };
+/// ```
 pub struct EapOptions {
+    /// User identity (usually email or username)
     pub identity: String,
+    /// Password for authentication
     pub password: String,
+    /// Anonymous outer identity (for privacy)
     pub anonymous_identity: Option<String>,
+    /// Domain to match against server certificate
     pub domain_suffix_match: Option<String>,
+    /// Path to CA certificate file (file:// URL)
     pub ca_cert_path: Option<String>,
+    /// Use system CA certificate store
     pub system_ca_certs: bool,
+    /// EAP method (PEAP or TTLS)
     pub method: EapMethod,
+    /// Phase 2 inner authentication method
     pub phase2: Phase2,
 }
 
 /// Connection options for saved NetworkManager connections.
+///
+/// Controls how NetworkManager handles saved connection profiles,
+/// including automatic connection behavior.
+///
+/// # Examples
+///
+/// ```rust
+/// use nmrs::ConnectionOptions;
+///
+/// // Basic auto-connect
+/// let opts = ConnectionOptions {
+///     autoconnect: true,
+///     autoconnect_priority: None,
+///     autoconnect_retries: None,
+/// };
+///
+/// // High-priority connection with retry limit
+/// let opts_priority = ConnectionOptions {
+///     autoconnect: true,
+///     autoconnect_priority: Some(10),  // Higher = more preferred
+///     autoconnect_retries: Some(3),    // Retry up to 3 times
+/// };
+///
+/// // Manual connection only
+/// let opts_manual = ConnectionOptions {
+///     autoconnect: false,
+///     autoconnect_priority: None,
+///     autoconnect_retries: None,
+/// };
+/// ```
 pub struct ConnectionOptions {
+    /// Whether to automatically connect when available
     pub autoconnect: bool,
+    /// Priority for auto-connection (higher = more preferred)
     pub autoconnect_priority: Option<i32>,
+    /// Maximum number of auto-connect retry attempts
     pub autoconnect_retries: Option<i32>,
 }
 
 /// Wi-Fi connection security types.
+///
+/// Represents the authentication method for connecting to a WiFi network.
+///
+/// # Variants
+///
+/// - [`Open`](WifiSecurity::Open) - No authentication required (open network)
+/// - [`WpaPsk`](WifiSecurity::WpaPsk) - WPA/WPA2/WPA3 Personal (password-based)
+/// - [`WpaEap`](WifiSecurity::WpaEap) - WPA/WPA2 Enterprise (802.1X authentication)
+///
+/// # Examples
+///
+/// ## Open Network
+///
+/// ```rust
+/// use nmrs::WifiSecurity;
+///
+/// let security = WifiSecurity::Open;
+/// ```
+///
+/// ## Password-Protected Network
+///
+/// ```no_run
+/// use nmrs::{NetworkManager, WifiSecurity};
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+///     psk: "my_secure_password".into()
+/// }).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Enterprise Network (WPA-EAP)
+///
+/// ```no_run
+/// use nmrs::{NetworkManager, WifiSecurity, EapOptions, EapMethod, Phase2};
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// nm.connect("CorpWiFi", WifiSecurity::WpaEap {
+///     opts: EapOptions {
+///         identity: "user@company.com".into(),
+///         password: "password".into(),
+///         anonymous_identity: None,
+///         domain_suffix_match: Some("company.com".into()),
+///         ca_cert_path: None,
+///         system_ca_certs: true,
+///         method: EapMethod::Peap,
+///         phase2: Phase2::Mschapv2,
+///     }
+/// }).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub enum WifiSecurity {
+    /// Open network (no authentication)
     Open,
-    WpaPsk { psk: String },
-    WpaEap { opts: EapOptions },
+    /// WPA-PSK (password-based authentication)
+    WpaPsk {
+        /// Pre-shared key (password)
+        psk: String,
+    },
+    /// WPA-EAP (Enterprise authentication via 802.1X)
+    WpaEap {
+        /// EAP configuration options
+        opts: EapOptions,
+    },
 }
 
 /// NetworkManager device types.
@@ -340,6 +599,63 @@ impl Device {
 }
 
 /// Errors that can occur during network operations.
+///
+/// This enum provides specific error types for different failure modes,
+/// making it easy to handle errors appropriately in your application.
+///
+/// # Examples
+///
+/// ## Basic Error Handling
+///
+/// ```no_run
+/// use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+///     psk: "password".into()
+/// }).await {
+///     Ok(_) => println!("Connected!"),
+///     Err(ConnectionError::AuthFailed) => {
+///         eprintln!("Wrong password");
+///     }
+///     Err(ConnectionError::NotFound) => {
+///         eprintln!("Network not in range");
+///     }
+///     Err(ConnectionError::Timeout) => {
+///         eprintln!("Connection timed out");
+///     }
+///     Err(e) => eprintln!("Error: {}", e),
+/// }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Retry Logic
+///
+/// ```no_run
+/// use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
+///
+/// # async fn example() -> nmrs::Result<()> {
+/// let nm = NetworkManager::new().await?;
+///
+/// for attempt in 1..=3 {
+///     match nm.connect("MyNetwork", WifiSecurity::Open).await {
+///         Ok(_) => {
+///             println!("Connected on attempt {}", attempt);
+///             break;
+///         }
+///         Err(ConnectionError::Timeout) if attempt < 3 => {
+///             println!("Timeout, retrying...");
+///             continue;
+///         }
+///         Err(e) => return Err(e),
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Error)]
 pub enum ConnectionError {
     /// A D-Bus communication error occurred.

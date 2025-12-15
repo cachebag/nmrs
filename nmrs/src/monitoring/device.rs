@@ -10,8 +10,8 @@ use std::pin::Pin;
 use zbus::Connection;
 
 use crate::Result;
-use crate::models::ConnectionError;
-use crate::proxies::{NMDeviceProxy, NMProxy};
+use crate::api::models::ConnectionError;
+use crate::dbus::{NMDeviceProxy, NMProxy};
 
 /// Monitors device state changes on all network devices.
 ///

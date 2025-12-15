@@ -26,11 +26,11 @@ use std::time::Duration;
 use zbus::Connection;
 
 use crate::Result;
-use crate::constants::{device_state, timeouts};
-use crate::models::{
+use crate::api::models::{
     ActiveConnectionState, ConnectionError, ConnectionStateReason, connection_state_reason_to_error,
 };
-use crate::proxies::{NMActiveConnectionProxy, NMDeviceProxy};
+use crate::dbus::{NMActiveConnectionProxy, NMDeviceProxy};
+use crate::types::constants::{device_state, timeouts};
 
 /// Default timeout for connection activation (30 seconds).
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
