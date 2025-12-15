@@ -1,6 +1,6 @@
 use nmrs::{
-    ConnectionError, DeviceState, DeviceType, NetworkManager, StateReason, VpnCredentials, VpnType,
-    WifiSecurity, WireGuardPeer, reason_to_error,
+    reason_to_error, ConnectionError, DeviceState, DeviceType, NetworkManager, StateReason,
+    VpnCredentials, VpnType, WifiSecurity, WireGuardPeer,
 };
 use std::time::Duration;
 use tokio::time::sleep;

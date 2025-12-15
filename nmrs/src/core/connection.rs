@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
-use crate::Result;
 use crate::api::builders::wifi::{build_ethernet_connection, build_wifi_connection};
 use crate::api::models::{ConnectionError, ConnectionOptions, WifiSecurity};
 use crate::core::connection_settings::{delete_connection, get_saved_connection_path};
@@ -13,6 +12,7 @@ use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
 use crate::types::constants::{device_state, device_type, timeouts};
 use crate::util::utils::decode_ssid_or_empty;
+use crate::Result;
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
 enum SavedDecision {
@@ -177,33 +177,33 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
             .path(dev_path.clone())?
             .build()
             .await?;
-        if let Ok(ap_path) = wifi.active_access_point().await
-            && ap_path.as_str() != "/"
-        {
-            let ap = NMAccessPointProxy::builder(conn)
-                .path(ap_path.clone())?
-                .build()
-                .await?;
-            if let Ok(bytes) = ap.ssid().await
-                && decode_ssid_or_empty(&bytes) == ssid
-            {
-                debug!("Disconnecting from active network: {ssid}");
-                if let Err(e) = disconnect_wifi_and_wait(conn, dev_path).await {
-                    warn!("Disconnect wait failed: {e}");
-                    let final_state = dev.state().await?;
-                    if final_state != device_state::DISCONNECTED
-                        && final_state != device_state::UNAVAILABLE
-                    {
-                        error!(
-                            "Device still connected (state: {final_state}), cannot safely delete"
-                        );
-                        return Err(ConnectionError::Stuck(format!(
-                            "disconnect failed, device in state {final_state}"
-                        )));
+        if let Ok(ap_path) = wifi.active_access_point().await {
+            if ap_path.as_str() != "/" {
+                let ap = NMAccessPointProxy::builder(conn)
+                    .path(ap_path.clone())?
+                    .build()
+                    .await?;
+                if let Ok(bytes) = ap.ssid().await {
+                    if decode_ssid_or_empty(&bytes) == ssid {
+                        debug!("Disconnecting from active network: {ssid}");
+                        if let Err(e) = disconnect_wifi_and_wait(conn, dev_path).await {
+                            warn!("Disconnect wait failed: {e}");
+                            let final_state = dev.state().await?;
+                            if final_state != device_state::DISCONNECTED
+                                && final_state != device_state::UNAVAILABLE
+                            {
+                                error!(
+                                    "Device still connected (state: {final_state}), cannot safely delete"
+                                );
+                                return Err(ConnectionError::Stuck(format!(
+                                    "disconnect failed, device in state {final_state}"
+                                )));
+                            }
+                            debug!("Device confirmed disconnected, proceeding with deletion");
+                        }
+                        debug!("Disconnect phase completed");
                     }
-                    debug!("Device confirmed disconnected, proceeding with deletion");
                 }
-                debug!("Disconnect phase completed");
             }
         }
     }
@@ -236,26 +236,27 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
 
             let mut should_delete = false;
 
-            if let Some(conn_sec) = settings_map.get("connection")
-                && let Some(Value::Str(id)) = conn_sec.get("id")
-                && id.as_str() == ssid
-            {
-                should_delete = true;
-                debug!("Found connection by ID: {id}");
-            }
-
-            if let Some(wifi_sec) = settings_map.get("802-11-wireless")
-                && let Some(Value::Array(arr)) = wifi_sec.get("ssid")
-            {
-                let mut raw = Vec::new();
-                for v in arr.iter() {
-                    if let Ok(b) = u8::try_from(v.clone()) {
-                        raw.push(b);
+            if let Some(conn_sec) = settings_map.get("connection") {
+                if let Some(Value::Str(id)) = conn_sec.get("id") {
+                    if id.as_str() == ssid {
+                        should_delete = true;
+                        debug!("Found connection by ID: {id}");
                     }
                 }
-                if decode_ssid_or_empty(&raw) == ssid {
-                    should_delete = true;
-                    debug!("Found connection by SSID match");
+            }
+
+            if let Some(wifi_sec) = settings_map.get("802-11-wireless") {
+                if let Some(Value::Array(arr)) = wifi_sec.get("ssid") {
+                    let mut raw = Vec::new();
+                    for v in arr.iter() {
+                        if let Ok(b) = u8::try_from(v.clone()) {
+                            raw.push(b);
+                        }
+                    }
+                    if decode_ssid_or_empty(&raw) == ssid {
+                        should_delete = true;
+                        debug!("Found connection by SSID match");
+                    }
                 }
             }
 

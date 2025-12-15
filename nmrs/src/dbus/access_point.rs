@@ -1,6 +1,6 @@
 //! NetworkManager Access Point proxy.
 
-use zbus::{Result, proxy};
+use zbus::{proxy, Result};
 
 /// Proxy for access point interface.
 ///

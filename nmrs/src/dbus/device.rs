@@ -1,6 +1,6 @@
 //! NetworkManager Device proxy.
 
-use zbus::{Result, proxy};
+use zbus::{proxy, Result};
 
 /// Proxy for NetworkManager device interface.
 ///

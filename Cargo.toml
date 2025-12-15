@@ -4,4 +4,23 @@ members = [
   "nmrs-gui"
 ]
 
-resolver = "3"
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/cachebag/nmrs"
+
+[workspace.dependencies]
+# Core dependencies
+zbus = "5.12.0"
+zvariant = "5.8.0"
+log = "0.4.29"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.17"
+uuid = { version = "1.19.0", features = ["v4", "v5"] }
+futures = "0.3.31"
+futures-timer = "3.0.3"
+
+# Dev dependencies
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "sync", "time"] }

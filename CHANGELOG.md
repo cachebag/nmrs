@@ -119,19 +119,10 @@
 - EAP connections default to no certificates (advanced certificate management coming in future releases)
 - VPN connections planned for near future
 
-[0.3.0-beta]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta
-[0...v0.3.0-beta
-[0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
-[0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
-[0...v0.4.0-beta
-[0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
-[0...v0.5.0-beta
-[unreleased]: https://github...v0.4.0-beta
-[0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
-[0...v0.4.0-beta
-[0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta
-[0...v0.5.0-beta
-[unreleased]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...HEAD
+[Unreleased]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...HEAD
+[0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...v0.5.0-beta
+[0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta...v0.4.0-beta
+[0.3.0-beta]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta...v0.3.0-beta
 [0.2.0-beta]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...v0.2.0-beta
 [0.1.1-beta]: https://github.com/cachebag/nmrs/compare/v0.1.0-beta...v0.1.1-beta
 [0.1.0-beta]: https://github.com/cachebag/nmrs/releases/tag/v0.1.0-beta

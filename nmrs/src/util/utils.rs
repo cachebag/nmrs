@@ -8,9 +8,9 @@ use std::borrow::Cow;
 use std::str;
 use zbus::Connection;
 
-use crate::Result;
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::types::constants::{device_type, frequency, signal_strength, wifi_mode};
+use crate::Result;
 
 /// Converts a Wi-Fi frequency in MHz to a channel number.
 ///
