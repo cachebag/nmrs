@@ -15,19 +15,25 @@ def extract_release_notes(changelog_path: Path, version: str, release_type: str)
     """Extract release notes for a specific version."""
     content = changelog_path.read_text()
     
-    # Look for the version section
-    version_tag = f"[{version}-{release_type}]"
-    pattern = rf'## \[{re.escape(version)}-{re.escape(release_type)}\](.*?)(?=## \[|\Z)'
+    # Format version tag based on release type
+    if release_type == "stable":
+        version_tag = f"[{version}]"
+        pattern = rf'## \[{re.escape(version)}\](.*?)(?=## \[|\Z)'
+        release_name = f"{version}"
+    else:
+        version_tag = f"[{version}-{release_type}]"
+        pattern = rf'## \[{re.escape(version)}-{re.escape(release_type)}\](.*?)(?=## \[|\Z)'
+        release_name = f"{version}-{release_type}"
     
     match = re.search(pattern, content, re.DOTALL)
     
     if not match:
-        return f"# Release {version}-{release_type}\n\nNo release notes found."
+        return f"# Release {release_name}\n\nNo release notes found."
     
     notes = match.group(1).strip()
     
     # Format as markdown
-    return f"# Release {version}-{release_type}\n\n{notes}"
+    return f"# Release {release_name}\n\n{notes}"
 
 
 def main():

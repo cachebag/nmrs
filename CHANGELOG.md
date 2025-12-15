@@ -1,7 +1,9 @@
 # Changelog
 ## [Unreleased]
 
-## [1.0.0-stable] - 2025-12-15
+## [1.0.0] - 2025-12-15
+
+### Added
 - Core: Full WireGuard VPN support ([#92](https://github.com/cachebag/nmrs/issues/92))
 
 ## [0.5.0-beta] - 2025-12-15
@@ -121,9 +123,8 @@
 - EAP connections default to no certificates (advanced certificate management coming in future releases)
 - VPN connections planned for near future
 
-[1.0.0-stable]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta
-[0...v1.0.0-stable
-[unreleased]: https://github.com/cachebag/nmrs/compare/v1.0.0-stable...HEAD
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...HEAD
+[1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
 [0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...v0.5.0-beta
 [0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta...v0.4.0-beta
 [0.3.0-beta]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta...v0.3.0-beta

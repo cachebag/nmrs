@@ -280,8 +280,16 @@ def update_changelog(file_path: Path, version: str, release_type: str) -> bool:
         if not unreleased_content or unreleased_content == "":
             print("⚠ [Unreleased] section is empty")
             unreleased_content = "\n\n(No changes documented)"
+        
+        # Format version header based on release type
+        if release_type == "stable":
+            version_header = f"## [{version}] - {today}"
+            version_tag = version
+        else:
+            version_header = f"## [{version}-{release_type}] - {today}"
+            version_tag = f"{version}-{release_type}"
                 
-        new_version_section = f"## [{version}-{release_type}] - {today}\n{unreleased_content}\n\n"
+        new_version_section = f"{version_header}\n{unreleased_content}\n\n"
         
         # Replace Unreleased with new version section and add new Unreleased
         new_unreleased_section = "## [Unreleased]\n\n"
@@ -295,35 +303,41 @@ def update_changelog(file_path: Path, version: str, release_type: str) -> bool:
         )
         
         # Update the comparison links at the bottom
+        # Use the correct tag format (with or without release_type suffix)
+        git_tag = f"nmrs-v{version_tag}" if release_type == "stable" or "nmrs" in version else f"v{version_tag}"
+        
         # Find the [unreleased] link and update it
-        unreleased_link_pattern = r'\[unreleased\]:\s*https://github\.com/[^/]+/[^/]+/compare/v([^\.]+\.[^\.]+\.[^-]+-[^\.]+)\.\.\.HEAD'
-        unreleased_link_replacement = f'[unreleased]: https://github.com/cachebag/nmrs/compare/v{version}-{release_type}...HEAD'
+        unreleased_link_pattern = r'\[unreleased\]:\s*https://github\.com/[^/]+/[^/]+/compare/[^\.]+\.\.\.[^$]*HEAD'
+        unreleased_link_replacement = f'[Unreleased]: https://github.com/cachebag/nmrs/compare/{git_tag}...HEAD'
         new_content = re.sub(unreleased_link_pattern, unreleased_link_replacement, new_content, flags=re.IGNORECASE)
         
         # Add new version link before the unreleased link
-        # Find the first version link to determine the previous version
-        version_link_pattern = r'\[([^\]]+)\]:\s*https://github\.com/[^/]+/[^/]+/compare/v([^\.]+\.[^\.]+\.[^-]+-[^\.]+)\.\.\.v([^\.]+\.[^\.]+\.[^-]+-[^\.]+)'
-        first_match = re.search(version_link_pattern, new_content)
+        # Look for existing version links to determine previous version
+        existing_links = re.findall(r'\[([^\]]+)\]:\s*https://github\.com/[^/]+/[^/]+/compare/([^\.]+)\.\.\.([^\s]+)', new_content)
         
-        if first_match:
-            prev_version = first_match.group(3)
-            new_version_link = f'[{version}-{release_type}]: https://github.com/cachebag/nmrs/compare/v{prev_version}...v{version}-{release_type}\n'
-            # Insert before the unreleased link
-            new_content = re.sub(
-                r'(\[unreleased\]:)',
-                new_version_link + r'\1',
-                new_content,
-                flags=re.IGNORECASE
-            )
+        if existing_links and len(existing_links) > 0:
+            # Find the most recent version link (should be right after Unreleased)
+            for link_text, prev_tag, curr_tag in existing_links:
+                if link_text.lower() != 'unreleased':
+                    # This is the previous version
+                    prev_version_tag = curr_tag.strip()
+                    break
+            else:
+                # Fallback
+                prev_version_tag = "v0.5.0-beta"
         else:
-            # Fallback: add link at the end of links section
-            new_version_link = f'[{version}-{release_type}]: https://github.com/cachebag/nmrs/compare/v0.2.0-beta...v{version}-{release_type}\n'
-            new_content = re.sub(
-                r'(\[unreleased\]:)',
-                new_version_link + r'\1',
-                new_content,
-                flags=re.IGNORECASE
-            )
+            prev_version_tag = "v0.5.0-beta"
+        
+        # Create the new version link
+        link_label = version if release_type == "stable" else version_tag
+        new_version_link = f'[{link_label}]: https://github.com/cachebag/nmrs/compare/{prev_version_tag}...{git_tag}\n'
+        
+        # Insert before the Unreleased link
+        new_content = re.sub(
+            r'(\[Unreleased\]:)',
+            new_version_link + r'\1',
+            new_content
+        )
         
         file_path.write_text(new_content)
         print(f"✓ Updated {file_path}")
