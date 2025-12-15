@@ -111,7 +111,7 @@ async fn test_wifi_enabled_get_set() {
                 .await
                 .expect("Failed to get WiFi enabled state after toggle");
 
-            if new_state != !initial_state {
+            if new_state == initial_state {
                 eprintln!(
                     "Warning: WiFi state didn't change (may lack permissions). Initial: {}, New: {}",
                     initial_state, new_state
