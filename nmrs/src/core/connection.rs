@@ -5,14 +5,14 @@ use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
 use crate::Result;
-use crate::connection_settings::{delete_connection, get_saved_connection_path};
-use crate::constants::{device_state, device_type, timeouts};
-use crate::models::{ConnectionError, ConnectionOptions, WifiSecurity};
-use crate::network_info::current_ssid;
-use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
-use crate::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
-use crate::utils::decode_ssid_or_empty;
-use crate::wifi_builders::{build_ethernet_connection, build_wifi_connection};
+use crate::api::builders::wifi::{build_ethernet_connection, build_wifi_connection};
+use crate::api::models::{ConnectionError, ConnectionOptions, WifiSecurity};
+use crate::core::connection_settings::{delete_connection, get_saved_connection_path};
+use crate::core::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
+use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::monitoring::info::current_ssid;
+use crate::types::constants::{device_state, device_type, timeouts};
+use crate::util::utils::decode_ssid_or_empty;
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
 enum SavedDecision {

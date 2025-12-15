@@ -8,10 +8,10 @@ use log::debug;
 use zbus::Connection;
 
 use crate::Result;
-use crate::constants::device_type;
-use crate::models::{ConnectionError, Device, DeviceIdentity, DeviceState};
-use crate::proxies::{NMDeviceProxy, NMProxy};
-use crate::state_wait::wait_for_wifi_device_ready;
+use crate::api::models::{ConnectionError, Device, DeviceIdentity, DeviceState};
+use crate::core::state_wait::wait_for_wifi_device_ready;
+use crate::dbus::{NMDeviceProxy, NMProxy};
+use crate::types::constants::device_type;
 
 /// Lists all network devices managed by NetworkManager.
 ///

@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use zbus::Connection;
 
 use crate::Result;
-use crate::constants::{device_type, security_flags};
-use crate::models::Network;
-use crate::proxies::{NMDeviceProxy, NMProxy, NMWirelessProxy};
-use crate::utils::{decode_ssid_or_hidden, for_each_access_point};
+use crate::api::models::Network;
+use crate::dbus::{NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::types::constants::{device_type, security_flags};
+use crate::util::utils::{decode_ssid_or_hidden, for_each_access_point};
 
 /// Triggers a Wi-Fi scan on all wireless devices.
 ///

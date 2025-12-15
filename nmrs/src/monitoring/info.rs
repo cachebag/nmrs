@@ -6,11 +6,12 @@
 use zbus::Connection;
 
 use crate::Result;
-use crate::constants::{device_type, rate, security_flags};
-use crate::models::{ConnectionError, Network, NetworkInfo};
-use crate::proxies::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::api::models::{ConnectionError, Network, NetworkInfo};
+#[allow(unused_imports)] // Used within try_log! macro
+use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::try_log;
-use crate::utils::{
+use crate::types::constants::{device_type, rate, security_flags};
+use crate::util::utils::{
     bars_from_strength, channel_from_freq, decode_ssid_or_empty, for_each_access_point,
     mode_to_string, strength_or_zero,
 };
