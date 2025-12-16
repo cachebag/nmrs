@@ -168,54 +168,103 @@ pub fn connection_state_reason_to_error(code: u32) -> ConnectionError {
 /// convert from the raw u32 values returned by NetworkManager.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateReason {
+    /// The reason is unknown.
     Unknown,
+    /// No specific reason given.
     None,
+    /// The user disconnected the device.
     UserDisconnected,
+    /// The device was disconnected by the system.
     DeviceDisconnected,
+    /// The carrier/link status changed (e.g., cable unplugged).
     CarrierChanged,
+    /// The Wi-Fi supplicant disconnected unexpectedly.
     SupplicantDisconnected,
+    /// The Wi-Fi supplicant's configuration failed.
     SupplicantConfigFailed,
+    /// The Wi-Fi supplicant failed (authentication issue).
     SupplicantFailed,
+    /// The Wi-Fi supplicant timed out during authentication.
     SupplicantTimeout,
+    /// PPP connection start failed.
     PppStartFailed,
+    /// DHCP client failed to start.
     DhcpStartFailed,
+    /// DHCP client encountered an error.
     DhcpError,
+    /// DHCP client failed to obtain an IP address.
     DhcpFailed,
+    /// Modem connection failed.
     ModemConnectionFailed,
+    /// Modem initialization failed.
     ModemInitFailed,
+    /// InfiniBand device mode mismatch.
     InfinibandMode,
+    /// A dependency connection failed.
     DependencyFailed,
+    /// BR2684 bridge setup failed.
     Br2684Failed,
+    /// Failed to set the device mode (e.g., AP mode).
     ModeSetFailed,
+    /// GSM modem APN selection failed.
     GsmApnSelectFailed,
+    /// GSM modem is not searching for networks.
     GsmNotSearching,
+    /// GSM network registration was denied.
     GsmRegistrationDenied,
+    /// GSM network registration timed out.
     GsmRegistrationTimeout,
+    /// GSM network registration failed.
     GsmRegistrationFailed,
+    /// GSM SIM PIN check failed.
     GsmPinCheckFailed,
+    /// Required firmware is missing for the device.
     FirmwareMissing,
+    /// The device was removed from the system.
     DeviceRemoved,
+    /// The system is entering sleep mode.
     Sleeping,
+    /// The connection profile was removed.
     ConnectionRemoved,
+    /// The user requested the operation.
     UserRequested,
+    /// Carrier status changed.
     Carrier,
+    /// NetworkManager assumed an existing connection.
     ConnectionAssumed,
+    /// The Wi-Fi supplicant became available.
     SupplicantAvailable,
+    /// The modem device was not found.
     ModemNotFound,
+    /// Bluetooth connection failed.
     BluetoothFailed,
+    /// GSM SIM card is not inserted.
     GsmSimNotInserted,
+    /// GSM SIM PIN is required.
     GsmSimPinRequired,
+    /// GSM SIM PUK is required.
     GsmSimPukRequired,
+    /// Wrong GSM SIM card inserted.
     GsmSimWrong,
+    /// The requested SSID was not found.
     SsidNotFound,
+    /// A secondary connection failed.
     SecondaryConnectionFailed,
+    /// DCB/FCoE setup failed.
     DcbFcoeFailed,
+    /// teamd control interface failed.
     TeamdControlFailed,
+    /// Modem operation failed.
     ModemFailed,
+    /// Modem became available.
     ModemAvailable,
+    /// SIM PIN was incorrect.
     SimPinIncorrect,
+    /// A new connection activation was queued.
     NewActivationEnqueued,
+    /// Parent device became unreachable.
     ParentUnreachable,
+    /// Parent device changed.
     ParentChanged,
     /// Unknown reason code not mapped to a specific variant.
     Other(u32),
@@ -374,24 +423,44 @@ pub struct Device {
     pub driver: Option<String>,
 }
 
-/// Represents the identity of a network device.
+/// Represents the hardware identity of a network device.
+///
+/// Contains MAC addresses that uniquely identify the device. The permanent
+/// MAC is burned into the hardware, while the current MAC may be different
+/// if MAC address randomization or spoofing is enabled.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DeviceIdentity {
+    /// The permanent (factory-assigned) MAC address.
     pub permanent_mac: String,
+    /// The current MAC address in use (may differ if randomized/spoofed).
     pub current_mac: String,
 }
 
-/// EAP (Extensible Authentication Protocol) method options for Wi-Fi connections.
+/// EAP (Extensible Authentication Protocol) method for WPA-Enterprise Wi-Fi.
+///
+/// These are the outer authentication methods used in 802.1X authentication.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EapMethod {
-    Peap, // PEAPv0/EAP-MSCHAPv2
-    Ttls, // EAP-TTLS
+    /// Protected EAP (PEAPv0) - tunnels inner authentication in TLS.
+    /// Most commonly used with MSCHAPv2 inner authentication.
+    Peap,
+    /// Tunneled TLS (EAP-TTLS) - similar to PEAP but more flexible.
+    /// Can use various inner authentication methods like PAP or MSCHAPv2.
+    Ttls,
 }
 
-/// Phase 2 authentication methods for EAP connections.
+/// Phase 2 (inner) authentication methods for EAP connections.
+///
+/// These methods run inside the TLS tunnel established by the outer
+/// EAP method (PEAP or TTLS).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Phase2 {
+    /// Microsoft Challenge Handshake Authentication Protocol v2.
+    /// More secure than PAP, commonly used with PEAP.
     Mschapv2,
+    /// Password Authentication Protocol.
+    /// Simple plaintext password (protected by TLS tunnel).
+    /// Often used with TTLS.
     Pap,
 }
 
@@ -570,11 +639,13 @@ pub enum WifiSecurity {
     },
 }
 
-/// VPN Connection type
+/// VPN connection type.
 ///
+/// Identifies the VPN protocol/technology used for the connection.
 /// Currently only WireGuard is supported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VpnType {
+    /// WireGuard - modern, high-performance VPN protocol.
     WireGuard,
 }
 
@@ -620,14 +691,23 @@ pub enum VpnType {
 /// ```
 #[derive(Debug, Clone)]
 pub struct VpnCredentials {
+    /// The type of VPN (currently only WireGuard).
     pub vpn_type: VpnType,
+    /// Unique name for the connection profile.
     pub name: String,
+    /// VPN gateway endpoint (e.g., "vpn.example.com:51820").
     pub gateway: String,
+    /// Client's WireGuard private key (base64 encoded).
     pub private_key: String,
+    /// Client's IP address with CIDR notation (e.g., "10.0.0.2/24").
     pub address: String,
+    /// List of WireGuard peers to connect to.
     pub peers: Vec<WireGuardPeer>,
+    /// Optional DNS servers to use when connected.
     pub dns: Option<Vec<String>>,
+    /// Optional Maximum Transmission Unit size.
     pub mtu: Option<u32>,
+    /// Optional UUID for the connection (auto-generated if not provided).
     pub uuid: Option<Uuid>,
 }
 
@@ -658,10 +738,15 @@ pub struct VpnCredentials {
 /// ```
 #[derive(Debug, Clone)]
 pub struct WireGuardPeer {
+    /// The peer's WireGuard public key (base64 encoded).
     pub public_key: String,
+    /// Peer endpoint in "host:port" format.
     pub gateway: String,
+    /// IP ranges to route through this peer (e.g., ["0.0.0.0/0"]).
     pub allowed_ips: Vec<String>,
+    /// Optional pre-shared key for additional security.
     pub preshared_key: Option<String>,
+    /// Optional keepalive interval in seconds (e.g., 25).
     pub persistent_keepalive: Option<u32>,
 }
 
@@ -691,9 +776,13 @@ pub struct WireGuardPeer {
 /// ```
 #[derive(Debug, Clone)]
 pub struct VpnConnection {
+    /// The connection name/identifier.
     pub name: String,
+    /// The type of VPN (WireGuard, etc.).
     pub vpn_type: VpnType,
+    /// Current connection state.
     pub state: DeviceState,
+    /// Network interface name when active (e.g., "wg0").
     pub interface: Option<String>,
 }
 
@@ -725,46 +814,73 @@ pub struct VpnConnection {
 /// ```
 #[derive(Debug, Clone)]
 pub struct VpnConnectionInfo {
+    /// The connection name/identifier.
     pub name: String,
+    /// The type of VPN (WireGuard, etc.).
     pub vpn_type: VpnType,
+    /// Current connection state.
     pub state: DeviceState,
+    /// Network interface name when active (e.g., "wg0").
     pub interface: Option<String>,
+    /// VPN gateway endpoint address.
     pub gateway: Option<String>,
+    /// Assigned IPv4 address with CIDR notation.
     pub ip4_address: Option<String>,
-    /// IPv6 address (currently always `None` - IPv6 parsing not yet implemented)
+    /// IPv6 address (currently always `None` - IPv6 parsing not yet implemented).
     pub ip6_address: Option<String>,
+    /// DNS servers configured for this VPN.
     pub dns_servers: Vec<String>,
 }
 
 /// NetworkManager device types.
+///
+/// Represents the type of network hardware managed by NetworkManager.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceType {
+    /// Wired Ethernet device.
     Ethernet,
+    /// Wi-Fi (802.11) wireless device.
     Wifi,
+    /// Wi-Fi P2P (peer-to-peer) device.
     WifiP2P,
+    /// Loopback device (localhost).
     Loopback,
+    /// Unknown or unsupported device type with raw code.
     Other(u32),
 }
 
 /// NetworkManager device states.
+///
+/// Represents the current operational state of a network device.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceState {
+    /// Device is not managed by NetworkManager.
     Unmanaged,
+    /// Device is managed but not yet available (e.g., Wi-Fi disabled).
     Unavailable,
+    /// Device is available but not connected.
     Disconnected,
+    /// Device is preparing to connect.
     Prepare,
+    /// Device is being configured (IP, etc.).
     Config,
+    /// Device is fully connected and operational.
     Activated,
+    /// Device is disconnecting.
     Deactivating,
+    /// Device connection failed.
     Failed,
+    /// Unknown or unsupported state with raw code.
     Other(u32),
 }
 
 impl Device {
+    /// Returns `true` if this is a wired (Ethernet) device.
     pub fn is_wired(&self) -> bool {
         matches!(self.device_type, DeviceType::Ethernet)
     }
 
+    /// Returns `true` if this is a wireless (Wi-Fi) device.
     pub fn is_wireless(&self) -> bool {
         matches!(self.device_type, DeviceType::Wifi)
     }
@@ -1124,20 +1240,28 @@ impl Display for DeviceState {
 }
 
 impl WifiSecurity {
+    /// Returns `true` if this security type requires authentication.
     pub fn secured(&self) -> bool {
         !matches!(self, WifiSecurity::Open)
     }
 
+    /// Returns `true` if this is a WPA-PSK (password-based) security type.
     pub fn is_psk(&self) -> bool {
         matches!(self, WifiSecurity::WpaPsk { .. })
     }
 
+    /// Returns `true` if this is a WPA-EAP (Enterprise/802.1X) security type.
     pub fn is_eap(&self) -> bool {
         matches!(self, WifiSecurity::WpaEap { .. })
     }
 }
 
 impl Network {
+    /// Merges another access point's information into this network.
+    ///
+    /// When multiple access points share the same SSID (e.g., mesh networks),
+    /// this method keeps the strongest signal and combines security flags.
+    /// Used internally during network scanning to deduplicate results.
     pub fn merge_ap(&mut self, other: &Network) {
         if other.strength.unwrap_or(0) > self.strength.unwrap_or(0) {
             self.strength = other.strength;

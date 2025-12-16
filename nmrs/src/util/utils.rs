@@ -60,7 +60,7 @@ pub(crate) fn mode_to_string(m: u32) -> &'static str {
     }
 }
 
-/// Decode SSID bytes, defaulting to "<Hidden Network>" if empty or invalid UTF-8.
+/// Decode SSID bytes, defaulting to `<Hidden Network>` if empty or invalid UTF-8.
 /// This is safer than unwrap_or and logs the error.
 pub(crate) fn decode_ssid_or_hidden(bytes: &[u8]) -> Cow<'static, str> {
     if bytes.is_empty() {
