@@ -9,7 +9,7 @@ use zbus::Connection;
 
 use crate::api::models::{ConnectionError, Device, DeviceIdentity, DeviceState};
 use crate::core::state_wait::wait_for_wifi_device_ready;
-use crate::dbus::{NMDeviceProxy, NMProxy};
+use crate::dbus::{NMDeviceProxy, NMProxy, NMWiredProxy};
 use crate::types::constants::device_type;
 use crate::Result;
 
@@ -46,6 +46,17 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
         let managed = d_proxy.managed().await.ok();
         let driver = d_proxy.driver().await.ok();
 
+        // Get link speed for wired devices
+        let speed = if raw_type == device_type::ETHERNET {
+            async {
+                let wired = NMWiredProxy::builder(conn).path(p.clone())?.build().await?;
+                wired.speed().await
+            }
+            .await
+            .ok()
+        } else {
+            None
+        };
         devices.push(Device {
             path: p.to_string(),
             interface,
@@ -57,6 +68,7 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
             state,
             managed,
             driver,
+            speed,
         });
     }
     Ok(devices)
