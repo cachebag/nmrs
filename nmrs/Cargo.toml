@@ -1,6 +1,6 @@
 [package]
 name = "nmrs"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Akrm Al-Hakimi <alhakimiakrmj@gmail.com>"]
 edition.workspace = true
 rust-version = "1.78.0"
