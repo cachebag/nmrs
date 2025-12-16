@@ -7,10 +7,12 @@ mod access_point;
 mod active_connection;
 mod device;
 mod main_nm;
+mod wired;
 mod wireless;
 
 pub(crate) use access_point::NMAccessPointProxy;
 pub(crate) use active_connection::NMActiveConnectionProxy;
 pub(crate) use device::NMDeviceProxy;
 pub(crate) use main_nm::NMProxy;
+pub(crate) use wired::NMWiredProxy;
 pub(crate) use wireless::NMWirelessProxy;

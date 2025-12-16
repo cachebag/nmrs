@@ -396,9 +396,12 @@ pub struct NetworkInfo {
 ///         println!("  This is a WiFi device");
 ///     } else if device.is_wired() {
 ///         println!("  This is an Ethernet device");
+///         if let Some(speed) == device.speed {
+///             println!("  Link speed: {speed} Mb/s");
+///         }
 ///     }
 ///     
-///     if let Some(driver) = &device.driver {
+///     if let Some(driver) == &device.driver {
 ///         println!("  Driver: {}", driver);
 ///     }
 /// }
@@ -421,6 +424,8 @@ pub struct Device {
     pub managed: Option<bool>,
     /// Kernel driver name
     pub driver: Option<String>,
+    /// Link speed in Mb/s (wired devices)
+    pub speed: Option<u32>,
 }
 
 /// Represents the hardware identity of a network device.
@@ -845,6 +850,8 @@ pub enum DeviceType {
     WifiP2P,
     /// Loopback device (localhost).
     Loopback,
+    /// Bluetooth
+    Bluetooth,
     /// Unknown or unsupported device type with raw code.
     Other(u32),
 }
@@ -1218,6 +1225,7 @@ impl Display for DeviceType {
             DeviceType::Wifi => write!(f, "Wi-Fi"),
             DeviceType::WifiP2P => write!(f, "Wi-Fi P2P"),
             DeviceType::Loopback => write!(f, "Loopback"),
+            DeviceType::Bluetooth => write!(f, "Bluetooth"),
             DeviceType::Other(v) => write!(f, "Other({v})"),
         }
     }
