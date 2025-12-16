@@ -1,7 +1,7 @@
 //! NetworkManager Wired (Ethernet) Device Proxy
 
-use zbus::Result;
 use zbus::proxy;
+use zbus::Result;
 
 /// Proxy for wired devices (Ethernet).
 ///

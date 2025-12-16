@@ -396,9 +396,12 @@ pub struct NetworkInfo {
 ///         println!("  This is a WiFi device");
 ///     } else if device.is_wired() {
 ///         println!("  This is an Ethernet device");
+///         if let Some(speed) == device.speed {
+///             println!("  Link speed: {speed} Mb/s");
+///         }
 ///     }
 ///     
-///     if let Some(driver) = &device.driver {
+///     if let Some(driver) == &device.driver {
 ///         println!("  Driver: {}", driver);
 ///     }
 /// }
@@ -421,6 +424,8 @@ pub struct Device {
     pub managed: Option<bool>,
     /// Kernel driver name
     pub driver: Option<String>,
+    /// Link speed in Mb/s (wired devices)
+    pub speed: Option<u32>,
 }
 
 /// Represents the hardware identity of a network device.
@@ -859,6 +864,8 @@ pub enum DeviceType {
     WifiP2P,
     /// Loopback device (localhost).
     Loopback,
+    /// Bluetooth
+    Bluetooth,
     /// Unknown or unsupported device type with raw code.
     ///
     /// Use the methods on `DeviceType` to query capabilities of unknown device types,
@@ -918,6 +925,7 @@ impl DeviceType {
             Self::Wifi => "802-11-wireless",
             Self::WifiP2P => "wifi-p2p",
             Self::Loopback => "loopback",
+            Self::Bluetooth => "bluetooth",
             Self::Other(code) => {
                 crate::types::device_type_registry::connection_type_for_code(*code)
                     .unwrap_or("generic")
@@ -932,6 +940,7 @@ impl DeviceType {
             Self::Wifi => 2,
             Self::WifiP2P => 30,
             Self::Loopback => 32,
+            Self::Bluetooth => 6,
             Self::Other(code) => *code,
         }
     }
@@ -1306,13 +1315,8 @@ impl Display for DeviceType {
             DeviceType::Wifi => write!(f, "Wi-Fi"),
             DeviceType::WifiP2P => write!(f, "Wi-Fi P2P"),
             DeviceType::Loopback => write!(f, "Loopback"),
-            DeviceType::Other(v) => {
-                write!(
-                    f,
-                    "{}",
-                    crate::types::device_type_registry::display_name_for_code(*v)
-                )
-            }
+            DeviceType::Bluetooth => write!(f, "Bluetooth"),
+            DeviceType::Other(v) => write!(f, "Other({v})"),
         }
     }
 }
