@@ -48,6 +48,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::net::Ipv4Addr;
 use uuid::Uuid;
 use zvariant::Value;
 
@@ -236,8 +237,19 @@ pub fn build_wireguard_connection(
 
     // [connection] section
     let mut connection = HashMap::new();
-    connection.insert("type", Value::from("vpn"));
+    connection.insert("type", Value::from("wireguard"));
     connection.insert("id", Value::from(creds.name.clone()));
+    let interface_name = format!(
+        "wg-{}",
+        creds
+            .name
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-')
+            .take(10)
+            .collect::<String>()
+    );
+    connection.insert("interface-name", Value::from(interface_name));
 
     let uuid = creds.uuid.unwrap_or_else(|| {
         Uuid::new_v5(
@@ -257,59 +269,77 @@ pub fn build_wireguard_connection(
 
     conn.insert("connection", connection);
 
-    // [vpn] section
-    let mut vpn = HashMap::new();
-    vpn.insert(
+    // [wireguard] section
+    let mut wireguard = HashMap::new();
+
+    wireguard.insert(
         "service-type",
         Value::from("org.freedesktop.NetworkManager.wireguard"),
     );
+    wireguard.insert("private-key", Value::from(creds.private_key.clone()));
 
-    // WireGuard-specific data
-    let mut data: HashMap<String, Value<'static>> = HashMap::new();
-    data.insert("private-key".into(), Value::from(creds.private_key.clone()));
+    let mut peers_array: Vec<HashMap<String, zvariant::Value<'static>>> = Vec::new();
 
-    for (i, peer) in creds.peers.iter().enumerate() {
-        let prefix = format!("peer.{i}.");
-        data.insert(
-            format!("{prefix}public-key"),
-            Value::from(peer.public_key.clone()),
-        );
-        data.insert(
-            format!("{prefix}endpoint"),
-            Value::from(peer.gateway.clone()),
-        );
-        data.insert(
-            format!("{prefix}allowed-ips"),
-            Value::from(peer.allowed_ips.join(",")),
-        );
+    for peer in creds.peers.iter() {
+        let mut peer_dict: HashMap<String, zvariant::Value<'static>> = HashMap::new();
+
+        peer_dict.insert("public-key".into(), Value::from(peer.public_key.clone()));
+        peer_dict.insert("endpoint".into(), Value::from(peer.gateway.clone()));
+        peer_dict.insert("allowed-ips".into(), Value::from(peer.allowed_ips.clone()));
 
         if let Some(psk) = &peer.preshared_key {
-            data.insert(format!("{prefix}preshared-key"), Value::from(psk.clone()));
+            peer_dict.insert("preshared-key".into(), Value::from(psk.clone()));
         }
 
         if let Some(ka) = peer.persistent_keepalive {
-            data.insert(format!("{prefix}persistent-keepalive"), Value::from(ka));
+            peer_dict.insert("persistent-keepalive".into(), Value::from(ka));
         }
+
+        peers_array.push(peer_dict);
     }
 
-    vpn.insert("data", Value::from(data));
-    conn.insert("vpn", vpn);
+    wireguard.insert("peers", Value::from(peers_array));
+
+    if let Some(mtu) = creds.mtu {
+        wireguard.insert("mtu", Value::from(mtu));
+    }
+
+    conn.insert("wireguard", wireguard);
 
     // [ipv4] section
     let mut ipv4 = HashMap::new();
     ipv4.insert("method", Value::from("manual"));
 
-    // Use already validated address
-    let addresses = vec![vec![
-        Value::from(ip),
-        Value::from(prefix),
-        Value::from("0.0.0.0"),
-    ]];
+    // address-data must be an array of dictionaries with "address" and "prefix" keys
+    let mut addr_dict: HashMap<String, Value<'static>> = HashMap::new();
+    addr_dict.insert("address".into(), Value::from(ip));
+    addr_dict.insert("prefix".into(), Value::from(prefix));
+    let addresses = vec![addr_dict];
     ipv4.insert("address-data", Value::from(addresses));
 
     if let Some(dns) = &creds.dns {
-        let dns_vec: Vec<String> = dns.to_vec();
-        ipv4.insert("dns", Value::from(dns_vec));
+        // NetworkManager expects DNS as array of u32 (IP addresses as integers)
+        let dns_u32: Result<Vec<u32>, _> = dns
+            .iter()
+            .map(|ip_str| {
+                ip_str
+                    .parse::<Ipv4Addr>()
+                    .map(u32::from)
+                    .map_err(|_| format!("Invalid IP: {ip_str}"))
+            })
+            .collect();
+
+        match dns_u32 {
+            Ok(ips) => {
+                ipv4.insert("dns", Value::from(ips));
+            }
+            Err(e) => {
+                return Err(crate::api::models::ConnectionError::VpnFailed(format!(
+                    "Invalid DNS server address: {}",
+                    e
+                )));
+            }
+        }
     }
 
     if let Some(mtu) = creds.mtu {
@@ -369,7 +399,7 @@ mod tests {
 
         let settings = settings.unwrap();
         assert!(settings.contains_key("connection"));
-        assert!(settings.contains_key("vpn"));
+        assert!(settings.contains_key("wireguard"));
         assert!(settings.contains_key("ipv4"));
         assert!(settings.contains_key("ipv6"));
     }
@@ -383,7 +413,7 @@ mod tests {
         let connection = settings.get("connection").unwrap();
 
         let conn_type = connection.get("type").unwrap();
-        assert_eq!(conn_type, &Value::from("vpn"));
+        assert_eq!(conn_type, &Value::from("wireguard"));
 
         let id = connection.get("id").unwrap();
         assert_eq!(id, &Value::from("TestVPN"));
@@ -395,7 +425,7 @@ mod tests {
         let opts = create_test_options();
 
         let settings = build_wireguard_connection(&creds, &opts).unwrap();
-        let vpn = settings.get("vpn").unwrap();
+        let vpn = settings.get("wireguard").unwrap();
 
         let service_type = vpn.get("service-type").unwrap();
         assert_eq!(
