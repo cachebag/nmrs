@@ -38,6 +38,30 @@
 //! // Build Ethernet connection settings
 //! let eth_settings = build_ethernet_connection("eth0", &opts);
 //! ```
+//! // Build WireGuard VPN connection settings
+//! let creds = VpnCredentials {
+//!     vpn_type: VpnType::WireGuard,
+//!     name: "MyVPN".into(),
+//!     gateway: "vpn.example.com:51820".into(),
+//!     private_key: "PRIVATE-KEY".into(),
+//!     address: "10.0.0.2/24".into(),
+//!     peers: vec![WireGuardPeer {
+//!         public_key: "PUBLIC-KEY".into(),
+//!         gateway: "vpn.example.com:51820".into(),
+//!         allowed_ips: vec!["0.0.0.0/0".into()],
+//!         preshared_key: None,
+//!         persistent_keepalive: Some(25),
+//!     }],
+//!     dns: None,
+//!     mtu: None,
+//!     uuid: None,
+//! };
+//!
+//! let vpn_settings = build_wireguard_connection(&creds, &opts).unwrap();
+//! ```
+//!
+//! These settings can then be passed to NetworkManager’s
+//! `AddConnection` or `AddAndActivateConnection` D-Bus methods.
 
 pub mod vpn;
 pub mod wifi;
