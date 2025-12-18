@@ -592,6 +592,7 @@ async fn test_device_types() {
         match device.device_type {
             DeviceType::Ethernet
             | DeviceType::Wifi
+            | DeviceType::Bluetooth
             | DeviceType::WifiP2P
             | DeviceType::Loopback
             | DeviceType::Other(_) => {

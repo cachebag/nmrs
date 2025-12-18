@@ -74,6 +74,7 @@
 //! `AddConnection` or `AddAndActivateConnection` D-Bus methods.
 
 pub mod connection_builder;
+pub mod bluetooth;
 pub mod vpn;
 pub mod wifi;
 pub mod wifi_builder;
@@ -84,6 +85,7 @@ pub use connection_builder::{ConnectionBuilder, IpConfig, Route};
 pub use wifi_builder::{WifiBand, WifiConnectionBuilder};
 pub use wireguard_builder::WireGuardBuilder;
 
-// Re-export builder functions for convenience (backward compatibility)
+// Re-export builder functions for convenience
+pub use bluetooth::build_bluetooth_connection;
 pub use vpn::build_wireguard_connection;
 pub use wifi::{build_ethernet_connection, build_wifi_connection};

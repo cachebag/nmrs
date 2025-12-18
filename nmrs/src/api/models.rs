@@ -396,12 +396,12 @@ pub struct NetworkInfo {
 ///         println!("  This is a WiFi device");
 ///     } else if device.is_wired() {
 ///         println!("  This is an Ethernet device");
-///         if let Some(speed) == device.speed {
+///         if let Some(speed) = device.speed {
 ///             println!("  Link speed: {speed} Mb/s");
 ///         }
 ///     }
 ///     
-///     if let Some(driver) == &device.driver {
+///     if let Some(driver) = &device.driver {
 ///         println!("  Driver: {}", driver);
 ///     }
 /// }
@@ -849,6 +849,27 @@ pub struct VpnConnectionInfo {
     pub dns_servers: Vec<String>,
 }
 
+/// Bluetooth settings.
+///
+/// Configuration options for Bluetooth devices managed by NetworkManager.
+/// # Example
+///
+/// ```rust
+/// use nmrs::models::BluetoothSettings;
+///
+/// let bt_settings = BluetoothSettings {
+///    bdaddr: "00:1A:7D:DA:71:13".into(),
+///    bt_device_type: "dun".into(),
+/// };
+/// ```
+#[derive(Debug, Clone)]
+pub struct BluetoothSettings {
+    /// Bluetooth device address (BDADDR)
+    pub bdaddr: String,
+    /// Bluetooth device type (DUN or PANU)
+    pub bt_device_type: String,
+}
+
 /// NetworkManager device types.
 ///
 /// Represents the type of network hardware managed by NetworkManager.
@@ -1285,6 +1306,7 @@ impl From<u32> for DeviceType {
         match value {
             1 => DeviceType::Ethernet,
             2 => DeviceType::Wifi,
+            5 => DeviceType::Bluetooth,
             30 => DeviceType::WifiP2P,
             32 => DeviceType::Loopback,
             v => DeviceType::Other(v),
