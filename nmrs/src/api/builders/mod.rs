@@ -63,9 +63,11 @@
 //! These settings can then be passed to NetworkManager’s
 //! `AddConnection` or `AddAndActivateConnection` D-Bus methods.
 
+pub mod bluetooth;
 pub mod vpn;
 pub mod wifi;
 
 // Re-export builder functions for convenience
+pub use bluetooth::build_bluetooth_connection;
 pub use vpn::build_wireguard_connection;
 pub use wifi::{build_ethernet_connection, build_wifi_connection};
