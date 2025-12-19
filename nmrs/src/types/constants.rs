@@ -7,6 +7,7 @@
 pub mod device_type {
     pub const ETHERNET: u32 = 1;
     pub const WIFI: u32 = 2;
+    pub const BLUETOOTH: u32 = 5;
     // pub const WIFI_P2P: u32 = 30;
     // pub const LOOPBACK: u32 = 32;
 }
