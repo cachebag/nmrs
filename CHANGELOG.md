@@ -1,5 +1,7 @@
 # Changelog
 ## [Unreleased]
+
+## [1.1.0] - 2025-12-19
 ### Fixed
 - Native WireGuard profile structure ([#135](https://github.com/cachebag/nmrs/issues/135))
 - Corrected binary name for `.desktop` file + `postInstall` hook for Nix flake ([#146](https://github.com/cachebag/nmrs/pull/146))
@@ -132,6 +134,7 @@
 - EAP connections default to no certificates (advanced certificate management coming in future releases)
 - VPN connections planned for near future
 
+[1.1.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.1.0
 [Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...HEAD
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
 [0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...v0.5.0-beta
