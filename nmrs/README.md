@@ -25,7 +25,7 @@ Rust bindings for NetworkManager via D-Bus.
 
 ```toml
 [dependencies]
-nmrs = "1.0.0"
+nmrs = "1.1.0"
 ```
 
 ## Quick Start

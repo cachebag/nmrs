@@ -1,27 +1,10 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    branches: [ master ]
-    inputs:
-      crate:
-        description: 'Crate to release'
-        required: true
-        type: choice
-        options:
-          - nmrs
-          - nmrs-gui
-      version:
-        description: 'Version to release'
-        required: true
-        type: string
-      release_type:
-        description: 'Release type'
-        required: true
-        type: choice
-        options:
-          - beta
-          - stable
+  push:
+    tags:
+      - 'nmrs-v*'
+      - 'gui-v*'
 
 jobs:
   release:
@@ -31,28 +14,48 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.PAT }}
-          fetch-depth: 0
+      - uses: actions/checkout@v4
+
+      - name: Parse tag info
+        id: tag
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          
+          # Determine crate from tag prefix
+          if [[ "$TAG" == nmrs-v* ]]; then
+            CRATE="nmrs"
+            VERSION_FULL=${TAG#nmrs-v}
+          elif [[ "$TAG" == gui-v* ]]; then
+            CRATE="nmrs-gui"
+            VERSION_FULL=${TAG#gui-v}
+          else
+            echo "Unknown tag format: $TAG"
+            exit 1
+          fi
+          
+          # Parse version and release type
+          if [[ "$VERSION_FULL" == *-beta ]]; then
+            VERSION=${VERSION_FULL%-beta}
+            RELEASE_TYPE="beta"
+          else
+            VERSION=$VERSION_FULL
+            RELEASE_TYPE="stable"
+          fi
+          
+          echo "CRATE=$CRATE" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "RELEASE_TYPE=$RELEASE_TYPE" >> $GITHUB_ENV
+          
+          echo "Parsed: crate=$CRATE version=$VERSION type=$RELEASE_TYPE"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
-
-      - name: Bump version
-        run: |
-          python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}" --crate "${{ github.event.inputs.crate }}" || echo "⚠ Version bump completed with warnings"
-          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-          echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
-          echo "CRATE=${{ github.event.inputs.crate }}" >> $GITHUB_ENV
+          python-version: '3.12'
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Update Cargo.lock
-        run: cargo update --workspace
 
       - name: Install build dependencies
         run: |
@@ -68,68 +71,7 @@ jobs:
             libadwaita-1-dev
 
       - name: Verify build
-        run: cargo build --release --locked
-
-      - name: Create tag and commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Get the current branch name
-          BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          
-          # Fetch latest changes and rebase if needed
-          git fetch origin "$BRANCH"
-          
-          # Check if we're behind remote and reset if needed
-          LOCAL=$(git rev-parse HEAD)
-          REMOTE=$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo "")
-          if [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
-            echo "Local branch differs from remote, resetting to remote"
-            git reset --hard "origin/$BRANCH"
-          else
-            echo "Local branch is up to date"
-          fi
-          
-          git add -A
-          
-          # Create crate-specific tag
-          CRATE="${{ env.CRATE }}"
-          VERSION="${{ env.VERSION }}"
-          RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
-          
-          if [ "$CRATE" = "nmrs" ]; then
-            TAG_PREFIX="nmrs-"
-            COMMIT_MSG="chore(nmrs): bump version to ${VERSION}"
-            if [ "$RELEASE_TYPE" = "beta" ]; then
-              TAG_NAME="${TAG_PREFIX}v${VERSION}-beta"
-              COMMIT_MSG="${COMMIT_MSG}-beta"
-            else
-              TAG_NAME="${TAG_PREFIX}v${VERSION}"
-            fi
-          elif [ "$CRATE" = "nmrs-gui" ]; then
-            TAG_PREFIX="gui-"
-            COMMIT_MSG="chore(nmrs-gui): bump version to ${VERSION}"
-            if [ "$RELEASE_TYPE" = "beta" ]; then
-              TAG_NAME="${TAG_PREFIX}v${VERSION}-beta"
-              COMMIT_MSG="${COMMIT_MSG}-beta"
-            else
-              TAG_NAME="${TAG_PREFIX}v${VERSION}"
-            fi
-          else
-            echo "Error: Unknown crate $CRATE"
-            exit 1
-          fi
-          
-          echo "Creating tag: $TAG_NAME"
-          git commit -m "$COMMIT_MSG"
-          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
-          
-          # Force push to handle any race conditions (safe since we just reset)
-          git push origin "$BRANCH" --force-with-lease
-          git push origin "$TAG_NAME"
-          
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+        run: cargo build --release --package ${{ env.CRATE }}
 
       - name: Extract release notes
         run: |
@@ -138,41 +80,35 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: Release ${{ env.TAG_NAME }}
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.CRATE }} ${{ env.VERSION }}${{ env.RELEASE_TYPE == 'beta' && '-beta' || '' }}
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: ${{ env.RELEASE_TYPE == 'beta' }}
 
-      - name: Update PKGBUILD checksums (after release)
-        run: |
-          # Now that the release is created, the tarball exists and we can update checksums
-          # Only update checksums for nmrs releases (PKGBUILD is for nmrs only)
-          if [ "${{ env.CRATE }}" = "nmrs" ]; then
-            python3 scripts/bump_version.py "${{ env.VERSION }}" "${{ env.RELEASE_TYPE }}" --crate "${{ env.CRATE }}" --update-checksums-only || echo "⚠ Could not update PKGBUILD checksums automatically"
-          else
-            echo "Skipping PKGBUILD checksum update for nmrs-gui (not applicable)"
-          fi
-        continue-on-error: true
+  # Optional: Update AUR package for nmrs releases
+  update-aur:
+    name: update-aur
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/nmrs-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Commit updated checksums
-        if: success() && env.CRATE == 'nmrs'
+      - name: Parse version from tag
         run: |
-          # Add PKGBUILD from root or nmrs/ directory
-          if [ -f "PKGBUILD" ]; then
-            git add PKGBUILD
-          elif [ -f "nmrs/PKGBUILD" ]; then
-            git add nmrs/PKGBUILD
+          TAG=${GITHUB_REF#refs/tags/nmrs-v}
+          if [[ "$TAG" == *-beta ]]; then
+            VERSION=${TAG%-beta}
+            RELEASE_TYPE="beta"
+          else
+            VERSION=$TAG
+            RELEASE_TYPE="stable"
           fi
-          git add package.nix
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update checksums for ${{ env.VERSION }}-${{ env.RELEASE_TYPE }}"
-            git push origin "$(git rev-parse --abbrev-ref HEAD)" --force-with-lease
-          fi
-        continue-on-error: true
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "RELEASE_TYPE=$RELEASE_TYPE" >> $GITHUB_ENV
 
       - name: Update AUR Package
-        if: env.CRATE == 'nmrs'
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
@@ -188,7 +124,6 @@ jobs:
           chmod 600 ~/.ssh/aur_key
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
           
-          # Configure SSH to use the key
           cat >> ~/.ssh/config << EOF
           Host aur.archlinux.org
             IdentityFile ~/.ssh/aur_key
@@ -198,28 +133,19 @@ jobs:
           # Clone AUR repo
           if ! git clone ssh://aur@aur.archlinux.org/nmrs.git /tmp/nmrs-aur; then
             echo "✗ Failed to clone AUR repo"
-            echo "⚠ AUR update skipped - you may need to update manually"
             exit 0
           fi
           
-          # Copy updated PKGBUILD (check both locations)
+          # Copy PKGBUILD
           if [ -f "PKGBUILD" ]; then
             cp PKGBUILD /tmp/nmrs-aur/
-          elif [ -f "nmrs/PKGBUILD" ]; then
-            cp nmrs/PKGBUILD /tmp/nmrs-aur/
           else
             echo "✗ PKGBUILD not found"
             exit 1
           fi
+          
           cd /tmp/nmrs-aur
           
-          # Note: Checksums and .SRCINFO need to be updated on an Arch Linux system
-          # The PKGBUILD is copied, but the maintainer should run:
-          #   updpkgsums
-          #   makepkg --printsrcinfo > .SRCINFO
-          # before committing, or this can be done manually
-          
-          # Commit and push (without .SRCINFO update - needs to be done manually or on Arch)
           git config user.name "cachebag"
           git config user.email "cachebag@users.noreply.github.com"
           git add PKGBUILD
@@ -227,10 +153,8 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update to ${{ env.VERSION }} - checksums need manual update with updpkgsums"
-            if git push origin master; then
-              echo "✓ AUR package updated"
-            else
-              echo "⚠ Failed to push to AUR - update may need to be done manually"
-            fi
+            git commit -m "Update to ${{ env.VERSION }}"
+            echo "⚠ Note: Run 'updpkgsums && makepkg --printsrcinfo > .SRCINFO' locally and push"
+            # Uncomment to auto-push (requires checksums to be pre-updated):
+            # git push origin master
           fi

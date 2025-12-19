@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Extract release notes for a specific version from CHANGELOG.md.
+Extract release notes for a specific version from a crate's CHANGELOG.md.
 
 This script extracts the release notes for a given version and writes them
 to a file that can be used for GitHub release notes.
@@ -17,11 +17,9 @@ def extract_release_notes(changelog_path: Path, version: str, release_type: str)
     
     # Format version tag based on release type
     if release_type == "stable":
-        version_tag = f"[{version}]"
         pattern = rf'## \[{re.escape(version)}\](.*?)(?=## \[|\Z)'
-        release_name = f"{version}"
+        release_name = version
     else:
-        version_tag = f"[{version}-{release_type}]"
         pattern = rf'## \[{re.escape(version)}-{re.escape(release_type)}\](.*?)(?=## \[|\Z)'
         release_name = f"{version}-{release_type}"
     
@@ -32,23 +30,32 @@ def extract_release_notes(changelog_path: Path, version: str, release_type: str)
     
     notes = match.group(1).strip()
     
-    # Format as markdown
+    # Remove the date suffix from the header if it was captured
+    notes = re.sub(r'^.*?\n', '', notes, count=0)  # Keep the notes as-is
+    
     return f"# Release {release_name}\n\n{notes}"
 
 
 def main():
     """Main entry point."""
-    if len(sys.argv) < 3:
-        print("Usage: extract_release_notes.py <version> <release_type> [--crate <crate>] [output_file]")
-        print("Example: extract_release_notes.py 0.3.0 beta")
-        print("         extract_release_notes.py 0.3.0 beta --crate nmrs")
-        print("         extract_release_notes.py 0.3.0 beta --crate nmrs-gui")
+    if len(sys.argv) < 4 or '--crate' not in sys.argv:
+        print("Usage: extract_release_notes.py <version> <release_type> --crate <crate> [output_file]")
+        print()
+        print("Arguments:")
+        print("  version       Version number (e.g., 1.2.0)")
+        print("  release_type  'beta' or 'stable'")
+        print("  --crate       Required: 'nmrs' or 'nmrs-gui'")
+        print("  output_file   Optional: file to write notes to (defaults to stdout)")
+        print()
+        print("Examples:")
+        print("  python3 scripts/extract_release_notes.py 1.2.0 stable --crate nmrs")
+        print("  python3 scripts/extract_release_notes.py 1.2.0 stable --crate nmrs RELEASE_NOTES.md")
         sys.exit(1)
     
     version = sys.argv[1]
     release_type = sys.argv[2]
     
-    # Parse optional arguments
+    # Parse arguments
     crate = None
     output_file = None
     i = 3
@@ -66,13 +73,18 @@ def main():
                 print("✗ --crate requires a value")
                 sys.exit(1)
         else:
-            # This should be the output file
             output_file = sys.argv[i]
             i += 1
     
+    if not crate:
+        print("✗ --crate is required")
+        sys.exit(1)
+    
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
-    changelog_path = project_root / 'CHANGELOG.md'
+    
+    # Use per-crate changelog
+    changelog_path = project_root / crate / 'CHANGELOG.md'
     
     if not changelog_path.exists():
         print(f"✗ CHANGELOG.md not found at {changelog_path}")
@@ -90,4 +102,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
