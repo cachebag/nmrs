@@ -11,6 +11,17 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/cachebag/nmrs"
 
+[workspace.lints.rust]
+unsafe_code = "forbid"
+# This shouldn't apply to nmrs-gui
+# missing_docs = "warn"
+unused = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+# Allow some common patterns
+too_many_arguments = "allow"
+type_complexity = "allow"
+
 [workspace.dependencies]
 # Core dependencies
 zbus = "5.12.0"

@@ -1,6 +1,14 @@
 # Changelog
 ## [Unreleased]
-- Fixed native WireGuard profile structure ([#135](https://github.com/cachebag/nmrs/issues/135))
+### Fixed
+- Native WireGuard profile structure ([#135](https://github.com/cachebag/nmrs/issues/135))
+- Corrected binary name for `.desktop` file + `postInstall` hook for Nix flake ([#146](https://github.com/cachebag/nmrs/pull/146))
+
+### Added
+- Added WireGuard connection example to docs ([#137](https://github.com/cachebag/nmrs/pull/137))
+
+## [1.0.1] - 2025-12-15
+- Update docs for various structs, enums and functions ([#132](https://github.com/cachebag/nmrs/pull/132))
 
 ## [1.0.0] - 2025-12-15
 

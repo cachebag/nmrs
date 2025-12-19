@@ -98,7 +98,7 @@ async fn main() -> nmrs::Result<()> {
 ```
 # <p align="center"> nmrs-gui </p>
 
-![Version](https://img.shields.io/badge/nmrs--gui-0.5.0--beta-orange?style=flat-square)
+![Version](https://img.shields.io/badge/nmrs--gui-1.1.0-orange?style=flat-square)
 
 This repository also includes `nmrs-gui`, a Wayland-compatible NetworkManager frontend built with GTK4.
 
