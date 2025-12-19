@@ -43,7 +43,7 @@ jobs:
 
       - name: Bump version
         run: |
-          python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}" || echo "⚠ Version bump completed with warnings"
+          python3 scripts/bump_version.py "${{ github.event.inputs.version }}" "${{ github.event.inputs.release_type }}" --crate "${{ github.event.inputs.crate }}" || echo "⚠ Version bump completed with warnings"
           echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
           echo "CRATE=${{ github.event.inputs.crate }}" >> $GITHUB_ENV
@@ -133,7 +133,7 @@ jobs:
 
       - name: Extract release notes
         run: |
-          python3 scripts/extract_release_notes.py "${{ env.VERSION }}" "${{ env.RELEASE_TYPE }}" RELEASE_NOTES.md
+          python3 scripts/extract_release_notes.py "${{ env.VERSION }}" "${{ env.RELEASE_TYPE }}" --crate "${{ env.CRATE }}" RELEASE_NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -147,11 +147,16 @@ jobs:
       - name: Update PKGBUILD checksums (after release)
         run: |
           # Now that the release is created, the tarball exists and we can update checksums
-          python3 scripts/bump_version.py "${{ env.VERSION }}" "${{ env.RELEASE_TYPE }}" --update-checksums-only || echo "⚠ Could not update PKGBUILD checksums automatically"
+          # Only update checksums for nmrs releases (PKGBUILD is for nmrs only)
+          if [ "${{ env.CRATE }}" = "nmrs" ]; then
+            python3 scripts/bump_version.py "${{ env.VERSION }}" "${{ env.RELEASE_TYPE }}" --crate "${{ env.CRATE }}" --update-checksums-only || echo "⚠ Could not update PKGBUILD checksums automatically"
+          else
+            echo "Skipping PKGBUILD checksum update for nmrs-gui (not applicable)"
+          fi
         continue-on-error: true
 
       - name: Commit updated checksums
-        if: success()
+        if: success() && env.CRATE == 'nmrs'
         run: |
           # Add PKGBUILD from root or nmrs/ directory
           if [ -f "PKGBUILD" ]; then
@@ -167,6 +172,7 @@ jobs:
         continue-on-error: true
 
       - name: Update AUR Package
+        if: env.CRATE == 'nmrs'
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |

@@ -260,7 +260,7 @@ def update_package_nix(file_path: Path, version: str, release_type: str) -> bool
         return False
 
 
-def update_changelog(file_path: Path, version: str, release_type: str) -> bool:
+def update_changelog(file_path: Path, version: str, release_type: str, crate: Optional[str] = None) -> bool:
     """Update CHANGELOG.md: move Unreleased to new version section."""
     try:
         content = file_path.read_text()
@@ -302,9 +302,21 @@ def update_changelog(file_path: Path, version: str, release_type: str) -> bool:
             flags=re.DOTALL
         )
         
-        # Update the comparison links at the bottom
-        # Use the correct tag format (with or without release_type suffix)
-        git_tag = f"nmrs-v{version_tag}" if release_type == "stable" or "nmrs" in version else f"v{version_tag}"
+        # Determine git tag format based on crate
+        if crate == "nmrs-gui":
+            # GUI releases use gui-v* tags
+            git_tag = f"gui-v{version_tag}" if release_type != "stable" else f"gui-v{version}"
+        elif crate == "nmrs":
+            # nmrs releases use nmrs-v* tags for stable, v* for beta (legacy)
+            if release_type == "stable":
+                git_tag = f"nmrs-v{version}"
+            else:
+                # For beta, check if we should use nmrs-v prefix or v prefix
+                # Use nmrs-v prefix for consistency
+                git_tag = f"nmrs-v{version_tag}"
+        else:
+            # Default to nmrs format if crate not specified
+            git_tag = f"nmrs-v{version_tag}" if release_type == "stable" else f"v{version_tag}"
         
         # Find the [unreleased] link and update it
         unreleased_link_pattern = r'\[unreleased\]:\s*https://github\.com/[^/]+/[^/]+/compare/[^\.]+\.\.\.[^$]*HEAD'
@@ -323,10 +335,17 @@ def update_changelog(file_path: Path, version: str, release_type: str) -> bool:
                     prev_version_tag = curr_tag.strip()
                     break
             else:
-                # Fallback
-                prev_version_tag = "v0.5.0-beta"
+                # Fallback - try to find the latest tag based on crate
+                if crate == "nmrs-gui":
+                    prev_version_tag = "nmrs-v1.0.0"  # Fallback
+                else:
+                    prev_version_tag = "nmrs-v1.0.0"  # Fallback
         else:
-            prev_version_tag = "v0.5.0-beta"
+            # Fallback
+            if crate == "nmrs-gui":
+                prev_version_tag = "nmrs-v1.0.0"
+            else:
+                prev_version_tag = "v0.5.0-beta"
         
         # Create the new version link
         link_label = version if release_type == "stable" else version_tag
@@ -352,14 +371,27 @@ def update_changelog(file_path: Path, version: str, release_type: str) -> bool:
 def main():
     """Main entry point."""
     if len(sys.argv) < 3:
-        print("Usage: bump_version.py <version> <release_type> [--update-checksums-only]")
+        print("Usage: bump_version.py <version> <release_type> [--crate <crate>] [--update-checksums-only]")
         print("Example: bump_version.py 0.3.0 beta")
+        print("         bump_version.py 0.3.0 beta --crate nmrs")
+        print("         bump_version.py 0.3.0 beta --crate nmrs-gui")
         print("         bump_version.py 0.3.0 beta --update-checksums-only")
         sys.exit(1)
     
     version = sys.argv[1]
     release_type = sys.argv[2]
+    
+    # Parse optional arguments
     update_checksums_only = '--update-checksums-only' in sys.argv
+    crate = None
+    if '--crate' in sys.argv:
+        crate_idx = sys.argv.index('--crate')
+        if crate_idx + 1 < len(sys.argv):
+            crate = sys.argv[crate_idx + 1]
+            if crate not in ['nmrs', 'nmrs-gui']:
+                print(f"✗ Invalid crate: {crate}")
+                print("Expected: 'nmrs' or 'nmrs-gui'")
+                sys.exit(1)
     
     if not re.match(r'^\d+\.\d+\.\d+$', version):
         print(f"✗ Invalid version format: {version}")
@@ -376,35 +408,44 @@ def main():
     
     if update_checksums_only:
         print(f"Updating checksums for {version}-{release_type}")
+        if crate:
+            print(f"Crate: {crate}")
         print("=" * 50)
         success = True
         
-        # Only update checksums (check both locations: root and nmrs/)
-        pkgbuild_path = project_root / 'PKGBUILD'
-        if not pkgbuild_path.exists():
-            pkgbuild_path = project_root / 'nmrs' / 'PKGBUILD'
-        if pkgbuild_path.exists():
-            update_pkgbuild_checksums(pkgbuild_path, version, release_type)
-        else:
-            print(f"⚠ File not found: {pkgbuild_path}")
-            print(f"  Skipping PKGBUILD checksum update")
-            # Don't fail - PKGBUILD may not be needed in all contexts
+        # Only update checksums for nmrs (PKGBUILD is for nmrs only)
+        if not crate or crate == "nmrs":
+            pkgbuild_path = project_root / 'PKGBUILD'
+            if not pkgbuild_path.exists():
+                pkgbuild_path = project_root / 'nmrs' / 'PKGBUILD'
+            if pkgbuild_path.exists():
+                update_pkgbuild_checksums(pkgbuild_path, version, release_type)
+            else:
+                print(f"⚠ File not found: {pkgbuild_path}")
+                print(f"  Skipping PKGBUILD checksum update")
         
-        package_nix_path = project_root / 'package.nix'
-        if package_nix_path.exists():
-            update_package_nix_cargohash(package_nix_path)
-        else:
-            print(f"⚠ File not found: {package_nix_path}")
-            print(f"  Skipping package.nix cargoHash update")
-            # Don't fail - package.nix may not be needed in all contexts
+        if not crate or crate == "nmrs":
+            package_nix_path = project_root / 'package.nix'
+            if package_nix_path.exists():
+                update_package_nix_cargohash(package_nix_path)
+            else:
+                print(f"⚠ File not found: {package_nix_path}")
+                print(f"  Skipping package.nix cargoHash update")
     else:
-        print(f"Bumping version to {version}-{release_type}")
+        crate_str = f" ({crate})" if crate else ""
+        print(f"Bumping version to {version}-{release_type}{crate_str}")
         print("=" * 50)
         
         success = True
         
-        # Update Cargo.toml files
-        for cargo_toml in ['nmrs/Cargo.toml', 'nmrs-gui/Cargo.toml']:
+        # Update Cargo.toml files - only the specified crate, or both if not specified
+        if crate:
+            cargo_toml_files = [f'{crate}/Cargo.toml']
+        else:
+            # If no crate specified, update both (backward compatibility)
+            cargo_toml_files = ['nmrs/Cargo.toml', 'nmrs-gui/Cargo.toml']
+        
+        for cargo_toml in cargo_toml_files:
             path = project_root / cargo_toml
             if not path.exists():
                 print(f"✗ File not found: {path}")
@@ -413,39 +454,39 @@ def main():
                 if not update_cargo_toml(path, version):
                     success = False
         
-    # Update PKGBUILD (check both locations: root and nmrs/)
-    pkgbuild_path = project_root / 'PKGBUILD'
-    if not pkgbuild_path.exists():
-        pkgbuild_path = project_root / 'nmrs' / 'PKGBUILD'
-    if not pkgbuild_path.exists():
-        print(f"⚠ File not found: {pkgbuild_path}")
-        print(f"  Skipping PKGBUILD update (may not be needed in this context)")
-        # Don't fail the whole script if PKGBUILD doesn't exist
-    else:
-        if not update_pkgbuild(pkgbuild_path, version, release_type):
-            success = False
+        # Update PKGBUILD and package.nix only for nmrs releases
+        if not crate or crate == "nmrs":
+            pkgbuild_path = project_root / 'PKGBUILD'
+            if not pkgbuild_path.exists():
+                pkgbuild_path = project_root / 'nmrs' / 'PKGBUILD'
+            if not pkgbuild_path.exists():
+                print(f"⚠ File not found: {pkgbuild_path}")
+                print(f"  Skipping PKGBUILD update (may not be needed in this context)")
+            else:
+                if not update_pkgbuild(pkgbuild_path, version, release_type):
+                    success = False
+            
+            package_nix_path = project_root / 'package.nix'
+            if not package_nix_path.exists():
+                print(f"⚠ File not found: {package_nix_path}")
+                print(f"  Skipping package.nix update (may not be needed in this context)")
+            else:
+                if not update_package_nix(package_nix_path, version, release_type):
+                    success = False
         
-        # Update package.nix
-        package_nix_path = project_root / 'package.nix'
-        if not package_nix_path.exists():
-            print(f"✗ File not found: {package_nix_path}")
-            success = False
-        else:
-            if not update_package_nix(package_nix_path, version, release_type):
-                success = False
-        
-        # Update CHANGELOG.md
+        # Update CHANGELOG.md (always update, but with crate-specific tag format)
         changelog_path = project_root / 'CHANGELOG.md'
         if not changelog_path.exists():
             print(f"✗ File not found: {changelog_path}")
             success = False
         else:
-            if not update_changelog(changelog_path, version, release_type):
+            if not update_changelog(changelog_path, version, release_type, crate):
                 success = False
     
     print("=" * 50)
     if success:
-        print(f"✓ Successfully bumped version to {version}-{release_type}")
+        crate_str = f" for {crate}" if crate else ""
+        print(f"✓ Successfully bumped version to {version}-{release_type}{crate_str}")
         print("\nNote: SHA256 checksums have been automatically updated where possible.")
         print("If checksums couldn't be calculated automatically:")
         print("  - PKGBUILD: Tarball may not exist yet (will be created on GitHub release)")

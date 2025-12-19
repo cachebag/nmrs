@@ -39,13 +39,36 @@ def extract_release_notes(changelog_path: Path, version: str, release_type: str)
 def main():
     """Main entry point."""
     if len(sys.argv) < 3:
-        print("Usage: extract_release_notes.py <version> <release_type> [output_file]")
+        print("Usage: extract_release_notes.py <version> <release_type> [--crate <crate>] [output_file]")
         print("Example: extract_release_notes.py 0.3.0 beta")
+        print("         extract_release_notes.py 0.3.0 beta --crate nmrs")
+        print("         extract_release_notes.py 0.3.0 beta --crate nmrs-gui")
         sys.exit(1)
     
     version = sys.argv[1]
     release_type = sys.argv[2]
-    output_file = sys.argv[3] if len(sys.argv) > 3 else None
+    
+    # Parse optional arguments
+    crate = None
+    output_file = None
+    i = 3
+    
+    while i < len(sys.argv):
+        if sys.argv[i] == '--crate':
+            if i + 1 < len(sys.argv):
+                crate = sys.argv[i + 1]
+                if crate not in ['nmrs', 'nmrs-gui']:
+                    print(f"✗ Invalid crate: {crate}")
+                    print("Expected: 'nmrs' or 'nmrs-gui'")
+                    sys.exit(1)
+                i += 2
+            else:
+                print("✗ --crate requires a value")
+                sys.exit(1)
+        else:
+            # This should be the output file
+            output_file = sys.argv[i]
+            i += 1
     
     script_dir = Path(__file__).parent
     project_root = script_dir.parent

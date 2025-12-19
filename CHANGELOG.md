@@ -136,6 +136,7 @@
 
 [1.1.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.1.0
 [Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...HEAD
+[1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
 [0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...v0.5.0-beta
 [0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta...v0.4.0-beta
