@@ -849,25 +849,69 @@ pub struct VpnConnectionInfo {
     pub dns_servers: Vec<String>,
 }
 
-/// Bluetooth settings.
+/// Bluetooth network role.
 ///
-/// Configuration options for Bluetooth devices managed by NetworkManager.
+/// Specifies the role of the Bluetooth device in the network connection.
+#[derive(Debug, Clone)]
+pub enum BluetoothNetworkRole {
+    PanU, // Personal Area Network User
+    Dun,  // Dial-Up Networking
+}
+
+/// Bluetooth device identity information.
+///
+/// Relevant info for Bluetooth devices managed by NetworkManager.
+///
 /// # Example
+///```rust
+/// use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
 ///
-/// ```rust
-/// use nmrs::models::BluetoothSettings;
-///
-/// let bt_settings = BluetoothSettings {
+/// let bt_settings = BluetoothIdentity {
 ///    bdaddr: "00:1A:7D:DA:71:13".into(),
-///    bt_device_type: "dun".into(),
+///    bt_device_type: BluetoothNetworkRole::Dun,
 /// };
 /// ```
 #[derive(Debug, Clone)]
-pub struct BluetoothSettings {
-    /// Bluetooth device address (BDADDR)
+pub struct BluetoothIdentity {
+    /// MAC address of Bluetooth device
     pub bdaddr: String,
     /// Bluetooth device type (DUN or PANU)
-    pub bt_device_type: String,
+    pub bt_device_type: BluetoothNetworkRole,
+}
+
+/// Bluetooth device with friendly name from BlueZ.
+///
+/// Contains information about a Bluetooth device managed by NetworkManager,
+/// proxying data from BlueZ.
+///
+/// This is a specialized struct for Bluetooth devices, separate from the
+/// general `Device` struct.
+///
+/// # Example
+///
+/// ```rust
+/// use nmrs::models::{BluetoothDevice, BluetoothNetworkRole, DeviceState};
+///
+/// let bt_device = BluetoothDevice {
+///    bdaddr: "00:1A:7D:DA:71:13".into(),
+///    name: Some("Foo".into()),
+///    alias: Some("Bar".into()),
+///    bt_device_type: BluetoothNetworkRole::PanU,
+///    state: DeviceState::Activated,
+/// };
+/// ```
+#[derive(Debug, Clone)]
+pub struct BluetoothDevice {
+    /// Bluetooth MAC address
+    pub bdaddr: String,
+    /// Friendly device name from BlueZ
+    pub name: Option<String>,
+    /// Device alias from BlueZ
+    pub alias: Option<String>,
+    /// Bluetooth device type (DUN or PANU)
+    pub bt_device_type: BluetoothNetworkRole,
+    /// Current device state
+    pub state: DeviceState,
 }
 
 /// NetworkManager device types.
@@ -1001,6 +1045,51 @@ impl Device {
     /// Returns `true` if this is a wireless (Wi-Fi) device.
     pub fn is_wireless(&self) -> bool {
         matches!(self.device_type, DeviceType::Wifi)
+    }
+
+    /// Returns 'true' if this is a Bluetooth (DUN or PANU) device.
+    pub fn is_bluetooth(&self) -> bool {
+        matches!(self.device_type, DeviceType::Bluetooth)
+    }
+}
+
+/// Display implementation for Device struct.
+///
+/// Formats the device information as "interface (device_type) [state]".
+impl Display for Device {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} ({}) [{}]",
+            self.interface, self.device_type, self.state
+        )
+    }
+}
+
+/// Display implementation for BluetoothDevice struct.
+///
+/// Formats the device information as "alias (device_type) [bdaddr]".
+impl Display for BluetoothDevice {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} ({}) [{}]",
+            self.alias.as_deref().unwrap_or("unknown"),
+            self.bt_device_type,
+            self.bdaddr
+        )
+    }
+}
+
+/// Display implementation for Device struct.
+///
+/// Formats the device information as "interface (device_type) [state]".
+impl Display for BluetoothNetworkRole {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BluetoothNetworkRole::Dun => write!(f, "DUN"),
+            BluetoothNetworkRole::PanU => write!(f, "PANU"),
+        }
     }
 }
 
@@ -1151,6 +1240,10 @@ pub enum ConnectionError {
     /// VPN connection failed
     #[error("VPN connection failed: {0}")]
     VpnFailed(String),
+
+    /// Bluetooth device not found
+    #[error("Bluetooth device not found")]
+    NoBluetoothDevice,
 }
 
 /// NetworkManager device state reason codes.
@@ -1355,6 +1448,16 @@ impl Display for DeviceState {
             DeviceState::Deactivating => write!(f, "Deactivating"),
             DeviceState::Failed => write!(f, "Failed"),
             DeviceState::Other(v) => write!(f, "Other({v})"),
+        }
+    }
+}
+
+impl From<u32> for BluetoothNetworkRole {
+    fn from(value: u32) -> Self {
+        match value {
+            0 => Self::PanU,
+            1 => Self::Dun,
+            _ => Self::PanU,
         }
     }
 }

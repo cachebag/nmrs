@@ -925,7 +925,11 @@ dependencies = [
 name = "nmrs"
 version = "1.3.5"
 dependencies = [
+<<<<<<< HEAD
  "base64",
+=======
+ "async-trait",
+>>>>>>> 26d6801 (feat: add Bluetooth device connection support)
  "futures",
  "futures-timer",
  "log",
