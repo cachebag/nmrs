@@ -1,5 +1,6 @@
 # Changelog
 ## [Unreleased]
+- Fixed native WireGuard profile structure ([#135](https://github.com/cachebag/nmrs/issues/135))
 
 ## [1.0.0] - 2025-12-15
 
