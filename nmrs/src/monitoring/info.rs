@@ -1,23 +1,21 @@
-//! Network information and current connection status.
+//! Network information and detailed network status.
 //!
-//! Provides functions to retrieve detailed information about networks
-//! and query the current connection state.
+//! Provides functions to retrieve detailed information about WiFi networks,
+//! including security capabilities, signal strength, and connection details.
 
 use log::debug;
 use zbus::Connection;
 
 use crate::api::models::{ConnectionError, Network, NetworkInfo};
-#[allow(unused_imports)] // Used within try_log! macro
-use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
-use crate::try_log;
-use crate::types::constants::{device_type, rate, security_flags};
+use crate::monitoring::wifi::current_ssid;
+use crate::types::constants::{rate, security_flags};
 use crate::util::utils::{
     bars_from_strength, channel_from_freq, decode_ssid_or_empty, for_each_access_point,
     mode_to_string, strength_or_zero,
 };
 use crate::Result;
 
-/// Returns detailed information about a network.
+/// Returns detailed information about a WiFi network.
 ///
 /// Queries the access point for comprehensive details including:
 /// - BSSID (MAC address)

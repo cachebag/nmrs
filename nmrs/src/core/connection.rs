@@ -9,7 +9,8 @@ use crate::api::models::{ConnectionError, ConnectionOptions, WifiSecurity};
 use crate::core::connection_settings::{delete_connection, get_saved_connection_path};
 use crate::core::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWiredProxy, NMWirelessProxy};
-use crate::monitoring::info::current_ssid;
+use crate::monitoring::transport::ActiveTransport;
+use crate::monitoring::wifi::Wifi;
 use crate::types::constants::{device_state, device_type, timeouts};
 use crate::util::utils::{decode_ssid_or_empty, nm_proxy};
 use crate::util::validation::{validate_ssid, validate_wifi_security};
@@ -60,7 +61,7 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
         .build()
         .await?;
 
-    if let Some(active) = current_ssid(conn).await {
+    if let Some(active) = Wifi::current(conn).await {
         debug!("Currently connected to: {active}");
         if active == ssid {
             debug!("Already connected to {active}, skipping connect()");
@@ -435,7 +436,7 @@ async fn ensure_disconnected(
     nm: &NMProxy<'_>,
     wifi_device: &OwnedObjectPath,
 ) -> Result<()> {
-    if let Some(active) = current_ssid(conn).await {
+    if let Some(active) = Wifi::current(conn).await {
         debug!("Disconnecting from {active}");
 
         if let Ok(conns) = nm.active_connections().await {

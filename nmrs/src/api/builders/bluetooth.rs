@@ -14,9 +14,9 @@
 //!
 //! ```rust
 //! use nmrs::builders::build_bluetooth_connection;
-//! use nmrs::models::BluetoothSettings;
+//! use nmrs::models::BluetoothIdentity;
 //!
-//! let bt_settings = BluetoothSettings {
+//! let bt_settings = BluetoothIdentity {
 //!    bdaddr: "00:1A:7D:DA:71:13".into(),
 //!    bt_device_type: "pan".into(),
 //! };
@@ -25,7 +25,10 @@
 use std::collections::HashMap;
 use zvariant::Value;
 
-use crate::{models::BluetoothSettings, ConnectionOptions};
+use crate::{
+    models::{BluetoothIdentity, BluetoothNetworkRole},
+    ConnectionOptions,
+};
 
 /// Builds the `connection` section with type, id, uuid, and autoconnect settings.
 pub fn base_connection_section(
@@ -50,16 +53,20 @@ pub fn base_connection_section(
 }
 
 /// Builds a Bluetooth connection settings dictionary.
-fn bluetooth_section(settings: &BluetoothSettings) -> HashMap<&'static str, Value<'static>> {
+fn bluetooth_section(settings: &BluetoothIdentity) -> HashMap<&'static str, Value<'static>> {
     let mut s = HashMap::new();
     s.insert("bdaddr", Value::from(settings.bdaddr.clone()));
-    s.insert("type", Value::from(settings.bt_device_type.clone()));
+    let bt_type = match settings.bt_device_type {
+        BluetoothNetworkRole::PanU => "panu",
+        BluetoothNetworkRole::Dun => "dun",
+    };
+    s.insert("type", Value::from(bt_type));
     s
 }
 
 pub fn build_bluetooth_connection(
     name: &str,
-    settings: &BluetoothSettings,
+    settings: &BluetoothIdentity,
     opts: &ConnectionOptions,
 ) -> HashMap<&'static str, HashMap<&'static str, Value<'static>>> {
     let mut conn: HashMap<&'static str, HashMap<&'static str, Value<'static>>> = HashMap::new();

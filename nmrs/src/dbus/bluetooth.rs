@@ -11,11 +11,25 @@ use zbus::Result;
     default_service = "org.freedesktop.NetworkManager"
 )]
 pub trait NMBluetooth {
-    /// Bluetooth name of device.
+    /// Bluetooth MAC address of the device.
     #[zbus(property)]
-    fn name(&self) -> Result<String>;
+    fn bd_address(&self) -> Result<String>;
 
     /// Bluetooth capabilities of the device (either DUN or NAP).
     #[zbus(property)]
     fn bt_capabilities(&self) -> Result<u32>;
+}
+
+/// Extension trait for Bluetooth device information via BlueZ.
+/// Provides convenient methods to access Bluetooth-specific properties otherwise
+/// not exposed by NetworkManager.
+#[proxy(interface = "org.bluez.Device1", default_service = "org.bluez")]
+pub trait BluezDeviceExt {
+    /// Returns the name of the Bluetooth device.
+    #[zbus(property)]
+    fn name(&self) -> Result<String>;
+
+    /// Returns the alias of the Bluetooth device.
+    #[zbus(property)]
+    fn alias(&self) -> Result<String>;
 }
