@@ -940,6 +940,7 @@ dependencies = [
 name = "nmrs"
 version = "1.2.0"
 dependencies = [
+ "async-trait",
  "futures",
  "futures-timer",
  "log",

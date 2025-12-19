@@ -21,6 +21,7 @@ thiserror.workspace = true
 uuid.workspace = true
 futures.workspace = true
 futures-timer.workspace = true
+async-trait = "0.1.89"
 
 [dev-dependencies]
 tokio.workspace = true
