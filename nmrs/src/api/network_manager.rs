@@ -10,11 +10,21 @@ use crate::core::connection_settings::{
 };
 use crate::core::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
 use crate::core::scan::{current_network, list_networks, scan_networks};
+use crate::core::bluetooth::connect_bluetooth;
+use crate::core::connection::{connect, connect_wired, forget};
+use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
+use crate::core::device::{
+    list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled,
+};
+use crate::core::scan::{list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
-use crate::models::{VpnConnection, VpnConnectionInfo, VpnCredentials};
+use crate::models::{
+    BluetoothDevice, BluetoothIdentity, VpnConnection, VpnConnectionInfo, VpnCredentials,
+};
 use crate::monitoring::device as device_monitor;
-use crate::monitoring::info::{current_connection_info, current_ssid, show_details};
+use crate::monitoring::info::show_details;
 use crate::monitoring::network as network_monitor;
+use crate::monitoring::wifi::{current_connection_info, current_ssid};
 use crate::Result;
 
 /// High-level interface to NetworkManager over D-Bus.
@@ -123,6 +133,11 @@ impl NetworkManager {
         list_devices(&self.conn).await
     }
 
+    /// List all bluetooth devices.
+    pub async fn list_bluetooth_devices(&self) -> Result<Vec<BluetoothDevice>> {
+        list_bluetooth_devices(&self.conn).await
+    }
+
     /// Lists all network devices managed by NetworkManager.
     pub async fn list_wireless_devices(&self) -> Result<Vec<Device>> {
         let devices = list_devices(&self.conn).await?;
@@ -162,6 +177,13 @@ impl NetworkManager {
     /// Returns `ConnectionError::NoWiredDevice` if no wired device is found.
     pub async fn connect_wired(&self) -> Result<()> {
         connect_wired(&self.conn).await
+    }
+
+    /// Connects to a bluetooth device using the provided identity.
+    ///
+    /// # Example
+    pub async fn connect_bluetooth(&self, name: &str, identity: &BluetoothIdentity) -> Result<()> {
+        connect_bluetooth(&self.conn, name, identity).await
     }
 
     /// Connects to a VPN using the provided credentials.

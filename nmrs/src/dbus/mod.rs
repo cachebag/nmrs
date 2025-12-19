@@ -13,7 +13,7 @@ mod wireless;
 
 pub(crate) use access_point::NMAccessPointProxy;
 pub(crate) use active_connection::NMActiveConnectionProxy;
-// pub(crate) use bluetooth::NMBluetoothProxy;
+pub(crate) use bluetooth::{BluezDeviceExtProxy, NMBluetoothProxy};
 pub(crate) use device::NMDeviceProxy;
 pub(crate) use main_nm::NMProxy;
 pub(crate) use wired::NMWiredProxy;

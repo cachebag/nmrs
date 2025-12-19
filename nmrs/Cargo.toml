@@ -23,6 +23,7 @@ futures.workspace = true
 futures-timer.workspace = true
 base64.workspace = true
 tokio.workspace = true
+async-trait = "0.1.89"
 
 [dev-dependencies]
 tokio.workspace = true
