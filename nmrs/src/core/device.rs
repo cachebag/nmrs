@@ -7,7 +7,8 @@
 use log::debug;
 use zbus::Connection;
 
-use crate::api::models::{ConnectionError, Device, DeviceIdentity, DeviceState};
+use crate::api::models::{BluetoothDevice, ConnectionError, Device, DeviceIdentity, DeviceState};
+use crate::core::bluetooth::populate_bluez_info;
 use crate::core::state_wait::wait_for_wifi_device_ready;
 use crate::dbus::{NMDeviceProxy, NMProxy, NMWiredProxy};
 use crate::types::constants::device_type;
@@ -69,6 +70,39 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
             managed,
             driver,
             speed,
+        });
+    }
+    Ok(devices)
+}
+
+pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<BluetoothDevice>> {
+    let proxy = NMProxy::new(conn).await?;
+    let paths = proxy.get_devices().await?;
+
+    let mut devices = Vec::new();
+    for p in paths {
+        let d_proxy = NMDeviceProxy::builder(conn)
+            .path(p.clone())?
+            .build()
+            .await?;
+
+        let bdaddr = d_proxy
+            .hw_address()
+            .await
+            .unwrap_or_else(|_| String::from("00:00:00:00:00:00"));
+        let raw_bt_device_type = d_proxy.device_type().await?;
+        let bt_device_type = raw_bt_device_type.into();
+        let raw_state = d_proxy.state().await?;
+        let state = raw_state.into();
+
+        let bluez_info = populate_bluez_info(conn, &bdaddr).await?;
+
+        devices.push(BluetoothDevice {
+            bdaddr,
+            name: bluez_info.0,
+            alias: bluez_info.1,
+            bt_device_type,
+            state,
         });
     }
     Ok(devices)
