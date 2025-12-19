@@ -7,3 +7,6 @@ RELEASE_NOTES.md
 __pycache__/
 *.pyc
 vendor/
+/pkg/
+/src/
+*.pkg.tar.zst
