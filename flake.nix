@@ -75,6 +75,10 @@
             glib
           ];
 
+          postInstall = ''
+            install -D nmrs.desktop -t $out/share/applications
+          '';
+
           meta.mainProgram = "nmrs-gui";
         };
       }
