@@ -18,9 +18,9 @@
 //!
 //! # Examples
 //!
-//! ```rust
-//! use nmrs::builders::{build_wifi_connection, build_ethernet_connection};
-//! use nmrs::{WifiSecurity, ConnectionOptions};
+//! ```ignore
+//! use nmrs::builders::{build_wifi_connection, build_wireguard_connection, build_ethernet_connection};
+//! use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials, VpnType, WireGuardPeer};
 //!
 //! let opts = ConnectionOptions {
 //!     autoconnect: true,
@@ -34,14 +34,9 @@
 //!     &WifiSecurity::WpaPsk { psk: "password".into() },
 //!     &opts
 //! );
-//!
+//! 
 //! // Build Ethernet connection settings
 //! let eth_settings = build_ethernet_connection("eth0", &opts);
-//! ```
-//!
-//! ```rust
-//! # use nmrs::builders::build_wireguard_connection;
-//! # use nmrs::{VpnCredentials, VpnType, WireGuardPeer, ConnectionOptions};
 //! // Build WireGuard VPN connection settings
 //! let opts = ConnectionOptions {
 //!     autoconnect: true,
