@@ -7,6 +7,7 @@ use uuid::Uuid;
 ///
 /// These values represent the lifecycle states of an active connection
 /// as reported by the NM D-Bus API.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveConnectionState {
     /// Connection state is unknown.
@@ -54,6 +55,7 @@ impl Display for ActiveConnectionState {
 /// These values indicate why an active connection transitioned to its
 /// current state. Use `ConnectionStateReason::from(code)` to convert
 /// from the raw u32 values returned by NetworkManager signals.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionStateReason {
     /// The reason is unknown.
@@ -166,6 +168,7 @@ pub fn connection_state_reason_to_error(code: u32) -> ConnectionError {
 /// These values come from the NM D-Bus API and indicate why a device
 /// transitioned to its current state. Use `StateReason::from(code)` to
 /// convert from the raw u32 values returned by NetworkManager.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateReason {
     /// The reason is unknown.
@@ -924,6 +927,7 @@ pub struct BluetoothDevice {
 /// Represents the type of network hardware managed by NetworkManager.
 /// This enum uses a registry-based system to support adding new device
 /// types without breaking the API.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceType {
     /// Wired Ethernet device.
@@ -1019,6 +1023,7 @@ impl DeviceType {
 /// NetworkManager device states.
 ///
 /// Represents the current operational state of a network device.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceState {
     /// Device is not managed by NetworkManager.
@@ -1156,6 +1161,7 @@ impl Display for BluetoothNetworkRole {
 /// # Ok(())
 /// # }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Error)]
 pub enum ConnectionError {
     /// A D-Bus communication error occurred.
