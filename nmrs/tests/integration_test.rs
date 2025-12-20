@@ -1031,3 +1031,191 @@ async fn test_vpn_credentials_structure() {
     assert_eq!(creds.dns.as_ref().unwrap().len(), 2);
     assert_eq!(creds.mtu, Some(1420));
 }
+
+/// Check if Bluetooth is available
+#[allow(dead_code)]
+async fn has_bluetooth_device(nm: &NetworkManager) -> bool {
+    nm.list_bluetooth_devices()
+        .await
+        .map(|d| !d.is_empty())
+        .unwrap_or(false)
+}
+
+/// Skip tests if Bluetooth device is not available
+#[allow(unused_macros)]
+macro_rules! require_bluetooth {
+    ($nm:expr) => {
+        if !has_bluetooth_device($nm).await {
+            eprintln!("Skipping test: No Bluetooth device available");
+            return;
+        }
+    };
+}
+
+/// Test listing Bluetooth devices
+#[tokio::test]
+async fn test_list_bluetooth_devices() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+
+    let devices = nm
+        .list_bluetooth_devices()
+        .await
+        .expect("Failed to list Bluetooth devices");
+
+    // Verify device structure for Bluetooth devices
+    for device in &devices {
+        assert!(
+            !device.bdaddr.is_empty(),
+            "Bluetooth address should not be empty"
+        );
+        eprintln!(
+            "Bluetooth device: {} ({}) - {}",
+            device.alias.as_deref().unwrap_or("unknown"),
+            device.bdaddr,
+            device.bt_device_type
+        );
+    }
+}
+
+/// Test Bluetooth device type enum
+#[test]
+fn test_bluetooth_network_role() {
+    use nmrs::models::BluetoothNetworkRole;
+
+    let panu = BluetoothNetworkRole::PanU;
+    assert_eq!(format!("{}", panu), "PANU");
+
+    let dun = BluetoothNetworkRole::Dun;
+    assert_eq!(format!("{}", dun), "DUN");
+}
+
+/// Test BluetoothIdentity structure
+#[test]
+fn test_bluetooth_identity_structure() {
+    use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
+
+    let identity = BluetoothIdentity {
+        bdaddr: "00:1A:7D:DA:71:13".into(),
+        bt_device_type: BluetoothNetworkRole::PanU,
+    };
+
+    assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
+    assert!(matches!(
+        identity.bt_device_type,
+        BluetoothNetworkRole::PanU
+    ));
+}
+
+/// Test BluetoothDevice structure
+#[test]
+fn test_bluetooth_device_structure() {
+    use nmrs::models::{BluetoothDevice, BluetoothNetworkRole};
+
+    let device = BluetoothDevice {
+        bdaddr: "00:1A:7D:DA:71:13".into(),
+        name: Some("MyPhone".into()),
+        alias: Some("Phone".into()),
+        bt_device_type: BluetoothNetworkRole::PanU,
+        state: DeviceState::Activated,
+    };
+
+    assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
+    assert_eq!(device.name, Some("MyPhone".into()));
+    assert_eq!(device.alias, Some("Phone".into()));
+    assert_eq!(device.state, DeviceState::Activated);
+}
+
+/// Test BluetoothDevice display
+#[test]
+fn test_bluetooth_device_display() {
+    use nmrs::models::{BluetoothDevice, BluetoothNetworkRole};
+
+    let device = BluetoothDevice {
+        bdaddr: "00:1A:7D:DA:71:13".into(),
+        name: Some("MyPhone".into()),
+        alias: Some("Phone".into()),
+        bt_device_type: BluetoothNetworkRole::PanU,
+        state: DeviceState::Activated,
+    };
+
+    let display = format!("{}", device);
+    assert!(display.contains("Phone"));
+    assert!(display.contains("00:1A:7D:DA:71:13"));
+}
+
+/// Test Device::is_bluetooth method
+#[tokio::test]
+async fn test_device_is_bluetooth() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+
+    let devices = nm.list_devices().await.expect("Failed to list devices");
+
+    for device in &devices {
+        if device.is_bluetooth() {
+            assert_eq!(device.device_type, DeviceType::Bluetooth);
+            eprintln!("Found Bluetooth device: {}", device.interface);
+        }
+    }
+}
+
+/// Test Bluetooth device in all devices list
+#[tokio::test]
+async fn test_bluetooth_in_device_types() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to create NetworkManager");
+
+    let devices = nm.list_devices().await.expect("Failed to list devices");
+
+    // Check if any Bluetooth devices exist
+    let bluetooth_devices: Vec<_> = devices
+        .iter()
+        .filter(|d| matches!(d.device_type, DeviceType::Bluetooth))
+        .collect();
+
+    if !bluetooth_devices.is_empty() {
+        eprintln!("Found {} Bluetooth device(s)", bluetooth_devices.len());
+        for device in bluetooth_devices {
+            eprintln!("  - {}: {}", device.interface, device.state);
+        }
+    } else {
+        eprintln!("No Bluetooth devices found (this is OK)");
+    }
+}
+
+/// Test ConnectionError::NoBluetoothDevice
+#[test]
+fn test_connection_error_no_bluetooth_device() {
+    let err = ConnectionError::NoBluetoothDevice;
+    assert_eq!(format!("{}", err), "Bluetooth device not found");
+}
+
+/// Test BluetoothNetworkRole conversion from u32
+#[test]
+fn test_bluetooth_network_role_from_u32() {
+    use nmrs::models::BluetoothNetworkRole;
+
+    assert!(matches!(
+        BluetoothNetworkRole::from(0),
+        BluetoothNetworkRole::PanU
+    ));
+    assert!(matches!(
+        BluetoothNetworkRole::from(1),
+        BluetoothNetworkRole::Dun
+    ));
+    // Unknown values should default to PanU
+    assert!(matches!(
+        BluetoothNetworkRole::from(999),
+        BluetoothNetworkRole::PanU
+    ));
+}
