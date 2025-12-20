@@ -424,8 +424,8 @@ pub struct Device {
     pub managed: Option<bool>,
     /// Kernel driver name
     pub driver: Option<String>,
-    /// Link speed in Mb/s (wired devices)
-    pub speed: Option<u32>,
+    // Link speed in Mb/s (wired devices)
+    // pub speed: Option<u32>,
 }
 
 /// Represents the hardware identity of a network device.
