@@ -152,7 +152,7 @@ Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-d
 - [ ] Any  
 - [X] Wired  
 - [ ] ADSL  
-- [ ] Bluetooth  
+- [X] Bluetooth  
 - [ ] Bond  
 - [ ] Bridge  
 - [ ] Dummy  
@@ -202,7 +202,7 @@ Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-d
 - [ ] DNS Manager  
 - [ ] PPP  
 - [ ] Secret Agent  
-- [ ] VPN Connection  
+- [X] VPN Connection (WireGuard)  
 - [ ] VPN Plugin  
 - [ ] Wi-Fi P2P  
 - [ ] WiMAX NSP  
