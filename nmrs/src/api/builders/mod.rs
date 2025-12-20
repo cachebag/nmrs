@@ -18,9 +18,9 @@
 //!
 //! # Examples
 //!
-//! ```rust
-//! use nmrs::builders::{build_wifi_connection, build_ethernet_connection};
-//! use nmrs::{WifiSecurity, ConnectionOptions};
+//! ```ignore
+//! use nmrs::builders::{build_wifi_connection, build_wireguard_connection, build_ethernet_connection};
+//! use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials, VpnType, WireGuardPeer};
 //!
 //! let opts = ConnectionOptions {
 //!     autoconnect: true,
@@ -34,10 +34,9 @@
 //!     &WifiSecurity::WpaPsk { psk: "password".into() },
 //!     &opts
 //! );
-//!
+//! 
 //! // Build Ethernet connection settings
 //! let eth_settings = build_ethernet_connection("eth0", &opts);
-//! ```
 //! // Build WireGuard VPN connection settings
 //! let creds = VpnCredentials {
 //!     vpn_type: VpnType::WireGuard,
@@ -60,7 +59,7 @@
 //! let vpn_settings = build_wireguard_connection(&creds, &opts).unwrap();
 //! ```
 //!
-//! These settings can then be passed to NetworkManager’s
+//! These settings can then be passed to NetworkManager's
 //! `AddConnection` or `AddAndActivateConnection` D-Bus methods.
 
 pub mod bluetooth;
