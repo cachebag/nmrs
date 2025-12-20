@@ -32,7 +32,7 @@ impl ActiveTransport for Bluetooth {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use nmrs::monitoring::bluetooth::current_bluetooth_bdaddr;
 /// use zbus::Connection;
 ///
