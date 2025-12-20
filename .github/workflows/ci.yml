@@ -3,7 +3,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master, dev ]
+    branches: [ master, 2.x-dev ]
 
 env:
   CARGO_TERM_COLOR: always
