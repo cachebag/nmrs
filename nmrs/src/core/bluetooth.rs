@@ -163,3 +163,49 @@ pub(crate) async fn connect_bluetooth(
     log::info!("Successfully connected to Bluetooth device '{name}'");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::BluetoothNetworkRole;
+
+    #[test]
+    fn test_bluez_path_format() {
+        // Test that bdaddr format is converted correctly for D-Bus path
+        let bdaddr = "00:1A:7D:DA:71:13";
+        let expected_path = "/org/bluez/hci0/dev_00_1A_7D_DA_71_13";
+        let actual_path = format!("/org/bluez/hci0/dev_{}", bdaddr.replace(':', "_"));
+        assert_eq!(actual_path, expected_path);
+    }
+
+    #[test]
+    fn test_bluez_path_format_various_addresses() {
+        let test_cases = vec![
+            ("AA:BB:CC:DD:EE:FF", "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF"),
+            ("00:00:00:00:00:00", "/org/bluez/hci0/dev_00_00_00_00_00_00"),
+            ("C8:1F:E8:F0:51:57", "/org/bluez/hci0/dev_C8_1F_E8_F0_51_57"),
+        ];
+
+        for (bdaddr, expected_path) in test_cases {
+            let actual_path = format!("/org/bluez/hci0/dev_{}", bdaddr.replace(':', "_"));
+            assert_eq!(actual_path, expected_path, "Failed for bdaddr: {}", bdaddr);
+        }
+    }
+
+    #[test]
+    fn test_bluetooth_identity_structure() {
+        let identity = BluetoothIdentity {
+            bdaddr: "00:1A:7D:DA:71:13".into(),
+            bt_device_type: BluetoothNetworkRole::PanU,
+        };
+
+        assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
+        assert!(matches!(
+            identity.bt_device_type,
+            BluetoothNetworkRole::PanU
+        ));
+    }
+
+    // Note: Most of the core connection functions require a real D-Bus connection
+    // and NetworkManager running, so they are better suited for integration tests.
+}

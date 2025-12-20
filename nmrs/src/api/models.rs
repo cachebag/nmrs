@@ -396,9 +396,8 @@ pub struct NetworkInfo {
 ///         println!("  This is a WiFi device");
 ///     } else if device.is_wired() {
 ///         println!("  This is an Ethernet device");
-///         if let Some(speed) = device.speed {
-///             println!("  Link speed: {speed} Mb/s");
-///         }
+///     } else if device.is_bluetooth() {
+///         println!("  This is a Bluetooth device");
 ///     }
 ///     
 ///     if let Some(driver) = &device.driver {
@@ -840,7 +839,13 @@ pub struct VpnConnectionInfo {
 /// Bluetooth network role.
 ///
 /// Specifies the role of the Bluetooth device in the network connection.
-#[derive(Debug, Clone)]
+///
+/// # Stability
+///
+/// This enum is marked as `#[non_exhaustive]` so as to assume that new Bluetooth roles may be
+/// added in future versions. When pattern matching, always include a wildcard arm.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BluetoothNetworkRole {
     PanU, // Personal Area Network User
     Dun,  // Dial-Up Networking
@@ -1769,5 +1774,129 @@ mod tests {
             ),
             "connection activation failed: no secrets (password) provided"
         );
+    }
+
+    #[test]
+    fn test_bluetooth_network_role_from_u32() {
+        assert_eq!(BluetoothNetworkRole::from(0), BluetoothNetworkRole::PanU);
+        assert_eq!(BluetoothNetworkRole::from(1), BluetoothNetworkRole::Dun);
+        // Unknown values default to PanU
+        assert_eq!(BluetoothNetworkRole::from(999), BluetoothNetworkRole::PanU);
+    }
+
+    #[test]
+    fn test_bluetooth_network_role_display() {
+        assert_eq!(format!("{}", BluetoothNetworkRole::PanU), "PANU");
+        assert_eq!(format!("{}", BluetoothNetworkRole::Dun), "DUN");
+    }
+
+    #[test]
+    fn test_bluetooth_identity_creation() {
+        let identity = BluetoothIdentity {
+            bdaddr: "00:1A:7D:DA:71:13".into(),
+            bt_device_type: BluetoothNetworkRole::PanU,
+        };
+
+        assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
+        assert!(matches!(
+            identity.bt_device_type,
+            BluetoothNetworkRole::PanU
+        ));
+    }
+
+    #[test]
+    fn test_bluetooth_identity_dun() {
+        let identity = BluetoothIdentity {
+            bdaddr: "C8:1F:E8:F0:51:57".into(),
+            bt_device_type: BluetoothNetworkRole::Dun,
+        };
+
+        assert_eq!(identity.bdaddr, "C8:1F:E8:F0:51:57");
+        assert!(matches!(identity.bt_device_type, BluetoothNetworkRole::Dun));
+    }
+
+    #[test]
+    fn test_bluetooth_device_creation() {
+        let device = BluetoothDevice {
+            bdaddr: "00:1A:7D:DA:71:13".into(),
+            name: Some("MyPhone".into()),
+            alias: Some("Phone".into()),
+            bt_device_type: BluetoothNetworkRole::PanU,
+            state: DeviceState::Activated,
+        };
+
+        assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
+        assert_eq!(device.name, Some("MyPhone".into()));
+        assert_eq!(device.alias, Some("Phone".into()));
+        assert!(matches!(device.bt_device_type, BluetoothNetworkRole::PanU));
+        assert_eq!(device.state, DeviceState::Activated);
+    }
+
+    #[test]
+    fn test_bluetooth_device_display() {
+        let device = BluetoothDevice {
+            bdaddr: "00:1A:7D:DA:71:13".into(),
+            name: Some("MyPhone".into()),
+            alias: Some("Phone".into()),
+            bt_device_type: BluetoothNetworkRole::PanU,
+            state: DeviceState::Activated,
+        };
+
+        let display_str = format!("{}", device);
+        assert!(display_str.contains("Phone"));
+        assert!(display_str.contains("00:1A:7D:DA:71:13"));
+        assert!(display_str.contains("PANU"));
+    }
+
+    #[test]
+    fn test_bluetooth_device_display_no_alias() {
+        let device = BluetoothDevice {
+            bdaddr: "00:1A:7D:DA:71:13".into(),
+            name: Some("MyPhone".into()),
+            alias: None,
+            bt_device_type: BluetoothNetworkRole::Dun,
+            state: DeviceState::Disconnected,
+        };
+
+        let display_str = format!("{}", device);
+        assert!(display_str.contains("unknown"));
+        assert!(display_str.contains("00:1A:7D:DA:71:13"));
+        assert!(display_str.contains("DUN"));
+    }
+
+    #[test]
+    fn test_device_is_bluetooth() {
+        let bt_device = Device {
+            path: "/org/freedesktop/NetworkManager/Devices/1".into(),
+            interface: "bt0".into(),
+            identity: DeviceIdentity {
+                permanent_mac: "00:1A:7D:DA:71:13".into(),
+                current_mac: "00:1A:7D:DA:71:13".into(),
+            },
+            device_type: DeviceType::Bluetooth,
+            state: DeviceState::Activated,
+            managed: Some(true),
+            driver: Some("btusb".into()),
+        };
+
+        assert!(bt_device.is_bluetooth());
+        assert!(!bt_device.is_wireless());
+        assert!(!bt_device.is_wired());
+    }
+
+    #[test]
+    fn test_device_type_bluetooth() {
+        assert_eq!(DeviceType::from(5), DeviceType::Bluetooth);
+    }
+
+    #[test]
+    fn test_device_type_bluetooth_display() {
+        assert_eq!(format!("{}", DeviceType::Bluetooth), "Bluetooth");
+    }
+
+    #[test]
+    fn test_connection_error_no_bluetooth_device() {
+        let err = ConnectionError::NoBluetoothDevice;
+        assert_eq!(format!("{}", err), "Bluetooth device not found");
     }
 }
