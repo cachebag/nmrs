@@ -12,7 +12,7 @@ use zvariant::OwnedObjectPath;
 
 use crate::builders::bluetooth;
 use crate::core::connection_settings::get_saved_connection_path;
-use crate::dbus::{BluezDeviceExtProxy};
+use crate::dbus::BluezDeviceExtProxy;
 use crate::monitoring::bluetooth::Bluetooth;
 use crate::monitoring::transport::ActiveTransport;
 use crate::ConnectionError;
@@ -143,7 +143,10 @@ pub(crate) async fn connect_bluetooth(
 
             let connection_settings = bluetooth::build_bluetooth_connection(name, settings, &opts);
 
-            println!("Creating Bluetooth connection with settings: {:#?}", connection_settings);
+            println!(
+                "Creating Bluetooth connection with settings: {:#?}",
+                connection_settings
+            );
 
             let (_, active_conn) = nm
                 .add_and_activate_connection(

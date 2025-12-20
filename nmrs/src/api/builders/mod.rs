@@ -34,7 +34,7 @@
 //!     &WifiSecurity::WpaPsk { psk: "password".into() },
 //!     &opts
 //! );
-//! 
+//!
 //! // Build Ethernet connection settings
 //! let eth_settings = build_ethernet_connection("eth0", &opts);
 //! // Build WireGuard VPN connection settings
