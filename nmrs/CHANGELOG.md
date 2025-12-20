@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Added
+- Bluetooth device support ([#152](https://github.com/cachebag/nmrs/pull/152))
 
 ## [1.1.0] - 2025-12-19
 
