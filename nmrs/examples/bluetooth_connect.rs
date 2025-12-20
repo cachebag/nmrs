@@ -1,3 +1,4 @@
+/// Connect to a Bluetooth device using NetworkManager.
 use nmrs::models::BluetoothIdentity;
 use nmrs::{NetworkManager, Result};
 
@@ -21,8 +22,8 @@ async fn main() -> Result<()> {
         println!("  {}. {}", i + 1, device);
     }
 
-    // Example: Connect to the first device
-    if let Some(device) = devices.first {
+    // Example: Connect to the fourth device
+    if let Some(device) = devices.get(3) {
         println!("\nConnecting to: {}", device);
 
         let settings = BluetoothIdentity {

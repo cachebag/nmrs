@@ -7,7 +7,7 @@
 //!
 //! ## WiFi Connection
 //!
-//! ```no_run
+//! ```rust
 //! use nmrs::{NetworkManager, WifiSecurity};
 //!
 //! # async fn example() -> nmrs::Result<()> {
@@ -34,7 +34,7 @@
 //!
 //! ## VPN Connection (WireGuard)
 //!
-//! ```no_run
+//! ```rust
 //! use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
 //!
 //! # async fn example() -> nmrs::Result<()> {
@@ -107,7 +107,7 @@
 //!
 //! ## Connecting to Different Network Types
 //!
-//! ```no_run
+//! ```rust
 //! use nmrs::{NetworkManager, WifiSecurity, EapOptions, EapMethod, Phase2};
 //!
 //! # async fn example() -> nmrs::Result<()> {
@@ -146,7 +146,7 @@
 //! All operations return [`Result<T>`], which is an alias for `Result<T, ConnectionError>`.
 //! The [`ConnectionError`] type provides specific variants for different failure modes:
 //!
-//! ```no_run
+//! ```rust
 //! use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 //!
 //! # async fn example() -> nmrs::Result<()> {
@@ -176,7 +176,7 @@
 //!
 //! ## Device Management
 //!
-//! ```no_run
+//! ```rust
 //! use nmrs::NetworkManager;
 //!
 //! # async fn example() -> nmrs::Result<()> {
@@ -203,7 +203,7 @@
 //!
 //! Monitor network and device changes in real-time using D-Bus signals:
 //!
-//! ```ignore
+//! ```rust
 //! use nmrs::NetworkManager;
 //!
 //! # async fn example() -> nmrs::Result<()> {

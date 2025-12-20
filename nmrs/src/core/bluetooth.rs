@@ -12,10 +12,9 @@ use zvariant::OwnedObjectPath;
 
 use crate::builders::bluetooth;
 use crate::core::connection_settings::get_saved_connection_path;
-use crate::dbus::{BluezDeviceExtProxy, NMDeviceProxy};
+use crate::dbus::{BluezDeviceExtProxy};
 use crate::monitoring::bluetooth::Bluetooth;
 use crate::monitoring::transport::ActiveTransport;
-use crate::types::constants::device_type;
 use crate::ConnectionError;
 use crate::{dbus::NMProxy, models::BluetoothIdentity, Result};
 
@@ -34,6 +33,7 @@ pub(crate) async fn populate_bluez_info(
 ) -> Result<(Option<String>, Option<String>)> {
     // [variable prefix]/{hci0,hci1,...}/dev_XX_XX_XX_XX_XX_XX
     // This replaces ':' with '_' in the BDADDR to form the correct D-Bus object path.
+    // TODO: Instead of hardcoding hci0, we should determine the actual adapter name.
     let bluez_path = format!("/org/bluez/hci0/dev_{}", bdaddr.replace(':', "_"));
 
     match BluezDeviceExtProxy::builder(conn)
@@ -103,8 +103,11 @@ pub(crate) async fn connect_bluetooth(
     }
 
     // Find the Bluetooth hardware adapter
-    let bt_device = find_bluetooth_device(conn, &nm).await?;
-    debug!("Found Bluetooth adapter: {}", bt_device.as_str());
+    // Note: Unlike WiFi, Bluetooth connections in NetworkManager don't require
+    // specifying a specific device. We use "/" to let NetworkManager auto-select.
+    let bt_device = OwnedObjectPath::try_from("/")
+        .map_err(|e| ConnectionError::InvalidAddress(format!("Invalid device path: {}", e)))?;
+    debug!("Using auto-select device path for Bluetooth connection");
 
     // Check for saved connection
     let saved = get_saved_connection_path(conn, name).await?;
@@ -140,6 +143,8 @@ pub(crate) async fn connect_bluetooth(
 
             let connection_settings = bluetooth::build_bluetooth_connection(name, settings, &opts);
 
+            println!("Creating Bluetooth connection with settings: {:#?}", connection_settings);
+
             let (_, active_conn) = nm
                 .add_and_activate_connection(
                     connection_settings,
@@ -154,19 +159,4 @@ pub(crate) async fn connect_bluetooth(
 
     log::info!("Successfully connected to Bluetooth device '{name}'");
     Ok(())
-}
-
-async fn find_bluetooth_device(conn: &Connection, nm: &NMProxy<'_>) -> Result<OwnedObjectPath> {
-    let devices = nm.get_devices().await?;
-
-    for dp in devices {
-        let dev = NMDeviceProxy::builder(conn)
-            .path(dp.clone())?
-            .build()
-            .await?;
-        if dev.device_type().await? == device_type::BLUETOOTH {
-            return Ok(dp);
-        }
-    }
-    Err(ConnectionError::NoBluetoothDevice)
 }

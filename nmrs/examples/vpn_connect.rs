@@ -1,3 +1,4 @@
+/// Connect to a WireGuard VPN using NetworkManager and print the assigned IP address.
 use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
 
 #[tokio::main]

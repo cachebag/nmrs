@@ -14,11 +14,11 @@
 //!
 //! ```rust
 //! use nmrs::builders::build_bluetooth_connection;
-//! use nmrs::models::BluetoothIdentity;
+//! use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
 //!
 //! let bt_settings = BluetoothIdentity {
 //!    bdaddr: "00:1A:7D:DA:71:13".into(),
-//!    bt_device_type: "pan".into(),
+//!    bt_device_type: BluetoothNetworkRole::PanU,
 //! };
 //! ```
 
