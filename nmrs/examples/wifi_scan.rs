@@ -1,3 +1,4 @@
+/// Scan for available WiFi networks and print their SSIDs and signal strengths.
 use nmrs::NetworkManager;
 
 #[tokio::main]
