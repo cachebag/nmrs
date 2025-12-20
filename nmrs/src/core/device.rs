@@ -87,12 +87,18 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
             .build()
             .await?;
 
+        let raw_device_type = d_proxy.device_type().await?;
+
+        // Only process Bluetooth devices
+        if raw_device_type != device_type::BLUETOOTH {
+            continue;
+        }
+
         let bdaddr = d_proxy
             .hw_address()
             .await
             .unwrap_or_else(|_| String::from("00:00:00:00:00:00"));
-        let raw_bt_device_type = d_proxy.device_type().await?;
-        let bt_device_type = raw_bt_device_type.into();
+        let bt_device_type = raw_device_type.into();
         let raw_state = d_proxy.state().await?;
         let state = raw_state.into();
 
@@ -164,4 +170,38 @@ pub(crate) async fn set_wifi_enabled(conn: &Connection, value: bool) -> Result<(
 pub(crate) async fn wifi_enabled(conn: &Connection) -> Result<bool> {
     let nm = NMProxy::new(conn).await?;
     Ok(nm.wireless_enabled().await?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::BluetoothNetworkRole;
+
+    #[test]
+    fn test_default_bluetooth_address() {
+        // Test that the default address used for devices without hardware address is valid
+        let default_addr = "00:00:00:00:00:00";
+        assert_eq!(default_addr.len(), 17);
+        assert_eq!(default_addr.matches(':').count(), 5);
+    }
+
+    #[test]
+    fn test_bluetooth_device_construction() {
+        let device = BluetoothDevice {
+            bdaddr: "00:1A:7D:DA:71:13".into(),
+            name: Some("TestDevice".into()),
+            alias: Some("Test".into()),
+            bt_device_type: BluetoothNetworkRole::PanU,
+            state: DeviceState::Activated,
+        };
+
+        assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
+        assert_eq!(device.name, Some("TestDevice".into()));
+        assert_eq!(device.alias, Some("Test".into()));
+        assert!(matches!(device.bt_device_type, BluetoothNetworkRole::PanU));
+        assert_eq!(device.state, DeviceState::Activated);
+    }
+
+    // Note: Most device listing functions require a real D-Bus connection
+    // and NetworkManager running, so they are better suited for integration tests.
 }
