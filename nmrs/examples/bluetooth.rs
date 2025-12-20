@@ -1,7 +1,5 @@
 /// List Bluetooth devices using NetworkManager
-use nmrs::{
-    NetworkManager, Result,
-};
+use nmrs::{NetworkManager, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
