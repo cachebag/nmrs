@@ -560,6 +560,7 @@ async fn test_device_states() {
     // Verify that all devices have valid states
     for device in &devices {
         // DeviceState should be one of the known states
+        // The struct is non-exhaustive and so we allow Other(_)
         match device.state {
             DeviceState::Unmanaged
             | DeviceState::Unavailable
@@ -571,6 +572,9 @@ async fn test_device_states() {
             | DeviceState::Failed
             | DeviceState::Other(_) => {
                 // Valid state
+            }
+            _ => {
+                panic!("Invalid device state: {:?}", device.state);
             }
         }
     }
@@ -589,6 +593,7 @@ async fn test_device_types() {
     // Verify that all devices have valid types
     for device in &devices {
         // DeviceType should be one of the known types
+        // The struct is non-exhaustive and so we allow Other(_)
         match device.device_type {
             DeviceType::Ethernet
             | DeviceType::Wifi
@@ -597,6 +602,9 @@ async fn test_device_types() {
             | DeviceType::Loopback
             | DeviceType::Other(_) => {
                 // Valid type
+            }
+            _ => {
+                panic!("Invalid device type: {:?}", device.device_type);
             }
         }
     }
@@ -1076,7 +1084,7 @@ async fn test_list_bluetooth_devices() {
             "Bluetooth device: {} ({}) - {}",
             device.alias.as_deref().unwrap_or("unknown"),
             device.bdaddr,
-            device.bt_device_type
+            device.bt_caps
         );
     }
 }
@@ -1115,11 +1123,12 @@ fn test_bluetooth_identity_structure() {
 fn test_bluetooth_device_structure() {
     use nmrs::models::{BluetoothDevice, BluetoothNetworkRole};
 
+    let role = BluetoothNetworkRole::PanU as u32;
     let device = BluetoothDevice {
         bdaddr: "00:1A:7D:DA:71:13".into(),
         name: Some("MyPhone".into()),
         alias: Some("Phone".into()),
-        bt_device_type: BluetoothNetworkRole::PanU,
+        bt_caps: role,
         state: DeviceState::Activated,
     };
 
@@ -1134,11 +1143,12 @@ fn test_bluetooth_device_structure() {
 fn test_bluetooth_device_display() {
     use nmrs::models::{BluetoothDevice, BluetoothNetworkRole};
 
+    let role = BluetoothNetworkRole::PanU as u32;
     let device = BluetoothDevice {
         bdaddr: "00:1A:7D:DA:71:13".into(),
         name: Some("MyPhone".into()),
         alias: Some("Phone".into()),
-        bt_device_type: BluetoothNetworkRole::PanU,
+        bt_caps: role,
         state: DeviceState::Activated,
     };
 
