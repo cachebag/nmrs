@@ -11,7 +11,7 @@ use crate::core::connection_settings::{
 use crate::core::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
 use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::bluetooth::connect_bluetooth;
-use crate::core::connection::{connect, connect_wired, forget};
+use crate::core::connection::{connect, connect_wired, forget_by_name_and_type};
 use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
 use crate::core::device::{
     list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled,
@@ -25,6 +25,7 @@ use crate::monitoring::device as device_monitor;
 use crate::monitoring::info::show_details;
 use crate::monitoring::network as network_monitor;
 use crate::monitoring::wifi::{current_connection_info, current_ssid};
+use crate::types::constants::device_type;
 use crate::Result;
 
 /// High-level interface to NetworkManager over D-Bus.
@@ -492,7 +493,24 @@ impl NetworkManager {
     /// Returns `Ok(())` if at least one connection was deleted successfully.
     /// Returns `NoSavedConnection` if no matching connections were found.
     pub async fn forget(&self, ssid: &str) -> Result<()> {
-        forget(&self.conn, ssid).await
+        forget_by_name_and_type(&self.conn, ssid, Some(device_type::WIFI)).await
+    }
+
+    /// Forgets (deletes) a saved Bluetooth connection.
+    ///
+    /// If currently connected to this device, it will disconnect first before
+    /// deleting the connection profile. Can match by connection name or bdaddr.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Connection name or bdaddr to forget
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if the connection was deleted successfully.
+    /// Returns `NoSavedConnection` if no matching connection was found.
+    pub async fn forget_bluetooth(&self, name: &str) -> Result<()> {
+        forget_by_name_and_type(&self.conn, name, Some(device_type::BLUETOOTH)).await
     }
     ///
     /// Subscribes to D-Bus signals for access point additions and removals
