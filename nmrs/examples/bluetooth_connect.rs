@@ -1,7 +1,6 @@
 /// Connect to a Bluetooth device using NetworkManager.
 use nmrs::models::BluetoothIdentity;
 use nmrs::{NetworkManager, Result};
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let nm = NetworkManager::new().await?;
@@ -17,18 +16,20 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // This will print all devices that have been explicitly paired using
+    // `bluetoothctl pair <MAC_ADDRESS>`
     println!("\nAvailable Bluetooth devices:");
     for (i, device) in devices.iter().enumerate() {
         println!("  {}. {}", i + 1, device);
     }
 
-    // Example: Connect to the fourth device
-    if let Some(device) = devices.get(3) {
+    // Connect to the first device in the list
+    if let Some(device) = devices.first() {
         println!("\nConnecting to: {}", device);
 
         let settings = BluetoothIdentity {
             bdaddr: device.bdaddr.clone(),
-            bt_device_type: device.bt_device_type.clone(),
+            bt_device_type: device.bt_caps.into(),
         };
 
         let name = device
@@ -39,9 +40,17 @@ async fn main() -> Result<()> {
             .unwrap_or("Bluetooth Device");
 
         match nm.connect_bluetooth(name, &settings).await {
-            Ok(_) => println!("✓ Successfully connected to {}", name),
-            Err(e) => eprintln!("✗ Failed to connect: {}", e),
+            Ok(_) => println!("✓ Successfully connected to {name}"),
+            Err(e) => {
+                eprintln!("✗ Failed to connect: {}", e);
+                return Ok(());
+            }
         }
+
+        /* match nm.forget_bluetooth(name).await {
+            Ok(_) => println!("Disconnected {name}"),
+            Err(e) => eprintln!("Failed to forget: {e}"),
+        }*/
     }
 
     Ok(())

@@ -39,7 +39,7 @@ pub trait NMBluetooth {
     /// Returns the BD_ADDR (Bluetooth Device Address) in the format
     /// "XX:XX:XX:XX:XX:XX" where each XX is a hexadecimal value.
     #[zbus(property)]
-    fn bd_address(&self) -> Result<String>;
+    fn hw_address(&self) -> Result<String>;
 
     /// Bluetooth capabilities of the device (either DUN or NAP).
     ///
