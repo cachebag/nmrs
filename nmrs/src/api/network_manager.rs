@@ -174,6 +174,23 @@ impl NetworkManager {
     /// Connects to a bluetooth device using the provided identity.
     ///
     /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::{NetworkManager, models::BluetoothIdentity, models::BluetoothNetworkRole};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    ///    let nm = NetworkManager::new().await?;
+    ///
+    ///    let identity = BluetoothIdentity {
+    ///         bdaddr: "C8:1F:E8:F0:51:57".into(),
+    ///         bt_device_type: BluetoothNetworkRole::PanU,
+    ///     };
+    ///
+    ///    nm.connect_bluetooth("My Phone", &identity).await?;
+    ///    Ok(())
+    /// }
+    ///
+    /// ```
     pub async fn connect_bluetooth(&self, name: &str, identity: &BluetoothIdentity) -> Result<()> {
         connect_bluetooth(&self.conn, name, identity).await
     }
@@ -187,7 +204,7 @@ impl NetworkManager {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
     ///
     /// # async fn example() -> nmrs::Result<()> {
