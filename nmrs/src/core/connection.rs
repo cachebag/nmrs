@@ -164,69 +164,120 @@ pub(crate) async fn connect_wired(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Forgets (deletes) all saved connections for a network.
+/// Generic function to forget (delete) connections by name and optionally by device type.
 ///
-/// If currently connected to this network, disconnects first, then deletes
-/// all saved connection profiles matching the SSID. Matches are found by
-/// both the connection ID and the wireless SSID bytes.
+/// This handles disconnection if currently active, then deletes the connection profile(s).
+/// Can be used for WiFi, Bluetooth, or any NetworkManager connection type.
 ///
+/// # Arguments
+///
+/// * `conn` - D-Bus connection
+/// * `name` - Connection name/identifier to forget
+/// * `device_filter` - Optional device type filter (e.g., `Some(device_type::BLUETOOTH)`)
+///
+/// # Returns
+///
+/// Returns `Ok(())` if at least one connection was deleted successfully.
 /// Returns `NoSavedConnection` if no matching connections were found.
-pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
+pub(crate) async fn forget_by_name_and_type(
+    conn: &Connection,
+    name: &str,
+    device_filter: Option<u32>,
+) -> Result<()> {
     use std::collections::HashMap;
     use zvariant::{OwnedObjectPath, Value};
 
     // Validate SSID
     validate_ssid(ssid)?;
 
-    debug!("Starting forget operation for: {ssid}");
+    debug!(
+        "Starting forget operation for: {name} (device filter: {:?})",
+        device_filter
+    );
 
     let nm = NMProxy::new(conn).await?;
 
+    // Disconnect if currently active
     let devices = nm.get_devices().await?;
     for dev_path in &devices {
         let dev = NMDeviceProxy::builder(conn)
             .path(dev_path.clone())?
             .build()
             .await?;
-        if dev.device_type().await? != device_type::WIFI {
-            continue;
+
+        let dev_type = dev.device_type().await?;
+
+        // Skip if device type doesn't match our filter
+        if let Some(filter) = device_filter {
+            if dev_type != filter {
+                continue;
+            }
         }
 
-        let wifi = NMWirelessProxy::builder(conn)
-            .path(dev_path.clone())?
-            .build()
-            .await?;
-        if let Ok(ap_path) = wifi.active_access_point().await {
-            if ap_path.as_str() != "/" {
-                let ap = NMAccessPointProxy::builder(conn)
-                    .path(ap_path.clone())?
-                    .build()
-                    .await?;
-                if let Ok(bytes) = ap.ssid().await {
-                    if decode_ssid_or_empty(&bytes) == ssid {
-                        debug!("Disconnecting from active network: {ssid}");
-                        if let Err(e) = disconnect_wifi_and_wait(conn, dev_path).await {
-                            warn!("Disconnect wait failed: {e}");
-                            let final_state = dev.state().await?;
-                            if final_state != device_state::DISCONNECTED
-                                && final_state != device_state::UNAVAILABLE
-                            {
-                                error!(
-                                    "Device still connected (state: {final_state}), cannot safely delete"
-                                );
-                                return Err(ConnectionError::Stuck(format!(
-                                    "disconnect failed, device in state {final_state}"
-                                )));
+        // Handle WiFi-specific disconnect logic
+        if dev_type == device_type::WIFI {
+            let wifi = NMWirelessProxy::builder(conn)
+                .path(dev_path.clone())?
+                .build()
+                .await?;
+            if let Ok(ap_path) = wifi.active_access_point().await {
+                if ap_path.as_str() != "/" {
+                    let ap = NMAccessPointProxy::builder(conn)
+                        .path(ap_path.clone())?
+                        .build()
+                        .await?;
+                    if let Ok(bytes) = ap.ssid().await {
+                        if decode_ssid_or_empty(&bytes) == name {
+                            debug!("Disconnecting from active WiFi network: {name}");
+                            if let Err(e) = disconnect_wifi_and_wait(conn, dev_path).await {
+                                warn!("Disconnect wait failed: {e}");
+                                let final_state = dev.state().await?;
+                                if final_state != device_state::DISCONNECTED
+                                    && final_state != device_state::UNAVAILABLE
+                                {
+                                    error!(
+                                        "Device still connected (state: {final_state}), cannot safely delete"
+                                    );
+                                    return Err(ConnectionError::Stuck(format!(
+                                        "disconnect failed, device in state {final_state}"
+                                    )));
+                                }
+                                debug!("Device confirmed disconnected, proceeding with deletion");
                             }
-                            debug!("Device confirmed disconnected, proceeding with deletion");
+                            debug!("WiFi disconnect phase completed");
                         }
-                        debug!("Disconnect phase completed");
                     }
                 }
             }
         }
+        // Handle Bluetooth-specific disconnect logic
+        else if dev_type == device_type::BLUETOOTH {
+            // Check if this Bluetooth device is currently active
+            let state = dev.state().await?;
+            if state != device_state::DISCONNECTED && state != device_state::UNAVAILABLE {
+                debug!("Disconnecting from active Bluetooth device: {name}");
+                if let Err(e) =
+                    crate::core::bluetooth::disconnect_bluetooth_and_wait(conn, dev_path).await
+                {
+                    warn!("Bluetooth disconnect failed: {e}");
+                    let final_state = dev.state().await?;
+                    if final_state != device_state::DISCONNECTED
+                        && final_state != device_state::UNAVAILABLE
+                    {
+                        error!(
+                            "Bluetooth device still connected (state: {final_state}), cannot safely delete"
+                        );
+                        return Err(ConnectionError::Stuck(format!(
+                            "disconnect failed, device in state {final_state}"
+                        )));
+                    }
+                }
+                debug!("Bluetooth disconnect phase completed");
+            }
+        }
     }
 
+    // Delete connection profiles (generic, works for all types)
     debug!("Starting connection deletion phase...");
 
     let settings = nm_proxy(
@@ -255,15 +306,17 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
 
             let mut should_delete = false;
 
+            // Match by connection ID (works for all connection types)
             if let Some(conn_sec) = settings_map.get("connection") {
                 if let Some(Value::Str(id)) = conn_sec.get("id") {
-                    if id.as_str() == ssid {
+                    if id.as_str() == name {
                         should_delete = true;
                         debug!("Found connection by ID: {id}");
                     }
                 }
             }
 
+            // Additional WiFi-specific matching by SSID
             if let Some(wifi_sec) = settings_map.get("802-11-wireless") {
                 if let Some(Value::Array(arr)) = wifi_sec.get("ssid") {
                     let mut raw = Vec::new();
@@ -272,9 +325,19 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
                             raw.push(b);
                         }
                     }
-                    if decode_ssid_or_empty(&raw) == ssid {
+                    if decode_ssid_or_empty(&raw) == name {
                         should_delete = true;
-                        debug!("Found connection by SSID match");
+                        debug!("Found WiFi connection by SSID match");
+                    }
+                }
+            }
+
+            // Matching by bdaddr for Bluetooth connections
+            if let Some(bt_sec) = settings_map.get("bluetooth") {
+                if let Some(Value::Str(bdaddr)) = bt_sec.get("bdaddr") {
+                    if bdaddr.as_str() == name {
+                        should_delete = true;
+                        debug!("Found Bluetooth connection by bdaddr match");
                     }
                 }
             }
@@ -303,11 +366,18 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
     }
 
     if deleted_count > 0 {
-        info!("Successfully deleted {deleted_count} connection(s) for '{ssid}'");
+        info!("Successfully deleted {deleted_count} connection(s) for '{name}'");
         Ok(())
     } else {
-        debug!("No saved connections found for '{ssid}'");
-        Err(ConnectionError::NoSavedConnection)
+        debug!("No saved connections found for '{name}'");
+
+        // For Bluetooth, it's normal to have no NetworkManager connection profile if the device is only paired in BlueZ.
+        if device_filter == Some(device_type::BLUETOOTH) {
+            debug!("Bluetooth device '{name}' has no NetworkManager connection profile (device may only be paired in BlueZ)");
+            Ok(())
+        } else {
+            Err(ConnectionError::NoSavedConnection)
+        }
     }
 }
 
