@@ -10,7 +10,7 @@ use zbus::Connection;
 use crate::api::models::{BluetoothDevice, ConnectionError, Device, DeviceIdentity, DeviceState};
 use crate::core::bluetooth::populate_bluez_info;
 use crate::core::state_wait::wait_for_wifi_device_ready;
-use crate::dbus::{NMDeviceProxy, NMProxy};
+use crate::dbus::{NMBluetoothProxy, NMDeviceProxy, NMProxy};
 use crate::types::constants::device_type;
 use crate::Result;
 
@@ -82,23 +82,28 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
 
     let mut devices = Vec::new();
     for p in paths {
+        // So we can get the device type and state
         let d_proxy = NMDeviceProxy::builder(conn)
             .path(p.clone())?
             .build()
             .await?;
 
-        let raw_device_type = d_proxy.device_type().await?;
-
         // Only process Bluetooth devices
-        if raw_device_type != device_type::BLUETOOTH {
+        if d_proxy.device_type().await? != device_type::BLUETOOTH {
             continue;
         }
+        // Bluetooth-specific proxy
+        // to get BD_ADDR and capabilities
+        let bd_proxy = NMBluetoothProxy::builder(conn)
+            .path(p.clone())?
+            .build()
+            .await?;
 
-        let bdaddr = d_proxy
+        let bdaddr = bd_proxy
             .hw_address()
             .await
             .unwrap_or_else(|_| String::from("00:00:00:00:00:00"));
-        let bt_device_type = raw_device_type.into();
+        let bt_caps = bd_proxy.bt_capabilities().await?;
         let raw_state = d_proxy.state().await?;
         let state = raw_state.into();
 
@@ -108,7 +113,7 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
             bdaddr,
             name: bluez_info.0,
             alias: bluez_info.1,
-            bt_device_type,
+            bt_caps,
             state,
         });
     }
@@ -187,18 +192,19 @@ mod tests {
 
     #[test]
     fn test_bluetooth_device_construction() {
+        let panu = BluetoothNetworkRole::PanU as u32;
         let device = BluetoothDevice {
             bdaddr: "00:1A:7D:DA:71:13".into(),
             name: Some("TestDevice".into()),
             alias: Some("Test".into()),
-            bt_device_type: BluetoothNetworkRole::PanU,
+            bt_caps: panu,
             state: DeviceState::Activated,
         };
 
         assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
         assert_eq!(device.name, Some("TestDevice".into()));
         assert_eq!(device.alias, Some("Test".into()));
-        assert!(matches!(device.bt_device_type, BluetoothNetworkRole::PanU));
+        assert!(matches!(device.bt_caps, _panu));
         assert_eq!(device.state, DeviceState::Activated);
     }
 

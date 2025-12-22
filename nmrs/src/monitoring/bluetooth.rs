@@ -76,7 +76,7 @@ pub(crate) async fn current_bluetooth_bdaddr(conn: &Connection) -> Option<String
         );
         let bt = try_log!(bt_builder.build().await, "Failed to build Bluetooth proxy");
 
-        if let Ok(bdaddr) = bt.bd_address().await {
+        if let Ok(bdaddr) = bt.hw_address().await {
             return Some(bdaddr);
         }
     }
@@ -120,7 +120,7 @@ pub(crate) async fn current_bluetooth_info(conn: &Connection) -> Option<(String,
         );
         let bt = try_log!(bt_builder.build().await, "Failed to build Bluetooth proxy");
 
-        if let (Ok(bdaddr), Ok(capabilities)) = (bt.bd_address().await, bt.bt_capabilities().await)
+        if let (Ok(bdaddr), Ok(capabilities)) = (bt.hw_address().await, bt.bt_capabilities().await)
         {
             return Some((bdaddr, capabilities));
         }

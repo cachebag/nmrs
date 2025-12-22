@@ -888,11 +888,12 @@ pub struct BluetoothIdentity {
 /// ```rust
 /// use nmrs::models::{BluetoothDevice, BluetoothNetworkRole, DeviceState};
 ///
+/// let role = BluetoothNetworkRole::PanU as u32;
 /// let bt_device = BluetoothDevice {
 ///    bdaddr: "00:1A:7D:DA:71:13".into(),
 ///    name: Some("Foo".into()),
 ///    alias: Some("Bar".into()),
-///    bt_device_type: BluetoothNetworkRole::PanU,
+///    bt_caps: role,
 ///    state: DeviceState::Activated,
 /// };
 /// ```
@@ -905,7 +906,7 @@ pub struct BluetoothDevice {
     /// Device alias from BlueZ
     pub alias: Option<String>,
     /// Bluetooth device type (DUN or PANU)
-    pub bt_device_type: BluetoothNetworkRole,
+    pub bt_caps: u32,
     /// Current device state
     pub state: DeviceState,
 }
@@ -991,11 +992,12 @@ impl Display for Device {
 /// Formats the device information as "alias (device_type) [bdaddr]".
 impl Display for BluetoothDevice {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let role = BluetoothNetworkRole::from(self.bt_caps);
         write!(
             f,
             "{} ({}) [{}]",
             self.alias.as_deref().unwrap_or("unknown"),
-            self.bt_device_type,
+            role,
             self.bdaddr
         )
     }
@@ -1823,28 +1825,30 @@ mod tests {
 
     #[test]
     fn test_bluetooth_device_creation() {
+        let role = BluetoothNetworkRole::PanU as u32;
         let device = BluetoothDevice {
             bdaddr: "00:1A:7D:DA:71:13".into(),
             name: Some("MyPhone".into()),
             alias: Some("Phone".into()),
-            bt_device_type: BluetoothNetworkRole::PanU,
+            bt_caps: role,
             state: DeviceState::Activated,
         };
 
         assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
         assert_eq!(device.name, Some("MyPhone".into()));
         assert_eq!(device.alias, Some("Phone".into()));
-        assert!(matches!(device.bt_device_type, BluetoothNetworkRole::PanU));
+        assert!(matches!(device.bt_caps, _role));
         assert_eq!(device.state, DeviceState::Activated);
     }
 
     #[test]
     fn test_bluetooth_device_display() {
+        let role = BluetoothNetworkRole::PanU as u32;
         let device = BluetoothDevice {
             bdaddr: "00:1A:7D:DA:71:13".into(),
             name: Some("MyPhone".into()),
             alias: Some("Phone".into()),
-            bt_device_type: BluetoothNetworkRole::PanU,
+            bt_caps: role,
             state: DeviceState::Activated,
         };
 
@@ -1856,11 +1860,12 @@ mod tests {
 
     #[test]
     fn test_bluetooth_device_display_no_alias() {
+        let role = BluetoothNetworkRole::Dun as u32;
         let device = BluetoothDevice {
             bdaddr: "00:1A:7D:DA:71:13".into(),
             name: Some("MyPhone".into()),
             alias: None,
-            bt_device_type: BluetoothNetworkRole::Dun,
+            bt_caps: role,
             state: DeviceState::Disconnected,
         };
 
