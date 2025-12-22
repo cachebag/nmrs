@@ -9,12 +9,16 @@
 use log::debug;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
+// use futures_timer::Delay;
 
 use crate::builders::bluetooth;
 use crate::core::connection_settings::get_saved_connection_path;
-use crate::dbus::BluezDeviceExtProxy;
+use crate::core::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
+use crate::dbus::{BluezDeviceExtProxy, NMDeviceProxy};
 use crate::monitoring::bluetooth::Bluetooth;
 use crate::monitoring::transport::ActiveTransport;
+use crate::types::constants::device_state;
+use crate::types::constants::device_type;
 use crate::ConnectionError;
 use crate::{dbus::NMProxy, models::BluetoothIdentity, Result};
 
@@ -48,6 +52,24 @@ pub(crate) async fn populate_bluez_info(
         }
         Err(_) => Ok((None, None)),
     }
+}
+
+pub(crate) async fn find_bluetooth_device(
+    conn: &Connection,
+    nm: &NMProxy<'_>,
+) -> Result<OwnedObjectPath> {
+    let devices = nm.get_devices().await?;
+
+    for dp in devices {
+        let dev = NMDeviceProxy::builder(conn)
+            .path(dp.clone())?
+            .build()
+            .await?;
+        if dev.device_type().await? == device_type::BLUETOOTH {
+            return Ok(dp);
+        }
+    }
+    Err(ConnectionError::NoBluetoothDevice)
 }
 
 /// Connects to a Bluetooth device using NetworkManager.
@@ -105,8 +127,7 @@ pub(crate) async fn connect_bluetooth(
     // Find the Bluetooth hardware adapter
     // Note: Unlike WiFi, Bluetooth connections in NetworkManager don't require
     // specifying a specific device. We use "/" to let NetworkManager auto-select.
-    let bt_device = OwnedObjectPath::try_from("/")
-        .map_err(|e| ConnectionError::InvalidAddress(format!("Invalid device path: {}", e)))?;
+    let bt_device = find_bluetooth_device(conn, &nm).await?;
     debug!("Using auto-select device path for Bluetooth connection");
 
     // Check for saved connection
@@ -156,11 +177,50 @@ pub(crate) async fn connect_bluetooth(
                 )
                 .await?;
 
-            crate::core::state_wait::wait_for_connection_activation(conn, &active_conn).await?;
+            wait_for_connection_activation(conn, &active_conn).await?;
         }
     }
 
     log::info!("Successfully connected to Bluetooth device '{name}'");
+    Ok(())
+}
+
+/// Disconnects a Bluetooth device and waits for it to reach disconnected state.
+///
+/// Calls the Disconnect method on the device and waits for the `StateChanged`
+/// signal to indicate the device has reached Disconnected or Unavailable state.
+pub(crate) async fn disconnect_bluetooth_and_wait(
+    conn: &Connection,
+    dev_path: &OwnedObjectPath,
+) -> Result<()> {
+    let dev = NMDeviceProxy::builder(conn)
+        .path(dev_path.clone())?
+        .build()
+        .await?;
+
+    // Check if already disconnected
+    let current_state = dev.state().await?;
+    if current_state == device_state::DISCONNECTED || current_state == device_state::UNAVAILABLE {
+        debug!("Bluetooth device already disconnected");
+        return Ok(());
+    }
+
+    let raw: zbus::proxy::Proxy = zbus::proxy::Builder::new(conn)
+        .destination("org.freedesktop.NetworkManager")?
+        .path(dev_path.clone())?
+        .interface("org.freedesktop.NetworkManager.Device")?
+        .build()
+        .await?;
+
+    debug!("Sending disconnect request to Bluetooth device");
+    let _ = raw.call_method("Disconnect", &()).await;
+
+    // Wait for disconnect using signal-based monitoring
+    wait_for_device_disconnect(&dev).await?;
+
+    // Brief stabilization delay
+    // Delay::new(timeouts::stabilization_delay()).await;
+
     Ok(())
 }
 
