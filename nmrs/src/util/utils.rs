@@ -77,16 +77,18 @@ pub(crate) fn decode_ssid_or_hidden(bytes: &[u8]) -> Cow<'static, str> {
 }
 
 /// Decode SSID bytes for comparison purposes, defaulting to empty string if invalid.
-pub(crate) fn decode_ssid_or_empty(bytes: &[u8]) -> String {
+pub(crate) fn decode_ssid_or_empty(bytes: &[u8]) -> Cow<'static, str> {
     if bytes.is_empty() {
-        return String::new();
+        return Cow::Borrowed("");
     }
-    str::from_utf8(bytes)
-        .map(|s| s.to_string())
-        .unwrap_or_else(|e| {
+
+    match str::from_utf8(bytes) {
+        Ok(s) => Cow::Owned(s.to_owned()),
+        Err(e) => {
             warn!("Invalid UTF-8 in SSID during comparison: {e}");
-            String::new()
-        })
+            Cow::Borrowed("")
+        }
+    }
 }
 
 /// Safely get signal strength with a default value.
