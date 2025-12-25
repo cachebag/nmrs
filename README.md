@@ -3,7 +3,6 @@
 [![Crates.io](https://img.shields.io/crates/v/nmrs)](https://crates.io/crates/nmrs)
 [![Documentation](https://docs.rs/nmrs/badge.svg)](https://docs.rs/nmrs)
 [![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/ci.yml)
-[![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml)
 [![License](https://img.shields.io/crates/l/nmrs)](LICENSE)
 
 A Rust API for [NetworkManager](https://networkmanager.dev/) over [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html). The goal is to provide a safe and simple high-level API for managing Wi-Fi connections on Linux systems, built on [`zbus`](https://docs.rs/zbus) for reliable D-Bus communication.
@@ -99,6 +98,7 @@ async fn main() -> nmrs::Result<()> {
 # <p align="center"> nmrs-gui </p>
 
 ![Version](https://img.shields.io/badge/nmrs--gui-1.1.0-orange?style=flat-square)
+[![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml)
 
 This repository also includes `nmrs-gui`, a Wayland-compatible NetworkManager frontend built with GTK4.
 
