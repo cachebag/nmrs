@@ -153,7 +153,7 @@ pub(crate) async fn current_ssid(conn: &Connection) -> Option<String> {
                 );
                 let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
                 let ssid = decode_ssid_or_empty(&ssid_bytes);
-                return Some(ssid);
+                return Some(ssid.to_string());
             }
         }
     }
@@ -199,7 +199,7 @@ pub(crate) async fn current_connection_info(conn: &Connection) -> Option<(String
                 let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
                 let ssid = decode_ssid_or_empty(&ssid_bytes);
                 let frequency = ap.frequency().await.ok();
-                return Some((ssid, frequency));
+                return Some((ssid.to_string(), frequency));
             }
         }
     }
