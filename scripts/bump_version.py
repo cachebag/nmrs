@@ -5,10 +5,9 @@ Version bumping script for nmrs.
 This script updates version numbers for a specific crate:
 - Cargo.toml (nmrs or nmrs-gui)
 - CHANGELOG.md (per-crate, in the crate's directory)
-- PKGBUILD and package.nix (nmrs only)
 
 Usage:
-    python3 scripts/bump_version.py <version> <release_type> --crate <crate
+    python3 scripts/bump_version.py <version> <release_type> --crate <crate>
 """
 
 import re
@@ -30,73 +29,6 @@ def update_cargo_toml(file_path: Path, version: str) -> bool:
         if new_content != content:
             file_path.write_text(new_content)
             print(f"✓ Updated {file_path}")
-            return True
-        else:
-            print(f"⚠ No changes needed in {file_path}")
-            return False
-    except Exception as e:
-        print(f"✗ Error updating {file_path}: {e}")
-        return False
-
-
-def update_pkgbuild(file_path: Path, version: str, release_type: str) -> bool:
-    """Update PKGBUILD with new version (checksums must be updated after release)."""
-    try:
-        content = file_path.read_text()
-        
-        # Update pkgver
-        content = re.sub(r'^pkgver=.*', f'pkgver={version}', content, flags=re.MULTILINE)
-        
-        # Update source URL tag suffix
-        if release_type == "stable":
-            tag_suffix = ""
-        else:
-            tag_suffix = f"-{release_type}"
-        
-        # Update the tag in source URL: v$pkgver-beta -> v{version}{tag_suffix}
-        content = re.sub(
-            r'v\$pkgver(-beta)?',
-            f'v$pkgver{tag_suffix}',
-            content
-        )
-        
-        # Update the extracted directory name
-        content = re.sub(
-            r'\$pkgname-\$pkgver(-beta)?',
-            f'${{pkgname}}-${{pkgver}}{tag_suffix}',
-            content
-        )
-        
-        file_path.write_text(content)
-        print(f"✓ Updated {file_path}")
-        print(f"  ⚠ Note: SHA256 checksums need to be updated after the GitHub release is created")
-        print(f"  ⚠ Run: python3 scripts/update_checksums.py {version} {release_type}")
-        return True
-    except Exception as e:
-        print(f"✗ Error updating {file_path}: {e}")
-        return False
-
-
-def update_package_nix(file_path: Path, version: str, release_type: str) -> bool:
-    """Update package.nix with new version (cargoHash must be updated separately)."""
-    try:
-        content = file_path.read_text()
-        
-        if release_type == "stable":
-            version_str = version
-        else:
-            version_str = f"{version}-{release_type}"
-        
-        pattern = r'version\s*=\s*"[^"]*";'
-        replacement = f'version = "{version_str}";'
-        
-        new_content = re.sub(pattern, replacement, content)
-        
-        if new_content != content:
-            file_path.write_text(new_content)
-            print(f"✓ Updated {file_path}")
-            print(f"  ⚠ Note: cargoHash may need to be updated")
-            print(f"  ⚠ Set cargoHash = \"\"; and run nix-build to get the correct hash")
             return True
         else:
             print(f"⚠ No changes needed in {file_path}")
@@ -263,22 +195,6 @@ def main():
         if not update_changelog(changelog_path, version, release_type, crate):
             success = False
     
-    # For nmrs releases, also update PKGBUILD and package.nix
-    if crate == "nmrs":
-        pkgbuild_path = project_root / 'PKGBUILD'
-        if pkgbuild_path.exists():
-            if not update_pkgbuild(pkgbuild_path, version, release_type):
-                success = False
-        else:
-            print(f"⚠ PKGBUILD not found, skipping")
-        
-        package_nix_path = project_root / 'package.nix'
-        if package_nix_path.exists():
-            if not update_package_nix(package_nix_path, version, release_type):
-                success = False
-        else:
-            print(f"⚠ package.nix not found, skipping")
-    
     print("=" * 50)
     
     if success:
@@ -300,12 +216,15 @@ def main():
         print(f"  2. Commit: git commit -am 'chore({crate}): prepare {version_tag} release'")
         print(f"  3. Push and open PR to master")
         print(f"  4. After merge, create tag: git tag {git_tag} && git push origin {git_tag}")
-        print(f"  5. The release workflow will create the GitHub Release automatically")
         if crate == "nmrs":
+            print(f"  5. CI will automatically publish to crates.io and create GitHub release")
+        else:
+            print(f"  5. CI will automatically create GitHub release with binary")
             print()
-            print("For nmrs releases, after the GitHub Release is created:")
-            print(f"  6. Update PKGBUILD checksums (tarball now exists)")
-            print(f"  7. Update package.nix cargoHash if needed")
+            print("For nmrs-gui releases:")
+            print(f"  6. Manually update AUR in nmrs-aur/ directory")
+            print(f"  7. Update PKGBUILD and run: updpkgsums && makepkg --printsrcinfo > .SRCINFO")
+            print(f"  8. Commit and push to AUR repository")
     else:
         print("✗ Some errors occurred during version bumping")
         sys.exit(1)

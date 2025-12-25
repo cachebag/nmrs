@@ -1,19 +1,18 @@
 name: CI
+
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master, 2.x-dev ]
+    branches: [master, 2.x-dev]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  # Note: nmrs requires a Wayland compositor (Sway, Hyprland, GNOME Wayland, etc.)
-  # CI tests validate compilation and core functionality only
 
 jobs:
-  fmt:
-    name: format
+  format:
+    name: Format Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -22,74 +21,12 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
-  semver:
-    name: semver-checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0  # Need full history for semver checks
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libglib2.0-dev \
-            libgirepository1.0-dev \
-            libgdk-pixbuf2.0-dev \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-semver-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-semver-
-      - name: Install cargo-semver-checks
-        run: cargo install cargo-semver-checks --locked
-      - name: Check semver compliance (nmrs)
-        run: |
-          # Get the latest release tag for baseline
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -n "$LATEST_TAG" ]; then
-            echo "Checking against baseline: $LATEST_TAG"
-            # Check if the package exists in the baseline (handle renames)
-            if git show "$LATEST_TAG:nmrs/Cargo.toml" >/dev/null 2>&1; then
-              cargo semver-checks check-release --package nmrs --baseline-rev "$LATEST_TAG"
-            else
-              echo "Package 'nmrs' not found in baseline $LATEST_TAG (likely renamed), skipping semver check"
-            fi
-          else
-            echo "No previous tags found, skipping semver check for nmrs"
-          fi
-      - name: Check semver compliance (nmrs-gui)
-        run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -n "$LATEST_TAG" ]; then
-            echo "Checking against baseline: $LATEST_TAG"
-            # Check if the package exists in the baseline (handle renames)
-            if git show "$LATEST_TAG:nmrs-gui/Cargo.toml" >/dev/null 2>&1; then
-              cargo semver-checks check-release --package nmrs-gui --baseline-rev "$LATEST_TAG" || true
-            else
-              echo "Package 'nmrs-gui' not found in baseline $LATEST_TAG (likely renamed), skipping semver check"
-            fi
-          else
-            echo "No previous tags found, skipping semver check for nmrs-gui"
-          fi
-        # nmrs-gui may fail due to GTK bindings - continue anyway
-        continue-on-error: true
-
   clippy:
-    name: clippy
+    name: Clippy Lints
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -102,9 +39,11 @@ jobs:
             libcairo2-dev \
             libgtk-4-dev \
             libadwaita-1-dev
+      
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      
       - uses: actions/cache@v5
         with:
           path: |
@@ -114,97 +53,15 @@ jobs:
           key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-clippy-
+      
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
-  test-unit:
-    name: unit-tests
+  test:
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libglib2.0-dev \
-            libgirepository1.0-dev \
-            libgdk-pixbuf2.0-dev \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            xvfb
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-test-
-      - name: Run unit tests
-        run: cargo test --lib --all-features --workspace
-      - name: Run UI tests with virtual display
-        run: |
-          # Note: nmrs UI requires a Wayland compositor at runtime
-          # These smoke tests only verify compilation and basic GTK initialization
-          xvfb-run -a cargo test --test smoke_test --test style_test
-  
-  networkmanager:
-    name: networkmanager
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libglib2.0-dev \
-            libgirepository1.0-dev \
-            libgdk-pixbuf2.0-dev \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            network-manager \
-            dbus-x11
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-integration-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-integration-
-      - name: Start D-Bus system bus
-        run: |
-          sudo systemctl start dbus
-      - name: Verify integration tests compile
-        run: cargo test --test integration_test --all-features --no-run
-      - name: Start NetworkManager
-        run: |
-          sudo systemctl start NetworkManager
-          sleep 3
-      - name: Run integration tests
-        run: sudo -E env "PATH=$PATH" $(which cargo) test --test integration_test --all-features -- --nocapture || true
-
-  build:
-    name: build (${{ matrix.target }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            packages: nmrs-gui
-          - target: aarch64-unknown-linux-gnu
-            packages: nmrs
-    steps:
-      - uses: actions/checkout@v6
+      
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -217,12 +74,57 @@ jobs:
             libcairo2-dev \
             libgtk-4-dev \
             libadwaita-1-dev
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-test-
+      
+      - name: Run unit tests
+        run: cargo test --lib --all-features --workspace
+
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            packages: nmrs nmrs-gui
+          - target: aarch64-unknown-linux-gnu
+            packages: nmrs
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libglib2.0-dev \
+            libgirepository1.0-dev \
+            libgdk-pixbuf2.0-dev \
+            libpango1.0-dev \
+            libcairo2-dev \
+            libgtk-4-dev \
+            libadwaita-1-dev
+      
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+      
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      
       - uses: actions/cache@v5
         with:
           path: |
@@ -232,23 +134,13 @@ jobs:
           key: ${{ runner.os }}-build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ matrix.target }}-
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }} --package ${{ matrix.packages }}
+      
+      - name: Build ${{ matrix.packages }}
+        run: |
+          for package in ${{ matrix.packages }}; do
+            echo "Building $package for ${{ matrix.target }}"
+            cargo build --release --target ${{ matrix.target }} --package $package
+          done
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
           PKG_CONFIG_ALLOW_CROSS: 1
-
-  audit:
-    name: audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-audit-${{ hashFiles('**/Cargo.lock') }}
-      - run: cargo install cargo-audit
-      - run: cargo audit

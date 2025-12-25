@@ -1,0 +1,89 @@
+name: Release GUI
+
+on:
+  push:
+    tags:
+      - 'gui-v*'
+
+jobs:
+  release:
+    name: Build and Release nmrs-gui
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/gui-v}
+          echo "VERSION=$TAG" >> $GITHUB_ENV
+          echo "Releasing nmrs-gui version: $TAG"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libglib2.0-dev \
+            libgirepository1.0-dev \
+            libgdk-pixbuf2.0-dev \
+            libpango1.0-dev \
+            libcairo2-dev \
+            libgtk-4-dev \
+            libadwaita-1-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify version matches tag
+        run: |
+          CARGO_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nmrs-gui") | .version')
+          if [ "$CARGO_VERSION" != "${{ env.VERSION }}" ]; then
+            echo "Error: Cargo.toml version ($CARGO_VERSION) doesn't match tag version (${{ env.VERSION }})"
+            exit 1
+          fi
+          echo "Version check passed: $CARGO_VERSION"
+
+      - name: Build nmrs-gui
+        run: cargo build --release --package nmrs-gui
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          cp target/release/nmrs-gui release/
+          cp LICENSE release/
+          cp README.md release/
+          cd release
+          tar -czf nmrs-gui-${{ env.VERSION }}-x86_64-linux.tar.gz *
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: gui-v${{ env.VERSION }}
+          name: nmrs-gui ${{ env.VERSION }}
+          body: |
+            ## nmrs-gui ${{ env.VERSION }}
+            
+            A Wayland-compatible NetworkManager frontend built with GTK4.
+            
+            ### Installation
+            
+            **Arch Linux (AUR)**
+            ```bash
+            yay -S nmrs
+            ```
+            
+            **Manual Installation**
+            Download the binary, extract, and move to your PATH:
+            ```bash
+            tar -xzf nmrs-gui-${{ env.VERSION }}-x86_64-linux.tar.gz
+            sudo mv nmrs-gui /usr/local/bin/nmrs
+            ```
+            
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md) for full details.
+          files: |
+            release/nmrs-gui-${{ env.VERSION }}-x86_64-linux.tar.gz
+          draft: false
+          prerelease: false
+
