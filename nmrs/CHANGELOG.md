@@ -3,7 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
-
+### Fixed
+- Change `decode_ssid_or_empty` to return a borrowed slice instead of `String` ([#154](https://github.com/cachebag/nmrs/pull/154))
 ## [1.1.0] - 2025-12-19
 
 ### Fixed
