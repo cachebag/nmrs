@@ -333,13 +333,15 @@ pub(crate) async fn disconnect_wifi_and_wait(
     Ok(())
 }
 
-/// Find the first wired (Ethernet) device on the system.
+/// Finds a network device by its type.
 ///
-/// Iterates through all NetworkManager devices and returns the first one
-/// with device type `ETHERNET`. Returns `NoWiredDevice` if none found.
-pub(crate) async fn find_wired_device(
+/// Iterates through all devices managed by NetworkManager
+/// and returns the path of the first device matching the specified type.
+/// Returns an appropriate error if no matching device is found.
+async fn find_device_by_type(
     conn: &Connection,
     nm: &NMProxy<'_>,
+    device_type_id: u32,
 ) -> Result<OwnedObjectPath> {
     let devices = nm.get_devices().await?;
 
@@ -348,30 +350,27 @@ pub(crate) async fn find_wired_device(
             .path(dp.clone())?
             .build()
             .await?;
-        if dev.device_type().await? == device_type::ETHERNET {
+        if dev.device_type().await? == device_type_id {
             return Ok(dp);
         }
     }
-    Err(ConnectionError::NoWiredDevice)
+
+    match device_type_id {
+        device_type::WIFI => Err(ConnectionError::NoWifiDevice),
+        device_type::ETHERNET => Err(ConnectionError::NoWiredDevice),
+        _ => Err(ConnectionError::NoWifiDevice),
+    }
 }
 
-/// Finds the first Wi-Fi device on the system.
-///
-/// Iterates through all NetworkManager devices and returns the first one
-/// with device type `WIFI`. Returns `NoWifiDevice` if none found.
-async fn find_wifi_device(conn: &Connection, nm: &NMProxy<'_>) -> Result<OwnedObjectPath> {
-    let devices = nm.get_devices().await?;
+pub(crate) async fn find_wired_device(
+    conn: &Connection,
+    nm: &NMProxy<'_>,
+) -> Result<OwnedObjectPath> {
+    find_device_by_type(conn, nm, device_type::ETHERNET).await
+}
 
-    for dp in devices {
-        let dev = NMDeviceProxy::builder(conn)
-            .path(dp.clone())?
-            .build()
-            .await?;
-        if dev.device_type().await? == device_type::WIFI {
-            return Ok(dp);
-        }
-    }
-    Err(ConnectionError::NoWifiDevice)
+async fn find_wifi_device(conn: &Connection, nm: &NMProxy<'_>) -> Result<OwnedObjectPath> {
+    find_device_by_type(conn, nm, device_type::WIFI).await
 }
 
 /// Finds an access point by SSID.
