@@ -60,12 +60,20 @@
 //! let vpn_settings = build_wireguard_connection(&creds, &opts).unwrap();
 //! ```
 //!
-//! These settings can then be passed to NetworkManager’s
+//! These settings can then be passed to NetworkManager's
 //! `AddConnection` or `AddAndActivateConnection` D-Bus methods.
 
+pub mod connection_builder;
 pub mod vpn;
 pub mod wifi;
+pub mod wifi_builder;
+pub mod wireguard_builder;
 
-// Re-export builder functions for convenience
+// Re-export core builder types
+pub use connection_builder::{ConnectionBuilder, IpConfig, Route};
+pub use wifi_builder::{WifiBand, WifiConnectionBuilder};
+pub use wireguard_builder::WireGuardBuilder;
+
+// Re-export builder functions for convenience (backward compatibility)
 pub use vpn::build_wireguard_connection;
 pub use wifi::{build_ethernet_connection, build_wifi_connection};
