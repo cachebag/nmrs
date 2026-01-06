@@ -12,144 +12,28 @@
 //! - `802-11-wireless-security`: Security settings (key-mgmt, psk, auth-alg)
 //! - `802-1x`: Enterprise authentication settings (for WPA-EAP)
 //! - `ipv4` / `ipv6`: IP configuration (usually "auto" for DHCP)
+//!
+//! # New Builder API
+//!
+//! For new code, consider using the builder API from `wifi_builder` module:
+//!
+//! ```rust
+//! use nmrs::builders::WifiConnectionBuilder;
+//!
+//! let settings = WifiConnectionBuilder::new("MyNetwork")
+//!     .wpa_psk("password")
+//!     .autoconnect(true)
+//!     .ipv4_auto()
+//!     .ipv6_auto()
+//!     .build();
+//! ```
 
 use std::collections::HashMap;
 use zvariant::Value;
 
-use crate::api::models::{self, ConnectionOptions, EapMethod};
-
-/// Converts a string to bytes for SSID encoding.
-fn bytes(val: &str) -> Vec<u8> {
-    val.as_bytes().to_vec()
-}
-
-/// Creates a D-Bus string array value.
-fn string_array(xs: &[&str]) -> Value<'static> {
-    let vals: Vec<String> = xs.iter().map(|s| s.to_string()).collect();
-    Value::from(vals)
-}
-
-/// Builds the `802-11-wireless` section with SSID and mode.
-fn base_wifi_section(ssid: &str) -> HashMap<&'static str, Value<'static>> {
-    let mut s = HashMap::new();
-    s.insert("ssid", Value::from(bytes(ssid)));
-    s.insert("mode", Value::from("infrastructure"));
-    s
-}
-
-/// Builds the `connection` section with type, id, uuid, and autoconnect settings.
-fn base_connection_section(
-    ssid: &str,
-    opts: &ConnectionOptions,
-) -> HashMap<&'static str, Value<'static>> {
-    let mut s = HashMap::new();
-    s.insert("type", Value::from("802-11-wireless"));
-    s.insert("id", Value::from(ssid.to_string()));
-    s.insert("uuid", Value::from(uuid::Uuid::new_v4().to_string()));
-    s.insert("autoconnect", Value::from(opts.autoconnect));
-
-    if let Some(p) = opts.autoconnect_priority {
-        s.insert("autoconnect-priority", Value::from(p));
-    }
-
-    if let Some(r) = opts.autoconnect_retries {
-        s.insert("autoconnect-retries", Value::from(r));
-    }
-
-    s
-}
-
-/// Builds the `connection` section for Ethernet connections.
-fn base_ethernet_connection_section(
-    connection_id: &str,
-    opts: &ConnectionOptions,
-) -> HashMap<&'static str, Value<'static>> {
-    let mut s = HashMap::new();
-    s.insert("type", Value::from("802-3-ethernet"));
-    s.insert("id", Value::from(connection_id.to_string()));
-    s.insert("uuid", Value::from(uuid::Uuid::new_v4().to_string()));
-    s.insert("autoconnect", Value::from(opts.autoconnect));
-
-    if let Some(p) = opts.autoconnect_priority {
-        s.insert("autoconnect-priority", Value::from(p));
-    }
-
-    if let Some(r) = opts.autoconnect_retries {
-        s.insert("autoconnect-retries", Value::from(r));
-    }
-
-    s
-}
-
-/// Builds the `802-11-wireless-security` section for WPA-PSK networks.
-///
-/// Uses WPA2 (RSN) with CCMP encryption. The `psk-flags` of 0 means the
-/// password is stored in the connection (agent-owned).
-fn build_psk_security(psk: &str) -> HashMap<&'static str, Value<'static>> {
-    let mut sec = HashMap::new();
-
-    sec.insert("key-mgmt", Value::from("wpa-psk"));
-    sec.insert("psk", Value::from(psk.to_string()));
-    sec.insert("psk-flags", Value::from(0u32));
-    sec.insert("auth-alg", Value::from("open"));
-
-    // Enforce WPA2 with AES
-    sec.insert("proto", string_array(&["rsn"]));
-    sec.insert("pairwise", string_array(&["ccmp"]));
-    sec.insert("group", string_array(&["ccmp"]));
-
-    sec
-}
-
-/// Builds security sections for WPA-EAP (802.1X) networks.
-///
-/// Returns both the `802-11-wireless-security` section and the `802-1x` section.
-/// Supports PEAP and TTLS methods with MSCHAPv2 or PAP inner authentication.
-fn build_eap_security(
-    opts: &models::EapOptions,
-) -> (
-    HashMap<&'static str, Value<'static>>,
-    HashMap<&'static str, Value<'static>>,
-) {
-    let mut sec = HashMap::new();
-    sec.insert("key-mgmt", Value::from("wpa-eap"));
-    sec.insert("auth-alg", Value::from("open"));
-
-    let mut e1x = HashMap::new();
-
-    // EAP method (outer authentication)
-    let eap_str = match opts.method {
-        EapMethod::Peap => "peap",
-        EapMethod::Ttls => "ttls",
-    };
-    e1x.insert("eap", string_array(&[eap_str]));
-    e1x.insert("identity", Value::from(opts.identity.clone()));
-    e1x.insert("password", Value::from(opts.password.clone()));
-
-    if let Some(ai) = &opts.anonymous_identity {
-        e1x.insert("anonymous-identity", Value::from(ai.clone()));
-    }
-
-    // Phase 2 (inner authentication)
-    let p2 = match opts.phase2 {
-        models::Phase2::Mschapv2 => "mschapv2",
-        models::Phase2::Pap => "pap",
-    };
-    e1x.insert("phase2-auth", Value::from(p2));
-
-    // CA certificate handling for server verification
-    if opts.system_ca_certs {
-        e1x.insert("system-ca-certs", Value::from(true));
-    }
-    if let Some(cert) = &opts.ca_cert_path {
-        e1x.insert("ca-cert", Value::from(cert.clone()));
-    }
-    if let Some(dom) = &opts.domain_suffix_match {
-        e1x.insert("domain-suffix-match", Value::from(dom.clone()));
-    }
-
-    (sec, e1x)
-}
+use super::connection_builder::ConnectionBuilder;
+use super::wifi_builder::WifiConnectionBuilder;
+use crate::api::models::{self, ConnectionOptions};
 
 /// Builds a complete Wi-Fi connection settings dictionary.
 ///
@@ -164,53 +48,28 @@ fn build_eap_security(
 /// - `ipv4` / `ipv6`: Always present (set to "auto" for DHCP)
 /// - `802-11-wireless-security`: Present for PSK and EAP networks
 /// - `802-1x`: Present only for EAP networks
+///
+/// # Note
+///
+/// This function is maintained for backward compatibility. For new code,
+/// consider using `WifiConnectionBuilder` for a more ergonomic API.
 pub fn build_wifi_connection(
     ssid: &str,
     security: &models::WifiSecurity,
     opts: &ConnectionOptions,
 ) -> HashMap<&'static str, HashMap<&'static str, Value<'static>>> {
-    let mut conn: HashMap<&'static str, HashMap<&'static str, Value<'static>>> = HashMap::new();
+    let mut builder = WifiConnectionBuilder::new(ssid)
+        .options(opts)
+        .ipv4_auto()
+        .ipv6_auto();
 
-    // base connections
-    conn.insert("connection", base_connection_section(ssid, opts));
-    conn.insert("802-11-wireless", base_wifi_section(ssid));
+    builder = match security {
+        models::WifiSecurity::Open => builder.open(),
+        models::WifiSecurity::WpaPsk { psk } => builder.wpa_psk(psk),
+        models::WifiSecurity::WpaEap { opts } => builder.wpa_eap(opts.clone()),
+    };
 
-    // Add IPv4 and IPv6 configuration to prevent state 60 stall
-    // TODO: Expand upon auto/manual configuration options
-    let mut ipv4 = HashMap::new();
-    ipv4.insert("method", Value::from("auto"));
-    conn.insert("ipv4", ipv4);
-
-    let mut ipv6 = HashMap::new();
-    ipv6.insert("method", Value::from("auto"));
-    conn.insert("ipv6", ipv6);
-
-    match security {
-        models::WifiSecurity::Open => {}
-
-        models::WifiSecurity::WpaPsk { psk } => {
-            // point wireless at security section
-            if let Some(w) = conn.get_mut("802-11-wireless") {
-                w.insert("security", Value::from("802-11-wireless-security"));
-            }
-
-            let sec = build_psk_security(psk);
-            conn.insert("802-11-wireless-security", sec);
-        }
-
-        models::WifiSecurity::WpaEap { opts } => {
-            if let Some(w) = conn.get_mut("802-11-wireless") {
-                w.insert("security", Value::from("802-11-wireless-security"));
-            }
-
-            let (mut sec, e1x) = build_eap_security(opts);
-            sec.insert("auth-alg", Value::from("open"));
-            conn.insert("802-11-wireless-security", sec);
-            conn.insert("802-1x", e1x);
-        }
-    }
-
-    conn
+    builder.build()
 }
 
 /// Builds a complete Ethernet connection settings dictionary.
@@ -223,38 +82,29 @@ pub fn build_wifi_connection(
 /// - `connection`: Always present (type: "802-3-ethernet")
 /// - `802-3-ethernet`: Ethernet-specific settings (currently empty, can be extended)
 /// - `ipv4` / `ipv6`: Always present (set to "auto" for DHCP)
+///
+/// # Note
+///
+/// This function is maintained for backward compatibility. For new code,
+/// consider using `EthernetConnectionBuilder` for a more ergonomic API.
 pub fn build_ethernet_connection(
     connection_id: &str,
     opts: &ConnectionOptions,
 ) -> HashMap<&'static str, HashMap<&'static str, Value<'static>>> {
-    let mut conn: HashMap<&'static str, HashMap<&'static str, Value<'static>>> = HashMap::new();
-
-    // Base connection section
-    conn.insert(
-        "connection",
-        base_ethernet_connection_section(connection_id, opts),
-    );
-
-    // Ethernet section (minimal - can be extended for MAC address, MTU, etc.)
     let ethernet = HashMap::new();
-    conn.insert("802-3-ethernet", ethernet);
 
-    // Add IPv4 and IPv6 configuration
-    let mut ipv4 = HashMap::new();
-    ipv4.insert("method", Value::from("auto"));
-    conn.insert("ipv4", ipv4);
-
-    let mut ipv6 = HashMap::new();
-    ipv6.insert("method", Value::from("auto"));
-    conn.insert("ipv6", ipv6);
-
-    conn
+    ConnectionBuilder::new("802-3-ethernet", connection_id)
+        .options(opts)
+        .with_section("802-3-ethernet", ethernet)
+        .ipv4_auto()
+        .ipv6_auto()
+        .build()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ConnectionOptions, EapOptions, Phase2, WifiSecurity};
+    use crate::models::{ConnectionOptions, EapMethod, EapOptions, Phase2, WifiSecurity};
     use zvariant::Value;
 
     fn default_opts() -> ConnectionOptions {
