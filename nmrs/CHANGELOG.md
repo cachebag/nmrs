@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+
+## [1.2.0] - 2026-01-05
 ### Added
 - Docker image for reproducing testing/dev environment ([#159](https://github.com/cachebag/nmrs/pull/159))
 
@@ -109,7 +111,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ### Known Issues
 - EAP connections default to no certificates (advanced certificate management coming in future releases)
 
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.1.0...HEAD
+[1.2.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.1.0...nmrs-v1.2.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
