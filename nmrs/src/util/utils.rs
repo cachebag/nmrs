@@ -7,6 +7,7 @@ use log::warn;
 use std::borrow::Cow;
 use std::str;
 use zbus::Connection;
+use zvariant::OwnedObjectPath;
 
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::types::constants::{device_type, frequency, signal_strength, wifi_mode};
@@ -141,6 +142,27 @@ where
     }
 
     Ok(results)
+}
+
+/// Helper to create a NetworkManager D-Bus proxy for a given path and interface.
+///
+/// Returns a zbus Proxy instance for the specified path and interface.
+pub(crate) async fn nm_proxy<'a, P>(
+    conn: &'a Connection,
+    path: P,
+    interface: &'a str,
+) -> Result<zbus::Proxy<'a>>
+where
+    P: TryInto<OwnedObjectPath>,
+    P::Error: Into<zbus::Error>,
+{
+    let owned_path = path.try_into().map_err(Into::into)?;
+    Ok(zbus::proxy::Builder::new(conn)
+        .destination("org.freedesktop.NetworkManager")?
+        .path(owned_path)?
+        .interface(interface)?
+        .build()
+        .await?)
 }
 
 /// Macro to convert Result to Option with error logging.
