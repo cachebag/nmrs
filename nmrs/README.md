@@ -27,8 +27,14 @@ Rust bindings for NetworkManager via D-Bus.
 [dependencies]
 nmrs = "1.1.0"
 ```
+or
+```bash
+caargo add nmrs
+```
 
 ## Quick Start
+
+Below are a few examples of the different ways to interface with things like WiFi (wireless) devices, WireGuard VPN configs, or EAP connections.
 
 ### WiFi Connection
 
@@ -128,6 +134,8 @@ async fn main() -> nmrs::Result<()> {
 
 ### Device Management
 
+We also handle agnostic device management, as many of the devicees supported by NetworkManager can queried in similar ways.
+
 ```rust
 use nmrs::NetworkManager;
 
@@ -226,7 +234,7 @@ fn main() -> nmrs::Result<()> {
 }
 ```
 
-`nmrs` uses `zbus` for D-Bus communication, which launches a background thread to handle D-Bus message processing. This design ensures compatibility across all async runtimes without requiring manual executor management.
+`nmrs` uses [`zbus`](https://github.com/z-galaxy/zbus) for D-Bus communication, which launches a background thread to handle D-Bus message processing. This design ensures compatibility across all async runtimes without requiring manual executor management.
 
 ## Documentation
 
