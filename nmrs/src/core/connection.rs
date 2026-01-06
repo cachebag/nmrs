@@ -11,7 +11,7 @@ use crate::core::state_wait::{wait_for_connection_activation, wait_for_device_di
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
 use crate::types::constants::{device_state, device_type, timeouts};
-use crate::util::utils::decode_ssid_or_empty;
+use crate::util::utils::{decode_ssid_or_empty, nm_proxy};
 use crate::Result;
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
@@ -210,12 +210,12 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
 
     debug!("Starting connection deletion phase...");
 
-    let settings: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-        .destination("org.freedesktop.NetworkManager")?
-        .path("/org/freedesktop/NetworkManager/Settings")?
-        .interface("org.freedesktop.NetworkManager.Settings")?
-        .build()
-        .await?;
+    let settings = nm_proxy(
+        conn,
+        "/org/freedesktop/NetworkManager/Settings",
+        "org.freedesktop.NetworkManager.Settings",
+    )
+    .await?;
 
     let list_reply = settings.call_method("ListConnections", &()).await?;
     let conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
@@ -223,12 +223,12 @@ pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
     let mut deleted_count = 0;
 
     for cpath in conns {
-        let cproxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(cpath.clone())?
-            .interface("org.freedesktop.NetworkManager.Settings.Connection")?
-            .build()
-            .await?;
+        let cproxy = nm_proxy(
+            conn,
+            cpath.clone(),
+            "org.freedesktop.NetworkManager.Settings.Connection",
+        )
+        .await?;
 
         if let Ok(msg) = cproxy.call_method("GetSettings", &()).await {
             let body = msg.body();
@@ -314,12 +314,12 @@ pub(crate) async fn disconnect_wifi_and_wait(
         return Ok(());
     }
 
-    let raw: zbus::proxy::Proxy = zbus::proxy::Builder::new(conn)
-        .destination("org.freedesktop.NetworkManager")?
-        .path(dev_path.clone())?
-        .interface("org.freedesktop.NetworkManager.Device")?
-        .build()
-        .await?;
+    let raw = nm_proxy(
+        conn,
+        dev_path.clone(),
+        "org.freedesktop.NetworkManager.Device",
+    )
+    .await?;
 
     debug!("Sending disconnect request");
     let _ = raw.call_method("Disconnect", &()).await;

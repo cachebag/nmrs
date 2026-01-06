@@ -21,6 +21,7 @@ use crate::api::models::{
 use crate::builders::build_wireguard_connection;
 use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::{NMActiveConnectionProxy, NMProxy};
+use crate::util::utils::nm_proxy;
 use crate::Result;
 
 /// Connects to a WireGuard connection.
@@ -62,15 +63,15 @@ pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Res
 
         // Use Settings API to add connection first, then activate separately
         // This avoids NetworkManager's device validation when using add_and_activate_connection
-        let settings_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path("/org/freedesktop/NetworkManager/Settings")?
-            .interface("org.freedesktop.NetworkManager.Settings")?
-            .build()
-            .await?;
+        let settings_api = nm_proxy(
+            conn,
+            "/org/freedesktop/NetworkManager/Settings",
+            "org.freedesktop.NetworkManager.Settings",
+        )
+        .await?;
 
         debug!("Adding connection via Settings API");
-        let add_reply = settings_proxy
+        let add_reply = settings_api
             .call_method("AddConnection", &(settings,))
             .await?;
         let conn_path: OwnedObjectPath = add_reply.body().deserialize()?;
@@ -148,12 +149,12 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
     };
 
     for ac_path in active_conns {
-        let ac_proxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(ac_path.clone())?
-            .interface("org.freedesktop.NetworkManager.Connection.Active")?
-            .build()
-            .await
+        let ac_proxy = match nm_proxy(
+            conn,
+            ac_path.clone(),
+            "org.freedesktop.NetworkManager.Connection.Active",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -167,12 +168,12 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
             Err(_) => continue,
         };
 
-        let cproxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(conn_path.clone())?
-            .interface("org.freedesktop.NetworkManager.Settings.Connection")?
-            .build()
-            .await
+        let cproxy = match nm_proxy(
+            conn,
+            conn_path.clone(),
+            "org.freedesktop.NetworkManager.Settings.Connection",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -227,12 +228,12 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
 pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnConnection>> {
     let nm = NMProxy::new(conn).await?;
 
-    let settings: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-        .destination("org.freedesktop.NetworkManager")?
-        .path("/org/freedesktop/NetworkManager/Settings")?
-        .interface("org.freedesktop.NetworkManager.Settings")?
-        .build()
-        .await?;
+    let settings = nm_proxy(
+        conn,
+        "/org/freedesktop/NetworkManager/Settings",
+        "org.freedesktop.NetworkManager.Settings",
+    )
+    .await?;
 
     let list_reply = settings.call_method("ListConnections", &()).await?;
     let saved_conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
@@ -242,12 +243,12 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
     let mut active_wg_map: HashMap<String, (DeviceState, Option<String>)> = HashMap::new();
 
     for ac_path in active_conns {
-        let ac_proxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(ac_path.clone())?
-            .interface("org.freedesktop.NetworkManager.Connection.Active")?
-            .build()
-            .await
+        let ac_proxy = match nm_proxy(
+            conn,
+            ac_path.clone(),
+            "org.freedesktop.NetworkManager.Connection.Active",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -261,12 +262,12 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
             Err(_) => continue,
         };
 
-        let cproxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(conn_path)?
-            .interface("org.freedesktop.NetworkManager.Settings.Connection")?
-            .build()
-            .await
+        let cproxy = match nm_proxy(
+            conn,
+            conn_path,
+            "org.freedesktop.NetworkManager.Settings.Connection",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -314,12 +315,12 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
             .await
         {
             if let Some(dev_path) = dev_paths.first() {
-                match zbus::proxy::Builder::<zbus::Proxy>::new(conn)
-                    .destination("org.freedesktop.NetworkManager")?
-                    .path(dev_path.clone())?
-                    .interface("org.freedesktop.NetworkManager.Device")?
-                    .build()
-                    .await
+                match nm_proxy(
+                    conn,
+                    dev_path.clone(),
+                    "org.freedesktop.NetworkManager.Device",
+                )
+                .await
                 {
                     Ok(dev_proxy) => dev_proxy.get_property::<String>("Interface").await.ok(),
                     Err(_) => None,
@@ -337,12 +338,12 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
     let mut wg_conns = Vec::new();
 
     for cpath in saved_conns {
-        let cproxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(cpath.clone())?
-            .interface("org.freedesktop.NetworkManager.Settings.Connection")?
-            .build()
-            .await
+        let cproxy = match nm_proxy(
+            conn,
+            cpath.clone(),
+            "org.freedesktop.NetworkManager.Settings.Connection",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -403,23 +404,23 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
 
     let _ = disconnect_vpn(conn, name).await;
 
-    let settings: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-        .destination("org.freedesktop.NetworkManager")?
-        .path("/org/freedesktop/NetworkManager/Settings")?
-        .interface("org.freedesktop.NetworkManager.Settings")?
-        .build()
-        .await?;
+    let settings = nm_proxy(
+        conn,
+        "/org/freedesktop/NetworkManager/Settings",
+        "org.freedesktop.NetworkManager.Settings",
+    )
+    .await?;
 
     let list_reply = settings.call_method("ListConnections", &()).await?;
     let conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
 
     for cpath in conns {
-        let cproxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(cpath.clone())?
-            .interface("org.freedesktop.NetworkManager.Settings.Connection")?
-            .build()
-            .await
+        let cproxy = match nm_proxy(
+            conn,
+            cpath.clone(),
+            "org.freedesktop.NetworkManager.Settings.Connection",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -469,12 +470,12 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
     let active_conns = nm.active_connections().await?;
 
     for ac_path in active_conns {
-        let ac_proxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(ac_path.clone())?
-            .interface("org.freedesktop.NetworkManager.Connection.Active")?
-            .build()
-            .await
+        let ac_proxy = match nm_proxy(
+            conn,
+            ac_path.clone(),
+            "org.freedesktop.NetworkManager.Connection.Active",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -488,12 +489,12 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             Err(_) => continue,
         };
 
-        let cproxy: zbus::Proxy<'_> = match zbus::proxy::Builder::new(conn)
-            .destination("org.freedesktop.NetworkManager")?
-            .path(conn_path)?
-            .interface("org.freedesktop.NetworkManager.Settings.Connection")?
-            .build()
-            .await
+        let cproxy = match nm_proxy(
+            conn,
+            conn_path,
+            "org.freedesktop.NetworkManager.Settings.Connection",
+        )
+        .await
         {
             Ok(p) => p,
             Err(_) => continue,
@@ -540,12 +541,12 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
         // Device/interface
         let dev_paths: Vec<OwnedObjectPath> = ac_proxy.get_property("Devices").await?;
         let interface = if let Some(dev_path) = dev_paths.first() {
-            let dev_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-                .destination("org.freedesktop.NetworkManager")?
-                .path(dev_path.clone())?
-                .interface("org.freedesktop.NetworkManager.Device")?
-                .build()
-                .await?;
+            let dev_proxy = nm_proxy(
+                conn,
+                dev_path.clone(),
+                "org.freedesktop.NetworkManager.Device",
+            )
+            .await?;
             Some(dev_proxy.get_property::<String>("Interface").await?)
         } else {
             None
@@ -574,12 +575,8 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
         // IPv4 config
         let ip4_path: OwnedObjectPath = ac_proxy.get_property("Ip4Config").await?;
         let (ip4_address, dns_servers) = if ip4_path.as_str() != "/" {
-            let ip4_proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(conn)
-                .destination("org.freedesktop.NetworkManager")?
-                .path(ip4_path)?
-                .interface("org.freedesktop.NetworkManager.IP4Config")?
-                .build()
-                .await?;
+            let ip4_proxy =
+                nm_proxy(conn, ip4_path, "org.freedesktop.NetworkManager.IP4Config").await?;
 
             let ip4_address = if let Ok(addr_array) = ip4_proxy
                 .get_property::<Vec<HashMap<String, zvariant::Value>>>("AddressData")
