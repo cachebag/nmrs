@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Changed 
+- Dedupe DBus proxy construction across connection logic ([#165](https://github.com/cachebag/nmrs/pull/165))
 
 ## [1.2.0] - 2026-01-05
 ### Added
