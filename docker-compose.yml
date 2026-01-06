@@ -1,0 +1,66 @@
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    privileged: true
+    volumes:
+      - .:/app
+      - cargo-cache:/root/.cargo/registry
+      - target-cache:/app/target
+    environment:
+      - RUST_BACKTRACE=1
+    command: >
+      bash -c "
+        dbus-daemon --system --fork &&
+        sleep 1 &&
+        NetworkManager --no-daemon &
+        sleep 3 &&
+        cargo test -p nmrs
+      "
+
+  test-all:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    privileged: true
+    volumes:
+      - .:/app
+      - cargo-cache:/root/.cargo/registry
+      - target-cache:/app/target
+    environment:
+      - RUST_BACKTRACE=1
+    command: >
+      bash -c "
+        dbus-daemon --system --fork &&
+        sleep 1 &&
+        NetworkManager --no-daemon &
+        sleep 3 &&
+        cargo test --all
+      "
+
+  shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    privileged: true
+    volumes:
+      - .:/app
+      - cargo-cache:/root/.cargo/registry
+      - target-cache:/app/target
+    environment:
+      - RUST_BACKTRACE=1
+    command: >
+      bash -c "
+        dbus-daemon --system --fork &&
+        sleep 1 &&
+        NetworkManager --no-daemon &
+        sleep 3 &&
+        /bin/bash
+      "
+    stdin_open: true
+    tty: true
+
+volumes:
+  cargo-cache:
+  target-cache:
