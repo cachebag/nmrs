@@ -29,7 +29,7 @@ nmrs = "1.1.0"
 ```
 or
 ```bash
-caargo add nmrs
+cargo add nmrs
 ```
 
 ## Quick Start
