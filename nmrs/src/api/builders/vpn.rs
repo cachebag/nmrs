@@ -20,7 +20,7 @@
 //! use nmrs::WireGuardPeer;
 //!
 //! let peer = WireGuardPeer {
-//!     public_key: "SUPER_LONG_KEY".into(),
+//!     public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
 //!     gateway: "vpn.example.com:51820".into(),
 //!     allowed_ips: vec!["0.0.0.0/0".into()],
 //!     preshared_key: None,
@@ -28,7 +28,7 @@
 //! };
 //!
 //! let settings = WireGuardBuilder::new("MyVPN")
-//!     .private_key("SUPER_LONG_KEY")
+//!     .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
 //!     .address("10.0.0.2/24")
 //!     .add_peer(peer)
 //!     .dns(vec!["1.1.1.1".into()])
@@ -49,11 +49,11 @@
 //!     name: "MyVPN".into(),
 //!     gateway: "vpn.example.com:51820".into(),
 //!     // Valid WireGuard private key (44 chars base64)
-//!     private_key: "SUPER_LONG_KEY".into(),
+//!     private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
 //!     address: "10.0.0.2/24".into(),
 //!     peers: vec![WireGuardPeer {
 //!         // Valid WireGuard public key (44 chars base64)
-//!         public_key: "SUPER_LONG_KEY".into(),
+//!         public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
 //!         gateway: "vpn.example.com:51820".into(),
 //!         allowed_ips: vec!["0.0.0.0/0".into()],
 //!         preshared_key: None,

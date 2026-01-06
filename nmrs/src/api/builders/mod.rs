@@ -38,15 +38,25 @@
 //! // Build Ethernet connection settings
 //! let eth_settings = build_ethernet_connection("eth0", &opts);
 //! ```
+//!
+//! ```rust
+//! # use nmrs::builders::build_wireguard_connection;
+//! # use nmrs::{VpnCredentials, VpnType, WireGuardPeer, ConnectionOptions};
 //! // Build WireGuard VPN connection settings
+//! let opts = ConnectionOptions {
+//!     autoconnect: true,
+//!     autoconnect_priority: Some(10),
+//!     autoconnect_retries: Some(3),
+//! };
+//!
 //! let creds = VpnCredentials {
 //!     vpn_type: VpnType::WireGuard,
 //!     name: "MyVPN".into(),
 //!     gateway: "vpn.example.com:51820".into(),
-//!     private_key: "PRIVATE-KEY".into(),
+//!     private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
 //!     address: "10.0.0.2/24".into(),
 //!     peers: vec![WireGuardPeer {
-//!         public_key: "PUBLIC-KEY".into(),
+//!         public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
 //!         gateway: "vpn.example.com:51820".into(),
 //!         allowed_ips: vec!["0.0.0.0/0".into()],
 //!         preshared_key: None,

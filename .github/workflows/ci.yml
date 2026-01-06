@@ -90,6 +90,9 @@ jobs:
       - name: Run unit tests
         run: cargo test --lib --all-features --workspace
 
+      - name: Run doc tests
+        run: cargo test --doc --all-features --workspace
+
   semver:
     name: Semantic Versioning Check
     runs-on: ubuntu-latest
