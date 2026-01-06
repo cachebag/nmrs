@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -74,9 +74,9 @@ jobs:
             libcairo2-dev \
             libgtk-4-dev \
             libadwaita-1-dev
-      
+
       - uses: dtolnay/rust-toolchain@stable
-      
+
       - uses: actions/cache@v5
         with:
           path: |
@@ -86,9 +86,35 @@ jobs:
           key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-test-
-      
+
       - name: Run unit tests
         run: cargo test --lib --all-features --workspace
+
+  semver:
+    name: Semantic Versioning Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-semver-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-semver-
+
+      - name: Install cargo-semver-checks
+        run: cargo install cargo-semver-checks --locked
+
+      - name: Check semver compatibility
+        run: cargo semver-checks check-release -p nmrs
 
   build:
     name: Build (${{ matrix.target }})
