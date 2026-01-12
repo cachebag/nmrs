@@ -3,8 +3,16 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
-### Changed 
+### Changed
 - Dedupe DBus proxy construction across connection logic ([#165](https://github.com/cachebag/nmrs/pull/165))
+- Added contextual logging throughout VPN, connection, and device operations to preserve error context and improve debugging capabilities ([#168](https://github.com/cachebag/nmrs/pull/168))
+
+### Fixed
+- VPN operations no longer silently swallow D-Bus errors - now log warnings when proxy creation or method calls fail ([#168](https://github.com/cachebag/nmrs/pull/168))
+- Connection cleanup operations (disconnect, deactivate, delete) now log failures instead of ignoring them ([#168](https://github.com/cachebag/nmrs/pull/168))
+- VPN error mapping now attempts to extract actual connection state reasons instead of defaulting to `Unknown` ([#168](http://github.com/cachebag/nmrs/pull/168))
+- MAC address retrieval errors are now logged with appropriate context ([#168](https://github.com/cachebag/nmrs/pull/168))
+- Access point property retrieval failures are now logged for better diagnostics ([#168](https://github.com/cachebag/nmrs/pull/168))
 
 ## [1.2.0] - 2026-01-05
 ### Added
