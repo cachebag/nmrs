@@ -222,4 +222,13 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for 
 
 ## License
 
-MIT License. See [LICENSE](./LICENSE) for details.
+This project is dual-licensed under either of the following licenses, at your option:
+
+- MIT License  
+- Apache License, Version 2.0
+
+You may use, copy, modify, and distribute this software under the terms of either license.
+
+See the following files for full license texts:
+- MIT License: ./LICENSE-MIT
+- Apache License 2.0: ./LICENSE-APACHE
