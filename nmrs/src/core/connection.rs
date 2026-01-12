@@ -322,7 +322,13 @@ pub(crate) async fn disconnect_wifi_and_wait(
     .await?;
 
     debug!("Sending disconnect request");
-    let _ = raw.call_method("Disconnect", &()).await;
+    match raw.call_method("Disconnect", &()).await {
+        Ok(_) => debug!("Disconnect method called successfully"),
+        Err(e) => warn!(
+            "Disconnect method call failed (device may already be disconnected): {}",
+            e
+        ),
+    }
 
     // Wait for disconnect using signal-based monitoring
     wait_for_device_disconnect(&dev).await?;
@@ -416,7 +422,10 @@ async fn ensure_disconnected(
 
         if let Ok(conns) = nm.active_connections().await {
             for conn_path in conns {
-                let _ = nm.deactivate_connection(conn_path).await;
+                match nm.deactivate_connection(conn_path.clone()).await {
+                    Ok(_) => debug!("Connection deactivated during cleanup"),
+                    Err(e) => warn!("Failed to deactivate connection during cleanup: {}", e),
+                }
             }
         }
 
@@ -463,8 +472,14 @@ async fn connect_via_saved(
                     warn!("Saved connection activation failed: {e}");
                     warn!("Deleting saved connection and retrying with fresh credentials");
 
-                    let _ = nm.deactivate_connection(active_conn).await;
-                    let _ = delete_connection(conn, saved.clone()).await;
+                    match nm.deactivate_connection(active_conn.clone()).await {
+                        Ok(_) => debug!("Connection deactivated during cleanup"),
+                        Err(e) => warn!("Failed to deactivate connection during cleanup: {}", e),
+                    }
+                    match delete_connection(conn, saved.clone()).await {
+                        Ok(_) => debug!("Saved connection deleted"),
+                        Err(e) => warn!("Failed to delete saved connection during recovery: {}", e),
+                    }
 
                     let opts = ConnectionOptions {
                         autoconnect: true,
@@ -493,7 +508,10 @@ async fn connect_via_saved(
             warn!("activate_connection() failed: {e}");
             warn!("Saved connection may be corrupted, deleting and retrying with fresh connection");
 
-            let _ = delete_connection(conn, saved.clone()).await;
+            match delete_connection(conn, saved.clone()).await {
+                Ok(_) => debug!("Saved connection deleted"),
+                Err(e) => warn!("Failed to delete saved connection during recovery: {}", e),
+            }
 
             let opts = ConnectionOptions {
                 autoconnect: true,

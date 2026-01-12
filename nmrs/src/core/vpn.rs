@@ -21,7 +21,7 @@ use crate::api::models::{
 use crate::builders::build_wireguard_connection;
 use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::{NMActiveConnectionProxy, NMProxy};
-use crate::util::utils::nm_proxy;
+use crate::util::utils::{extract_connection_state_reason, nm_proxy};
 use crate::Result;
 
 /// Connects to a WireGuard connection.
@@ -98,8 +98,9 @@ pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Res
                     }
                     crate::api::models::ActiveConnectionState::Deactivated => {
                         warn!("Connection deactivated immediately after activation");
+                        let reason = extract_connection_state_reason(conn, &active_conn).await;
                         Err(crate::api::models::ConnectionError::ActivationFailed(
-                            crate::api::models::ConnectionStateReason::Unknown,
+                            reason,
                         ))
                     }
                     _ => {
@@ -113,8 +114,9 @@ pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Res
             }
             Err(e) => {
                 warn!("Failed to build active connection proxy after delay: {}", e);
+                let reason = extract_connection_state_reason(conn, &active_conn).await;
                 Err(crate::api::models::ConnectionError::ActivationFailed(
-                    crate::api::models::ConnectionStateReason::Unknown,
+                    reason,
                 ))
             }
         },
@@ -123,8 +125,9 @@ pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Res
                 "Failed to create active connection proxy builder after delay: {}",
                 e
             );
+            let reason = extract_connection_state_reason(conn, &active_conn).await;
             Err(crate::api::models::ConnectionError::ActivationFailed(
-                crate::api::models::ConnectionStateReason::Unknown,
+                reason,
             ))
         }
     }
@@ -157,15 +160,30 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to create proxy for active connection {}: {}",
+                    ac_path, e
+                );
+                continue;
+            }
         };
 
         let conn_path: OwnedObjectPath = match ac_proxy.call_method("Connection", &()).await {
             Ok(msg) => match msg.body().deserialize::<OwnedObjectPath>() {
                 Ok(path) => path,
-                Err(_) => continue,
+                Err(e) => {
+                    warn!(
+                        "Failed to deserialize connection path for {}: {}",
+                        ac_path, e
+                    );
+                    continue;
+                }
             },
-            Err(_) => continue,
+            Err(e) => {
+                warn!("Failed to get Connection property from {}: {}", ac_path, e);
+                continue;
+            }
         };
 
         let cproxy = match nm_proxy(
@@ -176,19 +194,31 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to create proxy for connection settings {}: {}",
+                    conn_path, e
+                );
+                continue;
+            }
         };
 
         let msg = match cproxy.call_method("GetSettings", &()).await {
             Ok(msg) => msg,
-            Err(_) => continue,
+            Err(e) => {
+                warn!("Failed to get settings for connection {}: {}", conn_path, e);
+                continue;
+            }
         };
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
             match body.deserialize() {
                 Ok(map) => map,
-                Err(_) => continue,
+                Err(e) => {
+                    warn!("Failed to deserialize settings for {}: {}", conn_path, e);
+                    continue;
+                }
             };
 
         if let Some(conn_sec) = settings_map.get("connection") {
@@ -210,8 +240,10 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
 
             if id_match && is_wireguard {
                 debug!("Found active WireGuard connection, deactivating: {name}");
-                let _ = nm.deactivate_connection(ac_path).await;
-                info!("Successfully disconnected VPN: {name}");
+                match nm.deactivate_connection(ac_path.clone()).await {
+                    Ok(_) => info!("Successfully disconnected VPN: {name}"),
+                    Err(e) => warn!("Failed to deactivate connection {}: {}", ac_path, e),
+                }
                 return Ok(());
             }
         }
@@ -251,38 +283,65 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to create proxy for active connection {}: {}",
+                    ac_path, e
+                );
+                continue;
+            }
         };
 
         let conn_path: OwnedObjectPath = match ac_proxy.call_method("Connection", &()).await {
             Ok(msg) => match msg.body().deserialize::<OwnedObjectPath>() {
                 Ok(p) => p,
-                Err(_) => continue,
+                Err(e) => {
+                    warn!(
+                        "Failed to deserialize connection path for {}: {}",
+                        ac_path, e
+                    );
+                    continue;
+                }
             },
-            Err(_) => continue,
+            Err(e) => {
+                warn!("Failed to get Connection property from {}: {}", ac_path, e);
+                continue;
+            }
         };
 
         let cproxy = match nm_proxy(
             conn,
-            conn_path,
+            conn_path.clone(),
             "org.freedesktop.NetworkManager.Settings.Connection",
         )
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to create proxy for connection settings {}: {}",
+                    conn_path, e
+                );
+                continue;
+            }
         };
 
         let msg = match cproxy.call_method("GetSettings", &()).await {
             Ok(m) => m,
-            Err(_) => continue,
+            Err(e) => {
+                warn!("Failed to get settings for connection {}: {}", conn_path, e);
+                continue;
+            }
         };
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
             match body.deserialize() {
                 Ok(m) => m,
-                Err(_) => continue,
+                Err(e) => {
+                    warn!("Failed to deserialize settings for {}: {}", conn_path, e);
+                    continue;
+                }
             };
 
         let conn_sec = match settings_map.get("connection") {
@@ -322,8 +381,20 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
                 )
                 .await
                 {
-                    Ok(dev_proxy) => dev_proxy.get_property::<String>("Interface").await.ok(),
-                    Err(_) => None,
+                    Ok(dev_proxy) => match dev_proxy.get_property::<String>("Interface").await {
+                        Ok(iface) => Some(iface),
+                        Err(e) => {
+                            debug!(
+                                "Failed to get interface name for VPN device {}: {}",
+                                dev_path, e
+                            );
+                            None
+                        }
+                    },
+                    Err(e) => {
+                        debug!("Failed to create device proxy for {}: {}", dev_path, e);
+                        None
+                    }
                 }
             } else {
                 None
@@ -346,19 +417,37 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to create proxy for saved connection {}: {}",
+                    cpath, e
+                );
+                continue;
+            }
         };
 
         let msg = match cproxy.call_method("GetSettings", &()).await {
             Ok(m) => m,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to get settings for saved connection {}: {}",
+                    cpath, e
+                );
+                continue;
+            }
         };
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
             match body.deserialize() {
                 Ok(m) => m,
-                Err(_) => continue,
+                Err(e) => {
+                    warn!(
+                        "Failed to deserialize settings for saved connection {}: {}",
+                        cpath, e
+                    );
+                    continue;
+                }
             };
 
         let conn_sec = match settings_map.get("connection") {
@@ -402,7 +491,13 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
 pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
     debug!("Starting forget operation for VPN: {name}");
 
-    let _ = disconnect_vpn(conn, name).await;
+    match disconnect_vpn(conn, name).await {
+        Ok(_) => debug!("VPN disconnected before deletion"),
+        Err(e) => warn!(
+            "Failed to disconnect VPN before deletion (may already be disconnected): {}",
+            e
+        ),
+    }
 
     let settings = nm_proxy(
         conn,
@@ -423,37 +518,45 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!("Failed to create proxy for connection {}: {}", cpath, e);
+                continue;
+            }
         };
 
-        if let Ok(msg) = cproxy.call_method("GetSettings", &()).await {
-            let body = msg.body();
-            let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
-                body.deserialize()?;
+        let msg = match cproxy.call_method("GetSettings", &()).await {
+            Ok(msg) => msg,
+            Err(e) => {
+                warn!("Failed to get settings for connection {}: {}", cpath, e);
+                continue;
+            }
+        };
 
-            if let Some(conn_sec) = settings_map.get("connection") {
-                let id_ok = conn_sec
-                    .get("id")
-                    .and_then(|v| match v {
-                        zvariant::Value::Str(s) => Some(s.as_str() == name),
-                        _ => None,
-                    })
-                    .unwrap_or(false);
+        let body = msg.body();
+        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> = body.deserialize()?;
 
-                let type_ok = conn_sec
-                    .get("type")
-                    .and_then(|v| match v {
-                        zvariant::Value::Str(s) => Some(s.as_str() == "wireguard"),
-                        _ => None,
-                    })
-                    .unwrap_or(false);
+        if let Some(conn_sec) = settings_map.get("connection") {
+            let id_ok = conn_sec
+                .get("id")
+                .and_then(|v| match v {
+                    zvariant::Value::Str(s) => Some(s.as_str() == name),
+                    _ => None,
+                })
+                .unwrap_or(false);
 
-                if id_ok && type_ok {
-                    debug!("Found WireGuard connection, deleting: {name}");
-                    cproxy.call_method("Delete", &()).await?;
-                    info!("Successfully deleted VPN connection: {name}");
-                    return Ok(());
-                }
+            let type_ok = conn_sec
+                .get("type")
+                .and_then(|v| match v {
+                    zvariant::Value::Str(s) => Some(s.as_str() == "wireguard"),
+                    _ => None,
+                })
+                .unwrap_or(false);
+
+            if id_ok && type_ok {
+                debug!("Found WireGuard connection, deleting: {name}");
+                cproxy.call_method("Delete", &()).await?;
+                info!("Successfully deleted VPN connection: {name}");
+                return Ok(());
             }
         }
     }
@@ -478,38 +581,65 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to create proxy for active connection {}: {}",
+                    ac_path, e
+                );
+                continue;
+            }
         };
 
         let conn_path: OwnedObjectPath = match ac_proxy.call_method("Connection", &()).await {
             Ok(msg) => match msg.body().deserialize::<OwnedObjectPath>() {
                 Ok(p) => p,
-                Err(_) => continue,
+                Err(e) => {
+                    warn!(
+                        "Failed to deserialize connection path for {}: {}",
+                        ac_path, e
+                    );
+                    continue;
+                }
             },
-            Err(_) => continue,
+            Err(e) => {
+                warn!("Failed to get Connection property from {}: {}", ac_path, e);
+                continue;
+            }
         };
 
         let cproxy = match nm_proxy(
             conn,
-            conn_path,
+            conn_path.clone(),
             "org.freedesktop.NetworkManager.Settings.Connection",
         )
         .await
         {
             Ok(p) => p,
-            Err(_) => continue,
+            Err(e) => {
+                warn!(
+                    "Failed to create proxy for connection settings {}: {}",
+                    conn_path, e
+                );
+                continue;
+            }
         };
 
         let msg = match cproxy.call_method("GetSettings", &()).await {
             Ok(m) => m,
-            Err(_) => continue,
+            Err(e) => {
+                warn!("Failed to get settings for connection {}: {}", conn_path, e);
+                continue;
+            }
         };
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
             match body.deserialize() {
                 Ok(m) => m,
-                Err(_) => continue,
+                Err(e) => {
+                    warn!("Failed to deserialize settings for {}: {}", conn_path, e);
+                    continue;
+                }
             };
 
         let conn_sec = match settings_map.get("connection") {
