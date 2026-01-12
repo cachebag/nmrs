@@ -3,13 +3,16 @@
 //! Provides helpers for converting between Wi-Fi data representations:
 //! frequency to channel, signal strength to visual bars, SSID bytes to strings.
 
-use log::warn;
+use log::{debug, warn};
 use std::borrow::Cow;
 use std::str;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
-use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::api::models::ConnectionStateReason;
+use crate::dbus::{
+    NMAccessPointProxy, NMActiveConnectionProxy, NMDeviceProxy, NMProxy, NMWirelessProxy,
+};
 use crate::types::constants::{device_type, frequency, signal_strength, wifi_mode};
 use crate::Result;
 
@@ -163,6 +166,43 @@ where
         .interface(interface)?
         .build()
         .await?)
+}
+
+/// Attempts to extract the actual state reason from an active connection.
+///
+/// NetworkManager only provides reason codes via StateChanged signals, not as
+/// a queryable property. This helper attempts to query the connection state
+/// to verify it exists, but cannot extract the reason for its current state.
+/// Returns Unknown if extraction fails, with appropriate logging.
+pub(crate) async fn extract_connection_state_reason(
+    conn: &Connection,
+    active_conn_path: &OwnedObjectPath,
+) -> ConnectionStateReason {
+    match NMActiveConnectionProxy::builder(conn).path(active_conn_path.clone()) {
+        Ok(builder) => match builder.build().await {
+            Ok(ac) => match ac.state().await {
+                Ok(state) => {
+                    debug!(
+                        "Active connection state: {}, but reason not available as property",
+                        state
+                    );
+                    ConnectionStateReason::Unknown
+                }
+                Err(e) => {
+                    warn!("Failed to query active connection state: {}", e);
+                    ConnectionStateReason::Unknown
+                }
+            },
+            Err(e) => {
+                warn!("Failed to build active connection proxy: {}", e);
+                ConnectionStateReason::Unknown
+            }
+        },
+        Err(e) => {
+            warn!("Failed to create active connection proxy builder: {}", e);
+            ConnectionStateReason::Unknown
+        }
+    }
 }
 
 /// Macro to convert Result to Option with error logging.

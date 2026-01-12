@@ -3,6 +3,7 @@
 //! Provides functions to retrieve detailed information about networks
 //! and query the current connection state.
 
+use log::debug;
 use zbus::Connection;
 
 use crate::api::models::{ConnectionError, Network, NetworkInfo};
@@ -46,9 +47,27 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
             let flags = ap.flags().await?;
             let wpa_flags = ap.wpa_flags().await?;
             let rsn_flags = ap.rsn_flags().await?;
-            let freq = ap.frequency().await.ok();
-            let max_br = ap.max_bitrate().await.ok();
-            let mode_raw = ap.mode().await.ok();
+            let freq = match ap.frequency().await {
+                Ok(f) => Some(f),
+                Err(e) => {
+                    debug!("Failed to get frequency for AP: {}", e);
+                    None
+                }
+            };
+            let max_br = match ap.max_bitrate().await {
+                Ok(br) => Some(br),
+                Err(e) => {
+                    debug!("Failed to get max bitrate for AP: {}", e);
+                    None
+                }
+            };
+            let mode_raw = match ap.mode().await {
+                Ok(m) => Some(m),
+                Err(e) => {
+                    debug!("Failed to get mode for AP: {}", e);
+                    None
+                }
+            };
 
             let wep = (flags & security_flags::WEP) != 0 && wpa_flags == 0 && rsn_flags == 0;
             let wpa1 = wpa_flags != 0;
@@ -198,7 +217,13 @@ pub(crate) async fn current_connection_info(conn: &Connection) -> Option<(String
                 );
                 let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
                 let ssid = decode_ssid_or_empty(&ssid_bytes);
-                let frequency = ap.frequency().await.ok();
+                let frequency = match ap.frequency().await {
+                    Ok(f) => Some(f),
+                    Err(e) => {
+                        debug!("Failed to get frequency for current AP: {}", e);
+                        None
+                    }
+                };
                 return Some((ssid.to_string(), frequency));
             }
         }

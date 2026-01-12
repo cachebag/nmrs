@@ -4,7 +4,7 @@
 //! and enabling/disabling Wi-Fi. Uses D-Bus signals for efficient state
 //! monitoring instead of polling.
 
-use log::debug;
+use log::{debug, warn};
 use zbus::Connection;
 
 use crate::api::models::{ConnectionError, Device, DeviceIdentity, DeviceState};
@@ -30,21 +30,48 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
 
         let interface = d_proxy.interface().await?;
         let raw_type = d_proxy.device_type().await?;
-        let current_mac = d_proxy
-            .hw_address()
-            .await
-            .unwrap_or_else(|_| String::from("00:00:00:00:00:00"));
-        // PermHwAddress may not be available on all systems/devices
-        // If not available, fall back to HwAddress
-        let perm_mac = d_proxy
-            .perm_hw_address()
-            .await
-            .unwrap_or_else(|_| current_mac.clone());
+        let current_mac = match d_proxy.hw_address().await {
+            Ok(addr) => addr,
+            Err(e) => {
+                warn!(
+                    "Failed to get hardware address for device {}: {}",
+                    interface, e
+                );
+                String::from("00:00:00:00:00:00")
+            }
+        };
+
+        let perm_mac = match d_proxy.perm_hw_address().await {
+            Ok(addr) => addr,
+            Err(e) => {
+                debug!(
+                    "Permanent hardware address not available for device {}: {}",
+                    interface, e
+                );
+                current_mac.clone()
+            }
+        };
+
         let device_type = raw_type.into();
         let raw_state = d_proxy.state().await?;
         let state = raw_state.into();
-        let managed = d_proxy.managed().await.ok();
-        let driver = d_proxy.driver().await.ok();
+        let managed = match d_proxy.managed().await {
+            Ok(m) => Some(m),
+            Err(e) => {
+                debug!(
+                    "Failed to get 'managed' property for device {}: {}",
+                    interface, e
+                );
+                None
+            }
+        };
+        let driver = match d_proxy.driver().await {
+            Ok(d) => Some(d),
+            Err(e) => {
+                debug!("Failed to get driver for device {}: {}", interface, e);
+                None
+            }
+        };
 
         devices.push(Device {
             path: p.to_string(),
