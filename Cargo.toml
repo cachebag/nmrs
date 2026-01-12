@@ -33,5 +33,4 @@ uuid = { version = "1.19.0", features = ["v4", "v5"] }
 futures = "0.3.31"
 futures-timer = "3.0.3"
 
-# Dev dependencies
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
