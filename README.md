@@ -223,6 +223,3 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for 
 ## License
 
 MIT License. See [LICENSE](./LICENSE) for details.
-
-## Existing crates
-I'm mainly trying to pick up off of where [networkmanager-rs](https://github.com/zibebe/networkmanager-rs) left off.
