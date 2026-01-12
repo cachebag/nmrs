@@ -68,8 +68,8 @@
 //! These settings can then be passed to NetworkManager's
 //! `AddConnection` or `AddAndActivateConnection` D-Bus methods.
 
-pub mod connection_builder;
 pub mod bluetooth;
+pub mod connection_builder;
 pub mod vpn;
 pub mod wifi;
 pub mod wifi_builder;
