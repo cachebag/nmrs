@@ -7,8 +7,9 @@ use log::debug;
 use zbus::Connection;
 
 use crate::api::models::{ConnectionError, Network, NetworkInfo};
-use crate::monitoring::wifi::current_ssid;
-use crate::types::constants::{rate, security_flags};
+use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::try_log;
+use crate::types::constants::{device_type, rate, security_flags};
 use crate::util::utils::{
     bars_from_strength, channel_from_freq, decode_ssid_or_empty, for_each_access_point,
     mode_to_string, strength_or_zero,
@@ -181,6 +182,7 @@ pub(crate) async fn current_ssid(conn: &Connection) -> Option<String> {
 ///
 /// Similar to `current_ssid` but also returns the operating frequency
 /// in MHz, useful for determining if connected to 2.4GHz or 5GHz band.
+#[allow(dead_code)]
 pub(crate) async fn current_connection_info(conn: &Connection) -> Option<(String, Option<u32>)> {
     let nm = try_log!(NMProxy::new(conn).await, "Failed to create NM proxy");
     let devices = try_log!(nm.get_devices().await, "Failed to get devices");
