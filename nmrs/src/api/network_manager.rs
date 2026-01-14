@@ -101,7 +101,7 @@ use crate::Result;
 ///
 /// `NetworkManager` is `Clone` and can be safely shared across async tasks.
 /// Each clone shares the same underlying D-Bus connection.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct NetworkManager {
     conn: Connection,
 }
