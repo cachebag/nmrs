@@ -4,6 +4,10 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-01-13
+### Changed
+- Add `Debug` derive to `NetworkManager` ([#171](https://github.com/cachebag/nmrs/pull/171))
+
 ## [1.3.0] - 2026-01-12
 ### Changed
 - Dedupe DBus proxy construction across connection logic ([#165](https://github.com/cachebag/nmrs/pull/165))
@@ -125,7 +129,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 [1.2.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.1.0...nmrs-v1.2.0
 [1.3.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v1.3.0
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.3.0...HEAD
+[1.3.5]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v1.3.5
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.3.5...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
