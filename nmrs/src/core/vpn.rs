@@ -21,7 +21,7 @@ use crate::api::models::{
 use crate::builders::build_wireguard_connection;
 use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::{NMActiveConnectionProxy, NMProxy};
-use crate::util::utils::{extract_connection_state_reason, nm_proxy};
+use crate::util::utils::{extract_connection_state_reason, nm_proxy, settings_proxy};
 use crate::Result;
 
 /// Connects to a WireGuard connection.
@@ -61,14 +61,7 @@ pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Res
 
         let settings = build_wireguard_connection(&creds, &opts)?;
 
-        // Use Settings API to add connection first, then activate separately
-        // This avoids NetworkManager's device validation when using add_and_activate_connection
-        let settings_api = nm_proxy(
-            conn,
-            "/org/freedesktop/NetworkManager/Settings",
-            "org.freedesktop.NetworkManager.Settings",
-        )
-        .await?;
+        let settings_api = settings_proxy(conn).await?;
 
         debug!("Adding connection via Settings API");
         let add_reply = settings_api
@@ -718,7 +711,7 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
                         _ => None,
                     })?;
                     let prefix = addr_map.get("prefix").and_then(|v| match v {
-                        zvariant::Value::U32(p) => Some(*p),
+                        zvariant::Value::U32(p) => Some(p),
                         _ => None,
                     })?;
                     Some(format!("{}/{}", address, prefix))

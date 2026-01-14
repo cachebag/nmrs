@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::{OwnedObjectPath, Value};
 
-use crate::util::utils::nm_proxy;
+use crate::util::utils::{connection_settings_proxy, settings_proxy};
 use crate::Result;
 
 /// Finds the D-Bus path of a saved connection by SSID.
@@ -23,23 +23,13 @@ pub(crate) async fn get_saved_connection_path(
     conn: &Connection,
     ssid: &str,
 ) -> Result<Option<OwnedObjectPath>> {
-    let settings = nm_proxy(
-        conn,
-        "/org/freedesktop/NetworkManager/Settings",
-        "org.freedesktop.NetworkManager.Settings",
-    )
-    .await?;
+    let settings = settings_proxy(conn).await?;
 
     let reply = settings.call_method("ListConnections", &()).await?;
     let conns: Vec<OwnedObjectPath> = reply.body().deserialize()?;
 
     for cpath in conns {
-        let cproxy = nm_proxy(
-            conn,
-            cpath.as_str(),
-            "org.freedesktop.NetworkManager.Settings.Connection",
-        )
-        .await?;
+        let cproxy = connection_settings_proxy(conn, cpath.clone()).await?;
 
         let msg = cproxy.call_method("GetSettings", &()).await?;
         let body = msg.body();
@@ -69,12 +59,7 @@ pub(crate) async fn has_saved_connection(conn: &Connection, ssid: &str) -> Resul
 /// Calls the Delete method on the connection settings object.
 /// This permanently removes the saved connection from NetworkManager.
 pub(crate) async fn delete_connection(conn: &Connection, conn_path: OwnedObjectPath) -> Result<()> {
-    let cproxy = nm_proxy(
-        conn,
-        conn_path.clone(),
-        "org.freedesktop.NetworkManager.Settings.Connection",
-    )
-    .await?;
+    let cproxy = connection_settings_proxy(conn, conn_path.clone()).await?;
 
     cproxy.call_method("Delete", &()).await?;
     debug!("Deleted connection: {}", conn_path.as_str());

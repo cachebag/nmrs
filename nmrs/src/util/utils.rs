@@ -168,6 +168,39 @@ where
         .await?)
 }
 
+/// Helper to create a Settings proxy.
+///
+/// Creates a proxy for the NetworkManager Settings interface at the standard path.
+/// This is used to list, add, and manage saved connection profiles.
+pub(crate) async fn settings_proxy(conn: &Connection) -> Result<zbus::Proxy<'_>> {
+    nm_proxy(
+        conn,
+        "/org/freedesktop/NetworkManager/Settings",
+        "org.freedesktop.NetworkManager.Settings",
+    )
+    .await
+}
+
+/// Helper to create a Settings.Connection proxy for a specific connection.
+///
+/// Creates a proxy for a specific saved connection object.
+/// This is used to get/update connection settings or delete the connection.
+pub(crate) async fn connection_settings_proxy<'a, P>(
+    conn: &'a Connection,
+    connection_path: P,
+) -> Result<zbus::Proxy<'a>>
+where
+    P: TryInto<OwnedObjectPath>,
+    P::Error: Into<zbus::Error>,
+{
+    nm_proxy(
+        conn,
+        connection_path,
+        "org.freedesktop.NetworkManager.Settings.Connection",
+    )
+    .await
+}
+
 /// Attempts to extract the actual state reason from an active connection.
 ///
 /// NetworkManager only provides reason codes via StateChanged signals, not as
