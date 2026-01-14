@@ -534,12 +534,8 @@ pub struct EapOptions {
 /// ```rust
 /// use nmrs::ConnectionOptions;
 ///
-/// // Basic auto-connect
-/// let opts = ConnectionOptions {
-///     autoconnect: true,
-///     autoconnect_priority: None,
-///     autoconnect_retries: None,
-/// };
+/// // Basic auto-connect (using defaults)
+/// let opts = ConnectionOptions::default();
 ///
 /// // High-priority connection with retry limit
 /// let opts_priority = ConnectionOptions {
@@ -563,6 +559,22 @@ pub struct ConnectionOptions {
     pub autoconnect_priority: Option<i32>,
     /// Maximum number of auto-connect retry attempts
     pub autoconnect_retries: Option<i32>,
+}
+
+impl Default for ConnectionOptions {
+    /// Returns the default connection options.
+    ///
+    /// Defaults:
+    /// - `autoconnect`: `true`
+    /// - `autoconnect_priority`: `None` (uses NetworkManager's default of 0)
+    /// - `autoconnect_retries`: `None` (unlimited retries)
+    fn default() -> Self {
+        Self {
+            autoconnect: true,
+            autoconnect_priority: None,
+            autoconnect_retries: None,
+        }
+    }
 }
 
 /// Wi-Fi connection security types.
@@ -835,6 +847,8 @@ pub struct VpnConnectionInfo {
 /// NetworkManager device types.
 ///
 /// Represents the type of network hardware managed by NetworkManager.
+/// This enum uses a registry-based system to support adding new device
+/// types without breaking the API.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceType {
     /// Wired Ethernet device.
@@ -846,7 +860,79 @@ pub enum DeviceType {
     /// Loopback device (localhost).
     Loopback,
     /// Unknown or unsupported device type with raw code.
+    ///
+    /// Use the methods on `DeviceType` to query capabilities of unknown device types,
+    /// which will consult the internal device type registry.
     Other(u32),
+}
+
+impl DeviceType {
+    /// Returns whether this device type supports network scanning.
+    ///
+    /// Currently only WiFi and WiFi P2P devices support scanning.
+    /// For unknown device types, consults the internal device type registry.
+    pub fn supports_scanning(&self) -> bool {
+        match self {
+            Self::Wifi | Self::WifiP2P => true,
+            Self::Other(code) => crate::types::device_type_registry::supports_scanning(*code),
+            _ => false,
+        }
+    }
+
+    /// Returns whether this device type requires a specific object (like an access point).
+    ///
+    /// WiFi devices require an access point to connect to, while Ethernet can connect
+    /// without a specific target.
+    /// For unknown device types, consults the internal device type registry.
+    pub fn requires_specific_object(&self) -> bool {
+        match self {
+            Self::Wifi | Self::WifiP2P => true,
+            Self::Other(code) => {
+                crate::types::device_type_registry::requires_specific_object(*code)
+            }
+            _ => false,
+        }
+    }
+
+    /// Returns whether this device type has a global enabled/disabled state.
+    ///
+    /// WiFi has a global radio killswitch that can enable/disable all WiFi devices.
+    /// For unknown device types, consults the internal device type registry.
+    pub fn has_global_enabled_state(&self) -> bool {
+        match self {
+            Self::Wifi => true,
+            Self::Other(code) => {
+                crate::types::device_type_registry::has_global_enabled_state(*code)
+            }
+            _ => false,
+        }
+    }
+
+    /// Returns the NetworkManager connection type string for this device.
+    ///
+    /// This is used when creating connection profiles for this device type.
+    /// For unknown device types, consults the internal device type registry.
+    pub fn connection_type_str(&self) -> &'static str {
+        match self {
+            Self::Ethernet => "802-3-ethernet",
+            Self::Wifi => "802-11-wireless",
+            Self::WifiP2P => "wifi-p2p",
+            Self::Loopback => "loopback",
+            Self::Other(code) => crate::types::device_type_registry::connection_type_for_code(*code)
+                .unwrap_or("generic"),
+        }
+    }
+
+    /// Returns the raw NetworkManager type code for this device.
+    pub fn to_code(&self) -> u32 {
+        match self {
+            Self::Ethernet => 1,
+            Self::Wifi => 2,
+            Self::WifiP2P => 30,
+            Self::Loopback => 32,
+            Self::Other(code) => *code,
+        }
+    }
 }
 
 /// NetworkManager device states.
@@ -1218,7 +1304,9 @@ impl Display for DeviceType {
             DeviceType::Wifi => write!(f, "Wi-Fi"),
             DeviceType::WifiP2P => write!(f, "Wi-Fi P2P"),
             DeviceType::Loopback => write!(f, "Loopback"),
-            DeviceType::Other(v) => write!(f, "Other({v})"),
+            DeviceType::Other(v) => {
+                write!(f, "{}", crate::types::device_type_registry::display_name_for_code(*v))
+            }
         }
     }
 }
@@ -1290,12 +1378,107 @@ mod tests {
     }
 
     #[test]
+    fn device_type_from_u32_registry_types() {
+        assert_eq!(DeviceType::from(11), DeviceType::Other(11));
+        assert_eq!(DeviceType::from(12), DeviceType::Other(12));
+        assert_eq!(DeviceType::from(13), DeviceType::Other(13));
+        assert_eq!(DeviceType::from(16), DeviceType::Other(16));
+        assert_eq!(DeviceType::from(29), DeviceType::Other(29));
+    }
+
+    #[test]
     fn device_type_display() {
         assert_eq!(format!("{}", DeviceType::Ethernet), "Ethernet");
         assert_eq!(format!("{}", DeviceType::Wifi), "Wi-Fi");
         assert_eq!(format!("{}", DeviceType::WifiP2P), "Wi-Fi P2P");
         assert_eq!(format!("{}", DeviceType::Loopback), "Loopback");
         assert_eq!(format!("{}", DeviceType::Other(42)), "Other(42)");
+    }
+
+    #[test]
+    fn device_type_display_registry() {
+        assert_eq!(format!("{}", DeviceType::Other(13)), "Bridge");
+        assert_eq!(format!("{}", DeviceType::Other(12)), "Bond");
+        assert_eq!(format!("{}", DeviceType::Other(11)), "VLAN");
+        assert_eq!(format!("{}", DeviceType::Other(16)), "TUN");
+        assert_eq!(format!("{}", DeviceType::Other(29)), "WireGuard");
+    }
+
+    #[test]
+    fn device_type_supports_scanning() {
+        assert!(DeviceType::Wifi.supports_scanning());
+        assert!(DeviceType::WifiP2P.supports_scanning());
+        assert!(!DeviceType::Ethernet.supports_scanning());
+        assert!(!DeviceType::Loopback.supports_scanning());
+    }
+
+    #[test]
+    fn device_type_supports_scanning_registry() {
+        assert!(DeviceType::Other(30).supports_scanning());
+        assert!(!DeviceType::Other(13).supports_scanning());
+        assert!(!DeviceType::Other(29).supports_scanning());
+    }
+
+    #[test]
+    fn device_type_requires_specific_object() {
+        assert!(DeviceType::Wifi.requires_specific_object());
+        assert!(DeviceType::WifiP2P.requires_specific_object());
+        assert!(!DeviceType::Ethernet.requires_specific_object());
+        assert!(!DeviceType::Loopback.requires_specific_object());
+    }
+
+    #[test]
+    fn device_type_requires_specific_object_registry() {
+        assert!(DeviceType::Other(2).requires_specific_object());
+        assert!(!DeviceType::Other(1).requires_specific_object());
+        assert!(!DeviceType::Other(29).requires_specific_object());
+    }
+
+    #[test]
+    fn device_type_has_global_enabled_state() {
+        assert!(DeviceType::Wifi.has_global_enabled_state());
+        assert!(!DeviceType::Ethernet.has_global_enabled_state());
+        assert!(!DeviceType::WifiP2P.has_global_enabled_state());
+    }
+
+    #[test]
+    fn device_type_has_global_enabled_state_registry() {
+        assert!(DeviceType::Other(2).has_global_enabled_state());
+        assert!(!DeviceType::Other(1).has_global_enabled_state());
+    }
+
+    #[test]
+    fn device_type_connection_type_str() {
+        assert_eq!(DeviceType::Ethernet.connection_type_str(), "802-3-ethernet");
+        assert_eq!(DeviceType::Wifi.connection_type_str(), "802-11-wireless");
+        assert_eq!(DeviceType::WifiP2P.connection_type_str(), "wifi-p2p");
+        assert_eq!(DeviceType::Loopback.connection_type_str(), "loopback");
+    }
+
+    #[test]
+    fn device_type_connection_type_str_registry() {
+        assert_eq!(DeviceType::Other(13).connection_type_str(), "bridge");
+        assert_eq!(DeviceType::Other(12).connection_type_str(), "bond");
+        assert_eq!(DeviceType::Other(11).connection_type_str(), "vlan");
+        assert_eq!(DeviceType::Other(29).connection_type_str(), "wireguard");
+    }
+
+    #[test]
+    fn device_type_to_code() {
+        assert_eq!(DeviceType::Ethernet.to_code(), 1);
+        assert_eq!(DeviceType::Wifi.to_code(), 2);
+        assert_eq!(DeviceType::WifiP2P.to_code(), 30);
+        assert_eq!(DeviceType::Loopback.to_code(), 32);
+        assert_eq!(DeviceType::Other(999).to_code(), 999);
+    }
+
+    #[test]
+    fn device_type_to_code_registry() {
+        assert_eq!(DeviceType::Other(11).to_code(), 11);
+        assert_eq!(DeviceType::Other(12).to_code(), 12);
+        assert_eq!(DeviceType::Other(13).to_code(), 13);
+        assert_eq!(DeviceType::Other(16).to_code(), 16);
+        assert_eq!(DeviceType::Other(29).to_code(), 29);
     }
 
     #[test]
