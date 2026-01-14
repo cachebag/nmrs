@@ -230,5 +230,5 @@ This project is dual-licensed under either of the following licenses, at your op
 You may use, copy, modify, and distribute this software under the terms of either license.
 
 See the following files for full license texts:
-- MIT License: ./LICENSE-MIT
-- Apache License 2.0: ./LICENSE-APACHE
+- [MIT License](./LICENSE-MIT)
+- [Apache License 2.0](./LICENSE-APACHE)
