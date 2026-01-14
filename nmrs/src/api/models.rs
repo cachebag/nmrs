@@ -918,8 +918,10 @@ impl DeviceType {
             Self::Wifi => "802-11-wireless",
             Self::WifiP2P => "wifi-p2p",
             Self::Loopback => "loopback",
-            Self::Other(code) => crate::types::device_type_registry::connection_type_for_code(*code)
-                .unwrap_or("generic"),
+            Self::Other(code) => {
+                crate::types::device_type_registry::connection_type_for_code(*code)
+                    .unwrap_or("generic")
+            }
         }
     }
 
@@ -1305,7 +1307,11 @@ impl Display for DeviceType {
             DeviceType::WifiP2P => write!(f, "Wi-Fi P2P"),
             DeviceType::Loopback => write!(f, "Loopback"),
             DeviceType::Other(v) => {
-                write!(f, "{}", crate::types::device_type_registry::display_name_for_code(*v))
+                write!(
+                    f,
+                    "{}",
+                    crate::types::device_type_registry::display_name_for_code(*v)
+                )
             }
         }
     }
