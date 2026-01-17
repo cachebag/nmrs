@@ -1082,6 +1082,10 @@ pub enum ConnectionError {
     #[error("no saved connection for network")]
     NoSavedConnection,
 
+    /// Invalid credentials for the request network
+    #[error("invalid credentials for network")]
+    InvalidCredentials,
+
     /// A general connection failure with a device state reason code.
     #[error("connection failed: {0}")]
     DeviceFailed(StateReason),
