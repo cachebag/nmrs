@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Added
+- Input validation before any D-Bus operations ([#173](https://github.com/cachebag/nmrs/pull/173))
 
 ## [1.3.5] - 2026-01-13
 ### Changed
