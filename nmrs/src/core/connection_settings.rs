@@ -10,19 +10,33 @@ use zbus::Connection;
 use zvariant::{OwnedObjectPath, Value};
 
 use crate::util::utils::{connection_settings_proxy, settings_proxy};
+use crate::util::validation::validate_ssid;
 use crate::Result;
 
-/// Finds the D-Bus path of a saved connection by SSID.
+/// Finds the D-Bus path of a saved connection by SSID or connection name.
 ///
 /// Iterates through all saved connections in NetworkManager's settings
 /// and returns the path of the first one whose connection ID matches
-/// the given SSID.
+/// the given SSID or name.
 ///
-/// Returns `None` if no saved connection exists for this SSID.
+/// Note: This function is used for both WiFi SSIDs and VPN connection names.
+/// The validation enforces WiFi SSID rules (max 32 bytes), which is also
+/// reasonable for VPN connection names.
+///
+/// Returns `None` if no saved connection exists for this SSID/name.
 pub(crate) async fn get_saved_connection_path(
     conn: &Connection,
     ssid: &str,
 ) -> Result<Option<OwnedObjectPath>> {
+    // Validate the connection name/SSID
+    if ssid.trim().is_empty() {
+        return Ok(None);
+    }
+
+    // Validate using SSID rules (max 32 bytes, no special chars)
+    // This applies to both WiFi SSIDs and connection names
+    validate_ssid(ssid)?;
+
     let settings = settings_proxy(conn).await?;
 
     let reply = settings.call_method("ListConnections", &()).await?;
