@@ -12,6 +12,7 @@ use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
 use crate::types::constants::{device_state, device_type, timeouts};
 use crate::util::utils::{decode_ssid_or_empty, nm_proxy};
+use crate::util::validation::{validate_ssid, validate_wifi_security};
 use crate::Result;
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
@@ -34,6 +35,10 @@ enum SavedDecision {
 /// If a saved connection exists but fails, it will be deleted and a fresh
 /// connection will be attempted with the provided credentials.
 pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) -> Result<()> {
+    // Validate inputs before attempting connection
+    validate_ssid(ssid)?;
+    validate_wifi_security(&creds)?;
+
     debug!(
         "Connecting to '{}' | secured={} is_psk={} is_eap={}",
         ssid,
@@ -158,6 +163,9 @@ pub(crate) async fn connect_wired(conn: &Connection) -> Result<()> {
 pub(crate) async fn forget(conn: &Connection, ssid: &str) -> Result<()> {
     use std::collections::HashMap;
     use zvariant::{OwnedObjectPath, Value};
+
+    // Validate SSID
+    validate_ssid(ssid)?;
 
     debug!("Starting forget operation for: {ssid}");
 
