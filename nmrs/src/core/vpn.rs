@@ -22,6 +22,7 @@ use crate::builders::build_wireguard_connection;
 use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::{NMActiveConnectionProxy, NMProxy};
 use crate::util::utils::{extract_connection_state_reason, nm_proxy, settings_proxy};
+use crate::util::validation::{validate_connection_name, validate_vpn_credentials};
 use crate::Result;
 
 /// Connects to a WireGuard connection.
@@ -35,6 +36,9 @@ use crate::Result;
 /// WireGuard activations do not require binding to an underlying device.
 /// Use "/" so NetworkManager auto-selects.
 pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Result<()> {
+    // Validate VPN credentials before attempting connection
+    validate_vpn_credentials(&creds)?;
+
     debug!("Connecting to VPN: {}", creds.name);
 
     let nm = NMProxy::new(conn).await?;
@@ -132,6 +136,9 @@ pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Res
 /// If found, deactivates the connection. If not found, assumes already
 /// disconnected and returns success.
 pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> {
+    // Validate connection name
+    validate_connection_name(name)?;
+
     debug!("Disconnecting VPN: {name}");
 
     let nm = NMProxy::new(conn).await?;
@@ -482,6 +489,9 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
 ///
 /// If currently connected, the connection will be disconnected first before deletion.
 pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
+    // Validate connection name
+    validate_connection_name(name)?;
+
     debug!("Starting forget operation for VPN: {name}");
 
     match disconnect_vpn(conn, name).await {
@@ -562,6 +572,9 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
 ///
 /// The connection must be in the active connections list to retrieve full details.
 pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnConnectionInfo> {
+    // Validate connection name
+    validate_connection_name(name)?;
+
     let nm = NMProxy::new(conn).await?;
     let active_conns = nm.active_connections().await?;
 
