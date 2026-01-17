@@ -21,6 +21,7 @@ thiserror.workspace = true
 uuid.workspace = true
 futures.workspace = true
 futures-timer.workspace = true
+base64.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
