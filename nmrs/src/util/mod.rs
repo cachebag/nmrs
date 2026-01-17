@@ -3,3 +3,4 @@
 //! This module contains helper functions used throughout the crate.
 
 pub(crate) mod utils;
+pub(crate) mod validation;
