@@ -925,8 +925,8 @@ dependencies = [
 name = "nmrs"
 version = "2.0.0-dev"
 dependencies = [
- "base64",
  "async-trait",
+ "base64",
  "futures",
  "futures-timer",
  "log",
