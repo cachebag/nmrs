@@ -303,6 +303,7 @@ pub enum StateReason {
 /// # Ok(())
 /// # }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Network {
     /// Device interface name (e.g., "wlan0")
@@ -352,6 +353,7 @@ pub struct Network {
 /// # Ok(())
 /// # }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkInfo {
     /// Network SSID (name)
@@ -410,6 +412,7 @@ pub struct NetworkInfo {
 /// # Ok(())
 /// # }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct Device {
     /// D-Bus object path
@@ -446,6 +449,7 @@ pub struct DeviceIdentity {
 /// EAP (Extensible Authentication Protocol) method for WPA-Enterprise Wi-Fi.
 ///
 /// These are the outer authentication methods used in 802.1X authentication.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EapMethod {
     /// Protected EAP (PEAPv0) - tunnels inner authentication in TLS.
@@ -460,6 +464,7 @@ pub enum EapMethod {
 ///
 /// These methods run inside the TLS tunnel established by the outer
 /// EAP method (PEAP or TTLS).
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Phase2 {
     /// Microsoft Challenge Handshake Authentication Protocol v2.
@@ -511,6 +516,7 @@ pub enum Phase2 {
 ///     phase2: Phase2::Pap,
 /// };
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EapOptions {
     /// User identity (usually email or username)
@@ -558,6 +564,7 @@ pub struct EapOptions {
 ///     autoconnect_retries: None,
 /// };
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ConnectionOptions {
     /// Whether to automatically connect when available
@@ -642,6 +649,7 @@ impl Default for ConnectionOptions {
 /// # Ok(())
 /// # }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WifiSecurity {
     /// Open network (no authentication)
@@ -662,6 +670,7 @@ pub enum WifiSecurity {
 ///
 /// Identifies the VPN protocol/technology used for the connection.
 /// Currently only WireGuard is supported.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VpnType {
     /// WireGuard - modern, high-performance VPN protocol.
@@ -708,6 +717,7 @@ pub enum VpnType {
 ///     uuid: None,
 /// };
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct VpnCredentials {
     /// The type of VPN (currently only WireGuard).
@@ -755,6 +765,7 @@ pub struct VpnCredentials {
 ///     persistent_keepalive: Some(25),
 /// };
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct WireGuardPeer {
     /// The peer's WireGuard public key (base64 encoded).
@@ -793,6 +804,7 @@ pub struct WireGuardPeer {
 ///     interface: Some("wg0".into()),
 /// };
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct VpnConnection {
     /// The connection name/identifier.
@@ -831,6 +843,7 @@ pub struct VpnConnection {
 ///     dns_servers: vec!["1.1.1.1".into()],
 /// };
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct VpnConnectionInfo {
     /// The connection name/identifier.
