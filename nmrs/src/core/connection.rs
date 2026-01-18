@@ -725,7 +725,7 @@ fn decide_saved_connection(
         Some(path) => Ok(SavedDecision::UseSaved(path)),
 
         None if matches!(creds, WifiSecurity::WpaPsk { psk } if psk.trim().is_empty()) => {
-            Err(ConnectionError::NoSavedConnection)
+            Err(ConnectionError::MissingPassword)
         }
 
         None => Ok(SavedDecision::RebuildFresh),
