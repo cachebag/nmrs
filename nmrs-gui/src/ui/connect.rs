@@ -191,18 +191,16 @@ fn draw_connect_modal(
 
             glib::MainContext::default().spawn_local(async move {
                 let creds = if is_eap {
-                    WifiSecurity::WpaEap {
-                        opts: EapOptions {
-                            identity: username,
-                            password: pwd,
-                            anonymous_identity: None,
-                            domain_suffix_match: None,
-                            ca_cert_path: cert_path,
-                            system_ca_certs: use_system_ca,
-                            method: EapMethod::Peap,
-                            phase2: Phase2::Mschapv2,
-                        },
+                    let mut opts = EapOptions::new(username, pwd)
+                        .with_method(EapMethod::Peap)
+                        .with_phase2(Phase2::Mschapv2)
+                        .with_system_ca_certs(use_system_ca);
+
+                    if let Some(cert) = cert_path {
+                        opts = opts.with_ca_cert_path(format!("file://{}", cert));
                     }
+
+                    WifiSecurity::WpaEap { opts }
                 } else {
                     WifiSecurity::WpaPsk { psk: pwd }
                 };
