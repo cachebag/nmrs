@@ -9,7 +9,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      id-token: read
       contents: write
     steps:
       - uses: actions/checkout@v6
