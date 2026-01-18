@@ -289,4 +289,5 @@ fn test_connection_error_types() {
     let _err6 = ConnectionError::InvalidPeers("test".to_string());
     let _err7 = ConnectionError::InvalidPrivateKey("test".to_string());
     let _err8 = ConnectionError::InvalidPublicKey("test".to_string());
+    let _err9 = ConnectionError::MissingPassword;
 }
