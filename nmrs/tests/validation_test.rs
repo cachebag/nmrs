@@ -3,10 +3,7 @@
 //! These tests verify that invalid inputs are rejected before attempting
 //! D-Bus operations, providing clear error messages to users.
 
-use nmrs::{
-    ConnectionError, EapMethod, EapOptions, Phase2, VpnCredentials, VpnType, WifiSecurity,
-    WireGuardPeer,
-};
+use nmrs::{ConnectionError, EapOptions, VpnCredentials, VpnType, WifiSecurity, WireGuardPeer};
 
 #[test]
 fn test_invalid_ssid_empty() {
@@ -85,77 +82,53 @@ fn test_empty_wpa_psk_allowed() {
 
 #[test]
 fn test_invalid_eap_empty_identity() {
-    let eap = WifiSecurity::WpaEap {
-        opts: EapOptions {
-            identity: "".to_string(), // Empty identity should be rejected
-            password: "password".to_string(),
-            anonymous_identity: None,
-            domain_suffix_match: None,
-            ca_cert_path: None,
-            system_ca_certs: true,
-            method: EapMethod::Peap,
-            phase2: Phase2::Mschapv2,
-        },
-    };
+    let opts = EapOptions::new("", "password").with_system_ca_certs(true);
+
+    let eap = WifiSecurity::WpaEap { opts };
 
     assert!(eap.is_eap());
 }
 
 #[test]
 fn test_invalid_eap_ca_cert_path() {
-    let eap = WifiSecurity::WpaEap {
-        opts: EapOptions {
-            identity: "user@example.com".to_string(),
-            password: "password".to_string(),
-            anonymous_identity: None,
-            domain_suffix_match: None,
-            ca_cert_path: Some("/etc/ssl/cert.pem".to_string()), // Missing file:// prefix
-            system_ca_certs: false,
-            method: EapMethod::Peap,
-            phase2: Phase2::Mschapv2,
-        },
-    };
+    let opts =
+        EapOptions::new("user@example.com", "password").with_ca_cert_path("/etc/ssl/cert.pem"); // Missing file:// prefix
+
+    let eap = WifiSecurity::WpaEap { opts };
 
     assert!(eap.is_eap());
 }
 
 #[test]
 fn test_valid_eap() {
-    let eap = WifiSecurity::WpaEap {
-        opts: EapOptions {
-            identity: "user@example.com".to_string(),
-            password: "password".to_string(),
-            anonymous_identity: Some("anonymous@example.com".to_string()),
-            domain_suffix_match: Some("example.com".to_string()),
-            ca_cert_path: Some("file:///etc/ssl/cert.pem".to_string()),
-            system_ca_certs: false,
-            method: EapMethod::Peap,
-            phase2: Phase2::Mschapv2,
-        },
-    };
+    let opts = EapOptions::new("user@example.com", "password")
+        .with_anonymous_identity("anonymous@example.com")
+        .with_domain_suffix_match("example.com")
+        .with_ca_cert_path("file:///etc/ssl/cert.pem");
+
+    let eap = WifiSecurity::WpaEap { opts };
 
     assert!(eap.is_eap());
 }
 
 #[test]
 fn test_invalid_vpn_empty_name() {
-    let creds = VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: "".to_string(), // Empty name should be rejected
-        gateway: "vpn.example.com:51820".to_string(),
-        private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".to_string(),
-        address: "10.0.0.2/24".to_string(),
-        peers: vec![WireGuardPeer {
-            public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".to_string(),
-            gateway: "vpn.example.com:51820".to_string(),
-            allowed_ips: vec!["0.0.0.0/0".to_string()],
-            preshared_key: None,
-            persistent_keepalive: Some(25),
-        }],
-        dns: Some(vec!["1.1.1.1".to_string()]),
-        mtu: None,
-        uuid: None,
-    };
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".to_string()],
+    )
+    .with_persistent_keepalive(25);
+
+    let creds = VpnCredentials::new(
+        VpnType::WireGuard,
+        "", // Empty name should be rejected
+        "vpn.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2/24",
+        vec![peer],
+    )
+    .with_dns(vec!["1.1.1.1".to_string()]);
 
     // Validation will catch this
     assert_eq!(creds.name, "");
@@ -163,23 +136,22 @@ fn test_invalid_vpn_empty_name() {
 
 #[test]
 fn test_invalid_vpn_gateway_no_port() {
-    let creds = VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: "TestVPN".to_string(),
-        gateway: "vpn.example.com".to_string(), // Missing port
-        private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".to_string(),
-        address: "10.0.0.2/24".to_string(),
-        peers: vec![WireGuardPeer {
-            public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".to_string(),
-            gateway: "vpn.example.com:51820".to_string(),
-            allowed_ips: vec!["0.0.0.0/0".to_string()],
-            preshared_key: None,
-            persistent_keepalive: Some(25),
-        }],
-        dns: Some(vec!["1.1.1.1".to_string()]),
-        mtu: None,
-        uuid: None,
-    };
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".to_string()],
+    )
+    .with_persistent_keepalive(25);
+
+    let creds = VpnCredentials::new(
+        VpnType::WireGuard,
+        "TestVPN",
+        "vpn.example.com", // Missing port
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2/24",
+        vec![peer],
+    )
+    .with_dns(vec!["1.1.1.1".to_string()]);
 
     // Validation will catch missing port
     assert!(!creds.gateway.contains(':'));
@@ -187,17 +159,15 @@ fn test_invalid_vpn_gateway_no_port() {
 
 #[test]
 fn test_invalid_vpn_no_peers() {
-    let creds = VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: "TestVPN".to_string(),
-        gateway: "vpn.example.com:51820".to_string(),
-        private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".to_string(),
-        address: "10.0.0.2/24".to_string(),
-        peers: vec![], // No peers should be rejected
-        dns: Some(vec!["1.1.1.1".to_string()]),
-        mtu: None,
-        uuid: None,
-    };
+    let creds = VpnCredentials::new(
+        VpnType::WireGuard,
+        "TestVPN",
+        "vpn.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2/24",
+        vec![], // No peers should be rejected
+    )
+    .with_dns(vec!["1.1.1.1".to_string()]);
 
     // Validation will catch empty peers
     assert!(creds.peers.is_empty());
@@ -205,23 +175,22 @@ fn test_invalid_vpn_no_peers() {
 
 #[test]
 fn test_invalid_vpn_bad_cidr() {
-    let creds = VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: "TestVPN".to_string(),
-        gateway: "vpn.example.com:51820".to_string(),
-        private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".to_string(),
-        address: "10.0.0.2".to_string(), // Missing /prefix
-        peers: vec![WireGuardPeer {
-            public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".to_string(),
-            gateway: "vpn.example.com:51820".to_string(),
-            allowed_ips: vec!["0.0.0.0/0".to_string()],
-            preshared_key: None,
-            persistent_keepalive: Some(25),
-        }],
-        dns: Some(vec!["1.1.1.1".to_string()]),
-        mtu: None,
-        uuid: None,
-    };
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".to_string()],
+    )
+    .with_persistent_keepalive(25);
+
+    let creds = VpnCredentials::new(
+        VpnType::WireGuard,
+        "TestVPN",
+        "vpn.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2", // Missing /prefix
+        vec![peer],
+    )
+    .with_dns(vec!["1.1.1.1".to_string()]);
 
     // Validation will catch invalid CIDR
     assert!(!creds.address.contains('/'));
@@ -229,23 +198,23 @@ fn test_invalid_vpn_bad_cidr() {
 
 #[test]
 fn test_invalid_vpn_mtu_too_small() {
-    let creds = VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: "TestVPN".to_string(),
-        gateway: "vpn.example.com:51820".to_string(),
-        private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".to_string(),
-        address: "10.0.0.2/24".to_string(),
-        peers: vec![WireGuardPeer {
-            public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".to_string(),
-            gateway: "vpn.example.com:51820".to_string(),
-            allowed_ips: vec!["0.0.0.0/0".to_string()],
-            preshared_key: None,
-            persistent_keepalive: Some(25),
-        }],
-        dns: Some(vec!["1.1.1.1".to_string()]),
-        mtu: Some(500), // Too small (minimum is 576)
-        uuid: None,
-    };
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".to_string()],
+    )
+    .with_persistent_keepalive(25);
+
+    let creds = VpnCredentials::new(
+        VpnType::WireGuard,
+        "TestVPN",
+        "vpn.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2/24",
+        vec![peer],
+    )
+    .with_dns(vec!["1.1.1.1".to_string()])
+    .with_mtu(500); // Too small (minimum is 576)
 
     // Validation will catch MTU too small
     assert!(creds.mtu.unwrap() < 576);
@@ -253,23 +222,23 @@ fn test_invalid_vpn_mtu_too_small() {
 
 #[test]
 fn test_valid_vpn_credentials() {
-    let creds = VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: "TestVPN".to_string(),
-        gateway: "vpn.example.com:51820".to_string(),
-        private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".to_string(),
-        address: "10.0.0.2/24".to_string(),
-        peers: vec![WireGuardPeer {
-            public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".to_string(),
-            gateway: "vpn.example.com:51820".to_string(),
-            allowed_ips: vec!["0.0.0.0/0".to_string(), "::/0".to_string()],
-            preshared_key: None,
-            persistent_keepalive: Some(25),
-        }],
-        dns: Some(vec!["1.1.1.1".to_string(), "8.8.8.8".to_string()]),
-        mtu: Some(1420),
-        uuid: None,
-    };
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".to_string(), "::/0".to_string()],
+    )
+    .with_persistent_keepalive(25);
+
+    let creds = VpnCredentials::new(
+        VpnType::WireGuard,
+        "TestVPN",
+        "vpn.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2/24",
+        vec![peer],
+    )
+    .with_dns(vec!["1.1.1.1".to_string(), "8.8.8.8".to_string()])
+    .with_mtu(1420);
 
     // All fields should be valid
     assert!(!creds.name.is_empty());

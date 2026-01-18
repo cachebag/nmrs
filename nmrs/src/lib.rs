@@ -41,23 +41,20 @@
 //! let nm = NetworkManager::new().await?;
 //!
 //! // Configure WireGuard VPN
-//! let creds = VpnCredentials {
-//!     vpn_type: VpnType::WireGuard,
-//!     name: "MyVPN".into(),
-//!     gateway: "vpn.example.com:51820".into(),
-//!     private_key: "your_private_key".into(),
-//!     address: "10.0.0.2/24".into(),
-//!     peers: vec![WireGuardPeer {
-//!         public_key: "peer_public_key".into(),
-//!         gateway: "vpn.example.com:51820".into(),
-//!         allowed_ips: vec!["0.0.0.0/0".into()],
-//!         preshared_key: None,
-//!         persistent_keepalive: Some(25),
-//!     }],
-//!     dns: Some(vec!["1.1.1.1".into(), "8.8.8.8".into()]),
-//!     mtu: None,
-//!     uuid: None,
-//! };
+//! let peer = WireGuardPeer::new(
+//!     "peer_public_key",
+//!     "vpn.example.com:51820",
+//!     vec!["0.0.0.0/0".into()],
+//! ).with_persistent_keepalive(25);
+//!
+//! let creds = VpnCredentials::new(
+//!     VpnType::WireGuard,
+//!     "MyVPN",
+//!     "vpn.example.com:51820",
+//!     "your_private_key",
+//!     "10.0.0.2/24",
+//!     vec![peer],
+//! ).with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
 //!
 //! // Connect to VPN
 //! nm.connect_vpn(creds).await?;
@@ -122,17 +119,14 @@
 //! }).await?;
 //!
 //! // WPA-EAP (Enterprise)
+//! let eap_opts = EapOptions::new("user@company.com", "password")
+//!     .with_domain_suffix_match("company.com")
+//!     .with_system_ca_certs(true)
+//!     .with_method(EapMethod::Peap)
+//!     .with_phase2(Phase2::Mschapv2);
+//!
 //! nm.connect("CorpWiFi", WifiSecurity::WpaEap {
-//!     opts: EapOptions {
-//!         identity: "user@company.com".into(),
-//!         password: "password".into(),
-//!         anonymous_identity: None,
-//!         domain_suffix_match: Some("company.com".into()),
-//!         ca_cert_path: None,
-//!         system_ca_certs: true,
-//!         method: EapMethod::Peap,
-//!         phase2: Phase2::Mschapv2,
-//!     }
+//!     opts: eap_opts
 //! }).await?;
 //!
 //! // Ethernet (auto-connects when cable is plugged in)
@@ -274,11 +268,7 @@ mod util;
 /// use nmrs::builders::build_wifi_connection;
 /// use nmrs::{WifiSecurity, ConnectionOptions};
 ///
-/// let opts = ConnectionOptions {
-///     autoconnect: true,
-///     autoconnect_priority: None,
-///     autoconnect_retries: None,
-/// };
+/// let opts = ConnectionOptions::new(true);
 ///
 /// let settings = build_wifi_connection(
 ///     "MyNetwork",

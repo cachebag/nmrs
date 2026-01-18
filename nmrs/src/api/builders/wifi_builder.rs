@@ -54,16 +54,11 @@ pub enum WifiBand {
 /// use nmrs::builders::WifiConnectionBuilder;
 /// use nmrs::{EapOptions, EapMethod, Phase2};
 ///
-/// let eap_opts = EapOptions {
-///     identity: "user@company.com".into(),
-///     password: "password".into(),
-///     anonymous_identity: None,
-///     domain_suffix_match: Some("company.com".into()),
-///     ca_cert_path: None,
-///     system_ca_certs: true,
-///     method: EapMethod::Peap,
-///     phase2: Phase2::Mschapv2,
-/// };
+/// let eap_opts = EapOptions::new("user@company.com", "password")
+///     .with_domain_suffix_match("company.com")
+///     .with_system_ca_certs(true)
+///     .with_method(EapMethod::Peap)
+///     .with_phase2(Phase2::Mschapv2);
 ///
 /// let settings = WifiConnectionBuilder::new("CorpNetwork")
 ///     .wpa_eap(eap_opts)
