@@ -8,6 +8,9 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - CI: adjust workflow to auto-update nix hashes on PRs ([#182](https://github.com/cachebag/nmrs/pull/182))
 - More helpful methods to `network_manager` facade ([#190](https://github.com/cachebag/nmrs/pull/190)) 
 
+### Fixed
+- Race condition in signal subscription ([#191](https://github.com/cachebag/nmrs/pull/191))
+
 ## [1.3.5] - 2026-01-13
 ### Changed
 - Add `Debug` derive to `NetworkManager` ([#171](https://github.com/cachebag/nmrs/pull/171))
