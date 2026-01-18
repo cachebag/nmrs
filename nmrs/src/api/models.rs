@@ -1032,6 +1032,7 @@ impl Device {
 /// # Ok(())
 /// # }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Error)]
 pub enum ConnectionError {
     /// A D-Bus communication error occurred.
@@ -1081,6 +1082,10 @@ pub enum ConnectionError {
     /// No saved connection exists for the requested network.
     #[error("no saved connection for network")]
     NoSavedConnection,
+
+    /// An empty password was provided for the requested network.
+    #[error("no password was provided")]
+    MissingPassword,
 
     /// A general connection failure with a device state reason code.
     #[error("connection failed: {0}")]
