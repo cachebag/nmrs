@@ -1,10 +1,14 @@
 use zbus::Connection;
 
 use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
-use crate::core::connection::{connect, connect_wired, forget};
-use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
+use crate::core::connection::{
+    connect, connect_wired, disconnect, forget, get_device_by_interface, is_connected,
+};
+use crate::core::connection_settings::{
+    get_saved_connection_path, has_saved_connection, list_saved_connections,
+};
 use crate::core::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
-use crate::core::scan::{list_networks, scan_networks};
+use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
 use crate::models::{VpnConnection, VpnConnectionInfo, VpnCredentials};
 use crate::monitoring::device as device_monitor;
@@ -331,6 +335,100 @@ impl NetworkManager {
         scan_networks(&self.conn).await
     }
 
+    /// Check if a network is connected
+    pub async fn is_connected(&self, ssid: &str) -> Result<bool> {
+        is_connected(&self.conn, ssid).await
+    }
+
+    /// Disconnects from the current network.
+    ///
+    /// If currently connected to a WiFi network, this will deactivate
+    /// the connection and wait for the device to reach disconnected state.
+    ///
+    /// Returns `Ok(())` if disconnected successfully or if no active connection exists.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.disconnect().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn disconnect(&self) -> Result<()> {
+        disconnect(&self.conn).await
+    }
+
+    /// Returns the full `Network` object for the currently connected WiFi network.
+    ///
+    /// This provides detailed information about the active connection including
+    /// signal strength, frequency, security type, and BSSID.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// if let Some(network) = nm.current_network().await? {
+    ///     println!("Connected to: {} ({}%)", network.ssid, network.strength.unwrap_or(0));
+    /// } else {
+    ///     println!("Not connected");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn current_network(&self) -> Result<Option<Network>> {
+        current_network(&self.conn).await
+    }
+
+    /// Lists all saved connection profiles.
+    ///
+    /// Returns the names (IDs) of all saved connection profiles in NetworkManager,
+    /// including WiFi, Ethernet, VPN, and other connection types.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let connections = nm.list_saved_connections().await?;
+    /// for name in connections {
+    ///     println!("Saved connection: {}", name);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_saved_connections(&self) -> Result<Vec<String>> {
+        list_saved_connections(&self.conn).await
+    }
+
+    /// Finds a device by its interface name (e.g., "wlan0", "eth0").
+    ///
+    /// Returns the D-Bus object path of the device if found.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let device_path = nm.get_device_by_interface("wlan0").await?;
+    /// println!("Device path: {}", device_path.as_str());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_device_by_interface(&self, name: &str) -> Result<zvariant::OwnedObjectPath> {
+        get_device_by_interface(&self.conn, name).await
+    }
+
     /// Returns the SSID of the currently connected network, if any.
     #[must_use]
     pub async fn current_ssid(&self) -> Option<String> {
@@ -361,14 +459,18 @@ impl NetworkManager {
         get_saved_connection_path(&self.conn, ssid).await
     }
 
-    /// Forgets (deletes) a saved connection for the given SSID.
+    /// Forgets (deletes) a saved WiFi connection for the given SSID.
     ///
-    /// If currently connected to this network, disconnects first.
+    /// If currently connected to this network, disconnects first, then deletes
+    /// all saved connection profiles matching the SSID.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if at least one connection was deleted successfully.
+    /// Returns `NoSavedConnection` if no matching connections were found.
     pub async fn forget(&self, ssid: &str) -> Result<()> {
         forget(&self.conn, ssid).await
     }
-
-    /// Monitors Wi-Fi network changes in real-time.
     ///
     /// Subscribes to D-Bus signals for access point additions and removals
     /// on all Wi-Fi devices. Invokes the callback whenever the network list

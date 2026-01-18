@@ -7,9 +7,10 @@ use std::collections::HashMap;
 use zbus::Connection;
 
 use crate::api::models::Network;
-use crate::dbus::{NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
+use crate::monitoring::info::current_ssid;
 use crate::types::constants::{device_type, security_flags};
-use crate::util::utils::{decode_ssid_or_hidden, for_each_access_point};
+use crate::util::utils::{decode_ssid_or_empty, decode_ssid_or_hidden, for_each_access_point};
 use crate::Result;
 
 /// Triggers a Wi-Fi scan on all wireless devices.
@@ -93,4 +94,79 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
     }
 
     Ok(networks.into_values().collect())
+}
+
+/// Returns the full Network object for the currently connected WiFi network.
+///
+/// Returns `None` if not connected to any WiFi network.
+pub(crate) async fn current_network(conn: &Connection) -> Result<Option<Network>> {
+    // Get current SSID
+    let current_ssid = match current_ssid(conn).await {
+        Some(ssid) => ssid,
+        None => return Ok(None),
+    };
+
+    // Find the WiFi device and active access point
+    let nm = NMProxy::new(conn).await?;
+    let devices = nm.get_devices().await?;
+
+    for dev_path in devices {
+        let dev = NMDeviceProxy::builder(conn)
+            .path(dev_path.clone())?
+            .build()
+            .await?;
+
+        if dev.device_type().await? != device_type::WIFI {
+            continue;
+        }
+
+        let wifi = NMWirelessProxy::builder(conn)
+            .path(dev_path.clone())?
+            .build()
+            .await?;
+
+        let ap_path = wifi.active_access_point().await?;
+        if ap_path.as_str() == "/" {
+            continue;
+        }
+
+        let ap = NMAccessPointProxy::builder(conn)
+            .path(ap_path)?
+            .build()
+            .await?;
+
+        let ssid_bytes = ap.ssid().await?;
+        let ssid = decode_ssid_or_empty(&ssid_bytes);
+
+        if ssid != current_ssid {
+            continue;
+        }
+
+        // Found the active AP, build Network object
+        let strength = ap.strength().await?;
+        let bssid = ap.hw_address().await?;
+        let flags = ap.flags().await?;
+        let wpa = ap.wpa_flags().await?;
+        let rsn = ap.rsn_flags().await?;
+        let frequency = ap.frequency().await?;
+
+        let secured = (flags & security_flags::WEP) != 0 || wpa != 0 || rsn != 0;
+        let is_psk = (wpa & security_flags::PSK) != 0 || (rsn & security_flags::PSK) != 0;
+        let is_eap = (wpa & security_flags::EAP) != 0 || (rsn & security_flags::EAP) != 0;
+
+        let interface = dev.interface().await.unwrap_or_default();
+
+        return Ok(Some(Network {
+            device: interface,
+            ssid: ssid.to_string(),
+            bssid: Some(bssid),
+            strength: Some(strength),
+            frequency: Some(frequency),
+            secured,
+            is_psk,
+            is_eap,
+        }));
+    }
+
+    Ok(None)
 }

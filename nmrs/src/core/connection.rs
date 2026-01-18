@@ -650,3 +650,91 @@ fn decide_saved_connection(
         None => Ok(SavedDecision::RebuildFresh),
     }
 }
+
+/// Checks if currently connected to the specified SSID.
+///
+/// If already connected, returns true. Otherwise, returns false.
+/// This can be used to skip redundant connection attempts.
+pub(crate) async fn is_connected(conn: &Connection, ssid: &str) -> Result<bool> {
+    if let Some(active) = current_ssid(conn).await {
+        debug!("Currently connected to: {active}");
+        if active == ssid {
+            debug!("Already connected to {active}");
+            return Ok(true);
+        }
+    } else {
+        debug!("Not currently connected to any network");
+    }
+    Ok(false)
+}
+
+/// Disconnects from the currently active network.
+///
+/// This finds the current active WiFi connection and deactivates it,
+/// then waits for the device to reach disconnected state.
+///
+/// Returns `Ok(())` if disconnected successfully or if no active connection exists.
+pub(crate) async fn disconnect(conn: &Connection) -> Result<()> {
+    let nm = NMProxy::new(conn).await?;
+
+    let wifi_device = match find_wifi_device(conn, &nm).await {
+        Ok(dev) => dev,
+        Err(ConnectionError::NoWifiDevice) => {
+            debug!("No WiFi device found");
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    };
+
+    let dev = NMDeviceProxy::builder(conn)
+        .path(wifi_device.clone())?
+        .build()
+        .await?;
+
+    let current_state = dev.state().await?;
+    if current_state == device_state::DISCONNECTED || current_state == device_state::UNAVAILABLE {
+        debug!("Device already disconnected");
+        return Ok(());
+    }
+
+    if let Ok(conns) = nm.active_connections().await {
+        for conn_path in conns {
+            match nm.deactivate_connection(conn_path.clone()).await {
+                Ok(_) => debug!("Connection deactivated"),
+                Err(e) => warn!("Failed to deactivate connection: {}", e),
+            }
+        }
+    }
+
+    disconnect_wifi_and_wait(conn, &wifi_device).await?;
+
+    info!("Disconnected from network");
+    Ok(())
+}
+
+/// Finds a device by its interface name.
+///
+/// Returns the device path if found, or an error if not found.
+pub(crate) async fn get_device_by_interface(
+    conn: &Connection,
+    interface_name: &str,
+) -> Result<OwnedObjectPath> {
+    let nm = NMProxy::new(conn).await?;
+    let devices = nm.get_devices().await?;
+
+    for dev_path in devices {
+        let dev = NMDeviceProxy::builder(conn)
+            .path(dev_path.clone())?
+            .build()
+            .await?;
+
+        if let Ok(iface) = dev.interface().await {
+            if iface == interface_name {
+                debug!("Found device with interface: {}", interface_name);
+                return Ok(dev_path);
+            }
+        }
+    }
+
+    Err(ConnectionError::NotFound)
+}
