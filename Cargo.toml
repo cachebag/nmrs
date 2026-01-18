@@ -33,5 +33,6 @@ uuid = { version = "1.19.0", features = ["v4", "v5"] }
 futures = "0.3.31"
 futures-timer = "3.0.3"
 base64 = "0.22.1"
+rayon = "*"
 
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
