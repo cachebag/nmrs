@@ -5,6 +5,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ## [Unreleased]
 ### Added
 - Input validation before any D-Bus operations ([#173](https://github.com/cachebag/nmrs/pull/173))
+- CI: adjust workflow to auto-update nix hashes on PRs ([#182](https://github.com/cachebag/nmrs/pull/182))
+- More helpful methods to `network_manager` facade ([#190](https://github.com/cachebag/nmrs/pull/190)) 
 
 ## [1.3.5] - 2026-01-13
 ### Changed
