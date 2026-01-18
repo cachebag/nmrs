@@ -79,6 +79,25 @@ pub(crate) async fn wait_for_connection_activation(
     let mut timeout_delay = pin!(Delay::new(CONNECTION_TIMEOUT).fuse());
 
     loop {
+        // Re-check state to catch any changes that occurred during subscription
+        let current_state = active_conn.state().await?;
+        let state = ActiveConnectionState::from(current_state);
+
+        match state {
+            ActiveConnectionState::Activated => {
+                debug!("Connection activated during loop");
+                return Ok(());
+            }
+            ActiveConnectionState::Deactivated => {
+                // Connection deactivated between subscription and loop - reason unknown
+                warn!("Connection deactivated during loop");
+                return Err(ConnectionError::ActivationFailed(
+                    ConnectionStateReason::Unknown,
+                ));
+            }
+            _ => {}
+        }
+
         select! {
             _ = timeout_delay => {
                 warn!("Connection activation timed out after {:?}", CONNECTION_TIMEOUT);
@@ -137,6 +156,15 @@ pub(crate) async fn wait_for_device_disconnect(dev: &NMDeviceProxy<'_>) -> Resul
     let mut timeout_delay = pin!(Delay::new(DISCONNECT_TIMEOUT).fuse());
 
     loop {
+        // Re-check state to catch any changes that occurred during subscription
+        let current_state = dev.state().await?;
+
+        if current_state == device_state::DISCONNECTED || current_state == device_state::UNAVAILABLE
+        {
+            debug!("Device disconnected during loop");
+            return Ok(());
+        }
+
         select! {
             _ = timeout_delay => {
                 // Check final state - might have reached target during the last moments
@@ -195,6 +223,14 @@ pub(crate) async fn wait_for_wifi_device_ready(dev: &NMDeviceProxy<'_>) -> Resul
     let mut timeout_delay = pin!(Delay::new(ready_timeout).fuse());
 
     loop {
+        // Re-check state to catch any changes that occurred during subscription
+        let current_state = dev.state().await?;
+
+        if current_state == device_state::DISCONNECTED || current_state == device_state::ACTIVATED {
+            debug!("Device ready during loop");
+            return Ok(());
+        }
+
         select! {
             _ = timeout_delay => {
                 // Check final state
