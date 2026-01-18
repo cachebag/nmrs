@@ -79,3 +79,34 @@ pub(crate) async fn delete_connection(conn: &Connection, conn_path: OwnedObjectP
     debug!("Deleted connection: {}", conn_path.as_str());
     Ok(())
 }
+
+/// Lists all saved connection profiles.
+///
+/// Returns a vector of connection names (IDs) for all saved profiles
+/// in NetworkManager. This includes WiFi, Ethernet, VPN, and other connection types.
+pub(crate) async fn list_saved_connections(conn: &Connection) -> Result<Vec<String>> {
+    let settings = settings_proxy(conn).await?;
+
+    let reply = settings.call_method("ListConnections", &()).await?;
+    let conns: Vec<OwnedObjectPath> = reply.body().deserialize()?;
+
+    let mut connection_names = Vec::new();
+
+    for cpath in conns {
+        let cproxy = connection_settings_proxy(conn, cpath.clone()).await?;
+
+        if let Ok(msg) = cproxy.call_method("GetSettings", &()).await {
+            let body = msg.body();
+            if let Ok(all) = body.deserialize::<HashMap<String, HashMap<String, Value>>>() {
+                if let Some(conn_section) = all.get("connection") {
+                    if let Some(Value::Str(id)) = conn_section.get("id") {
+                        connection_names.push(id.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    debug!("Found {} saved connection(s)", connection_names.len());
+    Ok(connection_names)
+}
