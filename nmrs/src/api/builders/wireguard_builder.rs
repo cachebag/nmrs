@@ -22,13 +22,11 @@ use crate::api::models::{ConnectionError, ConnectionOptions, WireGuardPeer};
 /// use nmrs::builders::WireGuardBuilder;
 /// use nmrs::{WireGuardPeer, ConnectionOptions};
 ///
-/// let peer = WireGuardPeer {
-///     public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
-///     gateway: "vpn.example.com:51820".into(),
-///     allowed_ips: vec!["0.0.0.0/0".into()],
-///     preshared_key: None,
-///     persistent_keepalive: Some(25),
-/// };
+/// let peer = WireGuardPeer::new(
+///     "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+///     "vpn.example.com:51820",
+///     vec!["0.0.0.0/0".into()],
+/// ).with_persistent_keepalive(25);
 ///
 /// let settings = WireGuardBuilder::new("MyVPN")
 ///     .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")

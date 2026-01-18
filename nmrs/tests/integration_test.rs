@@ -851,23 +851,23 @@ async fn test_connect_wired() {
 
 /// Helper to create test VPN credentials
 fn create_test_vpn_creds(name: &str) -> VpnCredentials {
-    VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: name.into(),
-        gateway: "test.example.com:51820".into(),
-        private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
-        address: "10.100.0.2/24".into(),
-        peers: vec![WireGuardPeer {
-            public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
-            gateway: "test.example.com:51820".into(),
-            allowed_ips: vec!["0.0.0.0/0".into(), "::/0".into()],
-            preshared_key: None,
-            persistent_keepalive: Some(25),
-        }],
-        dns: Some(vec!["1.1.1.1".into(), "8.8.8.8".into()]),
-        mtu: Some(1420),
-        uuid: None,
-    }
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "test.example.com:51820",
+        vec!["0.0.0.0/0".into(), "::/0".into()],
+    )
+    .with_persistent_keepalive(25);
+
+    VpnCredentials::new(
+        VpnType::WireGuard,
+        name,
+        "test.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.100.0.2/24",
+        vec![peer],
+    )
+    .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+    .with_mtu(1420)
 }
 
 /// Test listing VPN connections
@@ -1011,13 +1011,13 @@ async fn test_vpn_type() {
 /// Test WireGuard peer structure
 #[tokio::test]
 async fn test_wireguard_peer_structure() {
-    let peer = WireGuardPeer {
-        public_key: "test_key".into(),
-        gateway: "test.example.com:51820".into(),
-        allowed_ips: vec!["0.0.0.0/0".into()],
-        preshared_key: Some("psk".into()),
-        persistent_keepalive: Some(25),
-    };
+    let peer = WireGuardPeer::new(
+        "test_key",
+        "test.example.com:51820",
+        vec!["0.0.0.0/0".into()],
+    )
+    .with_preshared_key("psk")
+    .with_persistent_keepalive(25);
 
     assert_eq!(peer.public_key, "test_key");
     assert_eq!(peer.gateway, "test.example.com:51820");

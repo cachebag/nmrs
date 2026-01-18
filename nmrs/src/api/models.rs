@@ -488,16 +488,12 @@ pub enum Phase2 {
 /// ```rust
 /// use nmrs::{EapOptions, EapMethod, Phase2};
 ///
-/// let opts = EapOptions {
-///     identity: "employee@company.com".into(),
-///     password: "my_password".into(),
-///     anonymous_identity: Some("anonymous@company.com".into()),
-///     domain_suffix_match: Some("company.com".into()),
-///     ca_cert_path: None,
-///     system_ca_certs: true,  // Use system certificate store
-///     method: EapMethod::Peap,
-///     phase2: Phase2::Mschapv2,
-/// };
+/// let opts = EapOptions::new("employee@company.com", "my_password")
+///     .with_anonymous_identity("anonymous@company.com")
+///     .with_domain_suffix_match("company.com")
+///     .with_system_ca_certs(true)  // Use system certificate store
+///     .with_method(EapMethod::Peap)
+///     .with_phase2(Phase2::Mschapv2);
 /// ```
 ///
 /// ## TTLS with PAP (Alternative Setup)
@@ -505,16 +501,10 @@ pub enum Phase2 {
 /// ```rust
 /// use nmrs::{EapOptions, EapMethod, Phase2};
 ///
-/// let opts = EapOptions {
-///     identity: "student@university.edu".into(),
-///     password: "password".into(),
-///     anonymous_identity: None,
-///     domain_suffix_match: None,
-///     ca_cert_path: Some("file:///etc/ssl/certs/university-ca.pem".into()),
-///     system_ca_certs: false,
-///     method: EapMethod::Ttls,
-///     phase2: Phase2::Pap,
-/// };
+/// let opts = EapOptions::new("student@university.edu", "password")
+///     .with_ca_cert_path("file:///etc/ssl/certs/university-ca.pem")
+///     .with_method(EapMethod::Ttls)
+///     .with_phase2(Phase2::Pap);
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,6 +527,78 @@ pub struct EapOptions {
     pub phase2: Phase2,
 }
 
+impl Default for EapOptions {
+    fn default() -> Self {
+        Self {
+            identity: String::new(),
+            password: String::new(),
+            anonymous_identity: None,
+            domain_suffix_match: None,
+            ca_cert_path: None,
+            system_ca_certs: false,
+            method: EapMethod::Peap,
+            phase2: Phase2::Mschapv2,
+        }
+    }
+}
+
+impl EapOptions {
+    /// Creates a new `EapOptions` with the minimum required fields.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{EapOptions, EapMethod, Phase2};
+    ///
+    /// let opts = EapOptions::new("user@example.com", "password")
+    ///     .with_method(EapMethod::Peap)
+    ///     .with_phase2(Phase2::Mschapv2);
+    /// ```
+    pub fn new(identity: impl Into<String>, password: impl Into<String>) -> Self {
+        Self {
+            identity: identity.into(),
+            password: password.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Sets the anonymous identity for privacy.
+    pub fn with_anonymous_identity(mut self, anonymous_identity: impl Into<String>) -> Self {
+        self.anonymous_identity = Some(anonymous_identity.into());
+        self
+    }
+
+    /// Sets the domain suffix to match against the server certificate.
+    pub fn with_domain_suffix_match(mut self, domain: impl Into<String>) -> Self {
+        self.domain_suffix_match = Some(domain.into());
+        self
+    }
+
+    /// Sets the path to the CA certificate file (must start with `file://`).
+    pub fn with_ca_cert_path(mut self, path: impl Into<String>) -> Self {
+        self.ca_cert_path = Some(path.into());
+        self
+    }
+
+    /// Sets whether to use the system CA certificate store.
+    pub fn with_system_ca_certs(mut self, use_system: bool) -> Self {
+        self.system_ca_certs = use_system;
+        self
+    }
+
+    /// Sets the EAP method (PEAP or TTLS).
+    pub fn with_method(mut self, method: EapMethod) -> Self {
+        self.method = method;
+        self
+    }
+
+    /// Sets the Phase 2 authentication method.
+    pub fn with_phase2(mut self, phase2: Phase2) -> Self {
+        self.phase2 = phase2;
+        self
+    }
+}
+
 /// Connection options for saved NetworkManager connections.
 ///
 /// Controls how NetworkManager handles saved connection profiles,
@@ -551,18 +613,12 @@ pub struct EapOptions {
 /// let opts = ConnectionOptions::default();
 ///
 /// // High-priority connection with retry limit
-/// let opts_priority = ConnectionOptions {
-///     autoconnect: true,
-///     autoconnect_priority: Some(10),  // Higher = more preferred
-///     autoconnect_retries: Some(3),    // Retry up to 3 times
-/// };
+/// let opts_priority = ConnectionOptions::new(true)
+///     .with_priority(10)  // Higher = more preferred
+///     .with_retries(3);   // Retry up to 3 times
 ///
 /// // Manual connection only
-/// let opts_manual = ConnectionOptions {
-///     autoconnect: false,
-///     autoconnect_priority: None,
-///     autoconnect_retries: None,
-/// };
+/// let opts_manual = ConnectionOptions::new(false);
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -588,6 +644,37 @@ impl Default for ConnectionOptions {
             autoconnect_priority: None,
             autoconnect_retries: None,
         }
+    }
+}
+
+impl ConnectionOptions {
+    /// Creates new `ConnectionOptions` with the specified autoconnect setting.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::ConnectionOptions;
+    ///
+    /// let opts = ConnectionOptions::new(true);
+    /// ```
+    pub fn new(autoconnect: bool) -> Self {
+        Self {
+            autoconnect,
+            autoconnect_priority: None,
+            autoconnect_retries: None,
+        }
+    }
+
+    /// Sets the auto-connection priority.
+    pub fn with_priority(mut self, priority: i32) -> Self {
+        self.autoconnect_priority = Some(priority);
+        self
+    }
+
+    /// Sets the maximum number of auto-connect retry attempts.
+    pub fn with_retries(mut self, retries: i32) -> Self {
+        self.autoconnect_retries = Some(retries);
+        self
     }
 }
 
@@ -634,17 +721,14 @@ impl Default for ConnectionOptions {
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
+/// let eap_opts = EapOptions::new("user@company.com", "password")
+///     .with_domain_suffix_match("company.com")
+///     .with_system_ca_certs(true)
+///     .with_method(EapMethod::Peap)
+///     .with_phase2(Phase2::Mschapv2);
+///
 /// nm.connect("CorpWiFi", WifiSecurity::WpaEap {
-///     opts: EapOptions {
-///         identity: "user@company.com".into(),
-///         password: "password".into(),
-///         anonymous_identity: None,
-///         domain_suffix_match: Some("company.com".into()),
-///         ca_cert_path: None,
-///         system_ca_certs: true,
-///         method: EapMethod::Peap,
-///         phase2: Phase2::Mschapv2,
-///     }
+///     opts: eap_opts
 /// }).await?;
 /// # Ok(())
 /// # }
@@ -699,23 +783,20 @@ pub enum VpnType {
 /// ```rust
 /// use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
 ///
-/// let creds = VpnCredentials {
-///     vpn_type: VpnType::WireGuard,
-///     name: "HomeVPN".into(),
-///     gateway: "vpn.home.com:51820".into(),
-///     private_key: "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=".into(),
-///     address: "10.0.0.2/24".into(),
-///     peers: vec![WireGuardPeer {
-///         public_key: "server_public_key".into(),
-///         gateway: "vpn.home.com:51820".into(),
-///         allowed_ips: vec!["0.0.0.0/0".into()],
-///         preshared_key: None,
-///         persistent_keepalive: Some(25),
-///     }],
-///     dns: Some(vec!["1.1.1.1".into()]),
-///     mtu: None,
-///     uuid: None,
-/// };
+/// let peer = WireGuardPeer::new(
+///     "server_public_key",
+///     "vpn.home.com:51820",
+///     vec!["0.0.0.0/0".into()],
+/// ).with_persistent_keepalive(25);
+///
+/// let creds = VpnCredentials::new(
+///     VpnType::WireGuard,
+///     "HomeVPN",
+///     "vpn.home.com:51820",
+///     "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=",
+///     "10.0.0.2/24",
+///     vec![peer],
+/// ).with_dns(vec!["1.1.1.1".into()]);
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -740,6 +821,69 @@ pub struct VpnCredentials {
     pub uuid: Option<Uuid>,
 }
 
+impl VpnCredentials {
+    /// Creates new `VpnCredentials` with the required fields.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
+    ///
+    /// let peer = WireGuardPeer::new(
+    ///     "server_public_key",
+    ///     "vpn.example.com:51820",
+    ///     vec!["0.0.0.0/0".into()],
+    /// );
+    ///
+    /// let creds = VpnCredentials::new(
+    ///     VpnType::WireGuard,
+    ///     "MyVPN",
+    ///     "vpn.example.com:51820",
+    ///     "client_private_key",
+    ///     "10.0.0.2/24",
+    ///     vec![peer],
+    /// );
+    /// ```
+    pub fn new(
+        vpn_type: VpnType,
+        name: impl Into<String>,
+        gateway: impl Into<String>,
+        private_key: impl Into<String>,
+        address: impl Into<String>,
+        peers: Vec<WireGuardPeer>,
+    ) -> Self {
+        Self {
+            vpn_type,
+            name: name.into(),
+            gateway: gateway.into(),
+            private_key: private_key.into(),
+            address: address.into(),
+            peers,
+            dns: None,
+            mtu: None,
+            uuid: None,
+        }
+    }
+
+    /// Sets the DNS servers to use when connected.
+    pub fn with_dns(mut self, dns: Vec<String>) -> Self {
+        self.dns = Some(dns);
+        self
+    }
+
+    /// Sets the MTU (Maximum Transmission Unit) size.
+    pub fn with_mtu(mut self, mtu: u32) -> Self {
+        self.mtu = Some(mtu);
+        self
+    }
+
+    /// Sets the UUID for the connection.
+    pub fn with_uuid(mut self, uuid: Uuid) -> Self {
+        self.uuid = Some(uuid);
+        self
+    }
+}
+
 /// WireGuard peer configuration.
 ///
 /// Represents a single WireGuard peer (server) to connect to.
@@ -757,13 +901,11 @@ pub struct VpnCredentials {
 /// ```rust
 /// use nmrs::WireGuardPeer;
 ///
-/// let peer = WireGuardPeer {
-///     public_key: "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=".into(),
-///     gateway: "vpn.example.com:51820".into(),
-///     allowed_ips: vec!["0.0.0.0/0".into(), "::/0".into()],
-///     preshared_key: None,
-///     persistent_keepalive: Some(25),
-/// };
+/// let peer = WireGuardPeer::new(
+///     "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=",
+///     "vpn.example.com:51820",
+///     vec!["0.0.0.0/0".into(), "::/0".into()],
+/// );
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -780,6 +922,47 @@ pub struct WireGuardPeer {
     pub persistent_keepalive: Option<u32>,
 }
 
+impl WireGuardPeer {
+    /// Creates a new `WireGuardPeer` with the required fields.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::WireGuardPeer;
+    ///
+    /// let peer = WireGuardPeer::new(
+    ///     "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=",
+    ///     "vpn.example.com:51820",
+    ///     vec!["0.0.0.0/0".into()],
+    /// );
+    /// ```
+    pub fn new(
+        public_key: impl Into<String>,
+        gateway: impl Into<String>,
+        allowed_ips: Vec<String>,
+    ) -> Self {
+        Self {
+            public_key: public_key.into(),
+            gateway: gateway.into(),
+            allowed_ips,
+            preshared_key: None,
+            persistent_keepalive: None,
+        }
+    }
+
+    /// Sets the pre-shared key for additional security.
+    pub fn with_preshared_key(mut self, psk: impl Into<String>) -> Self {
+        self.preshared_key = Some(psk.into());
+        self
+    }
+
+    /// Sets the persistent keepalive interval in seconds.
+    pub fn with_persistent_keepalive(mut self, interval: u32) -> Self {
+        self.persistent_keepalive = Some(interval);
+        self
+    }
+}
+
 /// VPN Connection information.
 ///
 /// Represents a VPN connection managed by NetworkManager, including both
@@ -794,15 +977,11 @@ pub struct WireGuardPeer {
 ///
 /// # Example
 ///
-/// ```rust
-/// use nmrs::{VpnConnection, VpnType, DeviceState};
-///
-/// let vpn = VpnConnection {
-///     name: "WorkVPN".into(),
-///     vpn_type: VpnType::WireGuard,
-///     state: DeviceState::Activated,
-///     interface: Some("wg0".into()),
-/// };
+/// ```no_run
+/// # use nmrs::{VpnConnection, VpnType, DeviceState};
+/// # // This struct is returned by the library, not constructed directly
+/// # let vpn: VpnConnection = todo!();
+/// println!("VPN: {}, State: {:?}", vpn.name, vpn.state);
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -829,19 +1008,13 @@ pub struct VpnConnection {
 ///
 /// # Example
 ///
-/// ```rust
-/// use nmrs::{VpnConnectionInfo, VpnType, DeviceState};
-///
-/// let info = VpnConnectionInfo {
-///     name: "WorkVPN".into(),
-///     vpn_type: VpnType::WireGuard,
-///     state: DeviceState::Activated,
-///     interface: Some("wg0".into()),
-///     gateway: Some("vpn.example.com:51820".into()),
-///     ip4_address: Some("10.0.0.2/24".into()),
-///     ip6_address: None,  // IPv6 not yet implemented
-///     dns_servers: vec!["1.1.1.1".into()],
-/// };
+/// ```no_run
+/// # use nmrs::{VpnConnectionInfo, VpnType, DeviceState};
+/// # // This struct is returned by the library, not constructed directly
+/// # let info: VpnConnectionInfo = todo!();
+/// if let Some(ip) = &info.ip4_address {
+///     println!("VPN IP: {}", ip);
+/// }
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]

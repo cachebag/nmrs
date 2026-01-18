@@ -19,13 +19,11 @@
 //! use nmrs::builders::WireGuardBuilder;
 //! use nmrs::WireGuardPeer;
 //!
-//! let peer = WireGuardPeer {
-//!     public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
-//!     gateway: "vpn.example.com:51820".into(),
-//!     allowed_ips: vec!["0.0.0.0/0".into()],
-//!     preshared_key: None,
-//!     persistent_keepalive: Some(25),
-//! };
+//! let peer = WireGuardPeer::new(
+//!     "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+//!     "vpn.example.com:51820",
+//!     vec!["0.0.0.0/0".into()],
+//! ).with_persistent_keepalive(25);
 //!
 //! let settings = WireGuardBuilder::new("MyVPN")
 //!     .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
@@ -44,31 +42,22 @@
 //! use nmrs::builders::build_wireguard_connection;
 //! use nmrs::{VpnCredentials, VpnType, WireGuardPeer, ConnectionOptions};
 //!
-//! let creds = VpnCredentials {
-//!     vpn_type: VpnType::WireGuard,
-//!     name: "MyVPN".into(),
-//!     gateway: "vpn.example.com:51820".into(),
-//!     // Valid WireGuard private key (44 chars base64)
-//!     private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
-//!     address: "10.0.0.2/24".into(),
-//!     peers: vec![WireGuardPeer {
-//!         // Valid WireGuard public key (44 chars base64)
-//!         public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
-//!         gateway: "vpn.example.com:51820".into(),
-//!         allowed_ips: vec!["0.0.0.0/0".into()],
-//!         preshared_key: None,
-//!         persistent_keepalive: Some(25),
-//!     }],
-//!     dns: Some(vec!["1.1.1.1".into()]),
-//!     mtu: None,
-//!     uuid: None,
-//! };
+//! let peer = WireGuardPeer::new(
+//!     "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+//!     "vpn.example.com:51820",
+//!     vec!["0.0.0.0/0".into()],
+//! ).with_persistent_keepalive(25);
 //!
-//! let opts = ConnectionOptions {
-//!     autoconnect: false,
-//!     autoconnect_priority: None,
-//!     autoconnect_retries: None,
-//! };
+//! let creds = VpnCredentials::new(
+//!     VpnType::WireGuard,
+//!     "MyVPN",
+//!     "vpn.example.com:51820",
+//!     "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+//!     "10.0.0.2/24",
+//!     vec![peer],
+//! ).with_dns(vec!["1.1.1.1".into()]);
+//!
+//! let opts = ConnectionOptions::new(false);
 //!
 //! let settings = build_wireguard_connection(&creds, &opts).unwrap();
 //! // Pass settings to NetworkManager's AddAndActivateConnection
@@ -125,31 +114,27 @@ mod tests {
     use crate::api::models::{VpnType, WireGuardPeer};
 
     fn create_test_credentials() -> VpnCredentials {
-        VpnCredentials {
-            vpn_type: VpnType::WireGuard,
-            name: "TestVPN".into(),
-            gateway: "vpn.example.com:51820".into(),
-            private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
-            address: "10.0.0.2/24".into(),
-            peers: vec![WireGuardPeer {
-                public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
-                gateway: "vpn.example.com:51820".into(),
-                allowed_ips: vec!["0.0.0.0/0".into()],
-                preshared_key: None,
-                persistent_keepalive: Some(25),
-            }],
-            dns: Some(vec!["1.1.1.1".into(), "8.8.8.8".into()]),
-            mtu: Some(1420),
-            uuid: None,
-        }
+        let peer = WireGuardPeer::new(
+            "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        )
+        .with_persistent_keepalive(25);
+
+        VpnCredentials::new(
+            VpnType::WireGuard,
+            "TestVPN",
+            "vpn.example.com:51820",
+            "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+            "10.0.0.2/24",
+            vec![peer],
+        )
+        .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+        .with_mtu(1420)
     }
 
     fn create_test_options() -> ConnectionOptions {
-        ConnectionOptions {
-            autoconnect: false,
-            autoconnect_priority: None,
-            autoconnect_retries: None,
-        }
+        ConnectionOptions::new(false)
     }
 
     #[test]
@@ -276,13 +261,14 @@ mod tests {
     #[test]
     fn handles_multiple_peers() {
         let mut creds = create_test_credentials();
-        creds.peers.push(WireGuardPeer {
-            public_key: "xScVkH3fUGUVRvGLFcjkx+GGD7cf5eBVyN3Gh4FLjmI=".into(),
-            gateway: "peer2.example.com:51821".into(),
-            allowed_ips: vec!["192.168.0.0/16".into()],
-            preshared_key: Some("PSKABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm=".into()),
-            persistent_keepalive: None,
-        });
+        let extra_peer = WireGuardPeer::new(
+            "xScVkH3fUGUVRvGLFcjkx+GGD7cf5eBVyN3Gh4FLjmI=",
+            "peer2.example.com:51821",
+            vec!["192.168.0.0/16".into()],
+        )
+        .with_preshared_key("PSKABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm=");
+
+        creds.peers.push(extra_peer);
         let opts = create_test_options();
 
         let result = build_wireguard_connection(&creds, &opts);
