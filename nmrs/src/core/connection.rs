@@ -188,7 +188,7 @@ pub(crate) async fn forget_by_name_and_type(
     use zvariant::{OwnedObjectPath, Value};
 
     // Validate SSID
-    validate_ssid(ssid)?;
+    validate_ssid(name)?;
 
     debug!(
         "Starting forget operation for: {name} (device filter: {:?})",

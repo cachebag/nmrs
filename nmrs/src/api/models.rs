@@ -1444,7 +1444,11 @@ impl Display for DeviceType {
             DeviceType::WifiP2P => write!(f, "Wi-Fi P2P"),
             DeviceType::Loopback => write!(f, "Loopback"),
             DeviceType::Bluetooth => write!(f, "Bluetooth"),
-            DeviceType::Other(v) => write!(f, "Other({v})"),
+            DeviceType::Other(v) => write!(
+                f,
+                "{}",
+                crate::types::device_type_registry::display_name_for_code(*v)
+            ),
         }
     }
 }
