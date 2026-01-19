@@ -1,6 +1,7 @@
 # <p align="center"> nmrs 🦀 
 
 [![Crates.io](https://img.shields.io/crates/v/nmrs)](https://crates.io/crates/nmrs)
+[![Discord](https://img.shields.io/badge/chat-on%20discord-7289da?logo=discord&logoColor=white)](https://discord.gg/Sk3VfrHrN4)
 [![Documentation](https://docs.rs/nmrs/badge.svg)](https://docs.rs/nmrs)
 [![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/nmrs)](LICENSE)
