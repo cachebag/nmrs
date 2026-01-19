@@ -578,6 +578,29 @@ impl EapOptions {
         }
     }
 
+    /// Creates a new `EapOptions` builder.
+    ///
+    /// This provides an alternative way to construct EAP options with a fluent API,
+    /// making it clearer what each configuration option does.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{EapOptions, EapMethod, Phase2};
+    ///
+    /// let opts = EapOptions::builder()
+    ///     .identity("user@company.com")
+    ///     .password("my_password")
+    ///     .method(EapMethod::Peap)
+    ///     .phase2(Phase2::Mschapv2)
+    ///     .domain_suffix_match("company.com")
+    ///     .system_ca_certs(true)
+    ///     .build();
+    /// ```
+    pub fn builder() -> EapOptionsBuilder {
+        EapOptionsBuilder::default()
+    }
+
     /// Sets the anonymous identity for privacy.
     pub fn with_anonymous_identity(mut self, anonymous_identity: impl Into<String>) -> Self {
         self.anonymous_identity = Some(anonymous_identity.into());
@@ -612,6 +635,218 @@ impl EapOptions {
     pub fn with_phase2(mut self, phase2: Phase2) -> Self {
         self.phase2 = phase2;
         self
+    }
+}
+
+/// Builder for constructing `EapOptions` with a fluent API.
+///
+/// This builder provides an ergonomic way to create EAP (Enterprise WiFi)
+/// authentication options, making the configuration more explicit and readable.
+///
+/// # Examples
+///
+/// ## PEAP with MSCHAPv2 (Common Corporate Setup)
+///
+/// ```rust
+/// use nmrs::{EapOptions, EapMethod, Phase2};
+///
+/// let opts = EapOptions::builder()
+///     .identity("employee@company.com")
+///     .password("my_password")
+///     .method(EapMethod::Peap)
+///     .phase2(Phase2::Mschapv2)
+///     .anonymous_identity("anonymous@company.com")
+///     .domain_suffix_match("company.com")
+///     .system_ca_certs(true)
+///     .build();
+/// ```
+///
+/// ## TTLS with PAP
+///
+/// ```rust
+/// use nmrs::{EapOptions, EapMethod, Phase2};
+///
+/// let opts = EapOptions::builder()
+///     .identity("student@university.edu")
+///     .password("password")
+///     .method(EapMethod::Ttls)
+///     .phase2(Phase2::Pap)
+///     .ca_cert_path("file:///etc/ssl/certs/university-ca.pem")
+///     .build();
+/// ```
+#[derive(Debug, Default)]
+pub struct EapOptionsBuilder {
+    identity: Option<String>,
+    password: Option<String>,
+    anonymous_identity: Option<String>,
+    domain_suffix_match: Option<String>,
+    ca_cert_path: Option<String>,
+    system_ca_certs: bool,
+    method: Option<EapMethod>,
+    phase2: Option<Phase2>,
+}
+
+impl EapOptionsBuilder {
+    /// Sets the user identity (usually email or username).
+    ///
+    /// This is a required field.
+    pub fn identity(mut self, identity: impl Into<String>) -> Self {
+        self.identity = Some(identity.into());
+        self
+    }
+
+    /// Sets the password for authentication.
+    ///
+    /// This is a required field.
+    pub fn password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
+        self
+    }
+
+    /// Sets the anonymous outer identity for privacy.
+    ///
+    /// This identity is sent in the clear during the initial handshake,
+    /// while the real identity is protected inside the TLS tunnel.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::EapOptions;
+    ///
+    /// let builder = EapOptions::builder()
+    ///     .anonymous_identity("anonymous@company.com");
+    /// ```
+    pub fn anonymous_identity(mut self, anonymous_identity: impl Into<String>) -> Self {
+        self.anonymous_identity = Some(anonymous_identity.into());
+        self
+    }
+
+    /// Sets the domain suffix to match against the server certificate.
+    ///
+    /// This provides additional security by verifying the server's certificate
+    /// matches the expected domain.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::EapOptions;
+    ///
+    /// let builder = EapOptions::builder()
+    ///     .domain_suffix_match("company.com");
+    /// ```
+    pub fn domain_suffix_match(mut self, domain: impl Into<String>) -> Self {
+        self.domain_suffix_match = Some(domain.into());
+        self
+    }
+
+    /// Sets the path to the CA certificate file.
+    ///
+    /// The path must start with `file://` (e.g., "file:///etc/ssl/certs/ca.pem").
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::EapOptions;
+    ///
+    /// let builder = EapOptions::builder()
+    ///     .ca_cert_path("file:///etc/ssl/certs/company-ca.pem");
+    /// ```
+    pub fn ca_cert_path(mut self, path: impl Into<String>) -> Self {
+        self.ca_cert_path = Some(path.into());
+        self
+    }
+
+    /// Sets whether to use the system CA certificate store.
+    ///
+    /// When enabled, the system's trusted CA certificates will be used
+    /// to validate the server certificate.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::EapOptions;
+    ///
+    /// let builder = EapOptions::builder()
+    ///     .system_ca_certs(true);
+    /// ```
+    pub fn system_ca_certs(mut self, use_system: bool) -> Self {
+        self.system_ca_certs = use_system;
+        self
+    }
+
+    /// Sets the EAP method (PEAP or TTLS).
+    ///
+    /// This is a required field. PEAP is more common in corporate environments,
+    /// while TTLS offers more flexibility in inner authentication methods.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{EapOptions, EapMethod};
+    ///
+    /// let builder = EapOptions::builder()
+    ///     .method(EapMethod::Peap);
+    /// ```
+    pub fn method(mut self, method: EapMethod) -> Self {
+        self.method = Some(method);
+        self
+    }
+
+    /// Sets the Phase 2 (inner) authentication method.
+    ///
+    /// This is a required field. MSCHAPv2 is commonly used with PEAP,
+    /// while PAP is often used with TTLS.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{EapOptions, Phase2};
+    ///
+    /// let builder = EapOptions::builder()
+    ///     .phase2(Phase2::Mschapv2);
+    /// ```
+    pub fn phase2(mut self, phase2: Phase2) -> Self {
+        self.phase2 = Some(phase2);
+        self
+    }
+
+    /// Builds the `EapOptions` from the configured values.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any required field is missing:
+    /// - `identity` (use [`identity()`](Self::identity))
+    /// - `password` (use [`password()`](Self::password))
+    /// - `method` (use [`method()`](Self::method))
+    /// - `phase2` (use [`phase2()`](Self::phase2))
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{EapOptions, EapMethod, Phase2};
+    ///
+    /// let opts = EapOptions::builder()
+    ///     .identity("user@example.com")
+    ///     .password("password")
+    ///     .method(EapMethod::Peap)
+    ///     .phase2(Phase2::Mschapv2)
+    ///     .build();
+    /// ```
+    pub fn build(self) -> EapOptions {
+        EapOptions {
+            identity: self
+                .identity
+                .expect("identity is required (use .identity())"),
+            password: self
+                .password
+                .expect("password is required (use .password())"),
+            anonymous_identity: self.anonymous_identity,
+            domain_suffix_match: self.domain_suffix_match,
+            ca_cert_path: self.ca_cert_path,
+            system_ca_certs: self.system_ca_certs,
+            method: self.method.expect("method is required (use .method())"),
+            phase2: self.phase2.expect("phase2 is required (use .phase2())"),
+        }
     }
 }
 
@@ -881,6 +1116,36 @@ impl VpnCredentials {
         }
     }
 
+    /// Creates a new `VpnCredentials` builder.
+    ///
+    /// This provides a more ergonomic way to construct VPN credentials with a fluent API,
+    /// making it harder to mix up parameter order and easier to see what each value represents.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
+    ///
+    /// let peer = WireGuardPeer::new(
+    ///     "server_public_key",
+    ///     "vpn.example.com:51820",
+    ///     vec!["0.0.0.0/0".into()],
+    /// );
+    ///
+    /// let creds = VpnCredentials::builder()
+    ///     .name("MyVPN")
+    ///     .wireguard()
+    ///     .gateway("vpn.example.com:51820")
+    ///     .private_key("client_private_key")
+    ///     .address("10.0.0.2/24")
+    ///     .add_peer(peer)
+    ///     .with_dns(vec!["1.1.1.1".into()])
+    ///     .build();
+    /// ```
+    pub fn builder() -> VpnCredentialsBuilder {
+        VpnCredentialsBuilder::default()
+    }
+
     /// Sets the DNS servers to use when connected.
     pub fn with_dns(mut self, dns: Vec<String>) -> Self {
         self.dns = Some(dns);
@@ -897,6 +1162,225 @@ impl VpnCredentials {
     pub fn with_uuid(mut self, uuid: Uuid) -> Self {
         self.uuid = Some(uuid);
         self
+    }
+}
+
+/// Builder for constructing `VpnCredentials` with a fluent API.
+///
+/// This builder provides a more ergonomic way to create VPN credentials,
+/// making the code more readable and less error-prone compared to the
+/// traditional constructor with many positional parameters.
+///
+/// # Examples
+///
+/// ## Basic WireGuard VPN
+///
+/// ```rust
+/// use nmrs::{VpnCredentials, WireGuardPeer};
+///
+/// let peer = WireGuardPeer::new(
+///     "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+///     "vpn.example.com:51820",
+///     vec!["0.0.0.0/0".into()],
+/// );
+///
+/// let creds = VpnCredentials::builder()
+///     .name("HomeVPN")
+///     .wireguard()
+///     .gateway("vpn.example.com:51820")
+///     .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
+///     .address("10.0.0.2/24")
+///     .add_peer(peer)
+///     .build();
+/// ```
+///
+/// ## With Optional DNS and MTU
+///
+/// ```rust
+/// use nmrs::{VpnCredentials, WireGuardPeer};
+///
+/// let peer = WireGuardPeer::new(
+///     "server_public_key",
+///     "vpn.example.com:51820",
+///     vec!["0.0.0.0/0".into()],
+/// ).with_persistent_keepalive(25);
+///
+/// let creds = VpnCredentials::builder()
+///     .name("CorpVPN")
+///     .wireguard()
+///     .gateway("vpn.corp.com:51820")
+///     .private_key("private_key_here")
+///     .address("10.8.0.2/24")
+///     .add_peer(peer)
+///     .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+///     .with_mtu(1420)
+///     .build();
+/// ```
+#[derive(Debug, Default)]
+pub struct VpnCredentialsBuilder {
+    vpn_type: Option<VpnType>,
+    name: Option<String>,
+    gateway: Option<String>,
+    private_key: Option<String>,
+    address: Option<String>,
+    peers: Vec<WireGuardPeer>,
+    dns: Option<Vec<String>>,
+    mtu: Option<u32>,
+    uuid: Option<Uuid>,
+}
+
+impl VpnCredentialsBuilder {
+    /// Sets the VPN type to WireGuard.
+    ///
+    /// Currently, WireGuard is the only supported VPN type.
+    pub fn wireguard(mut self) -> Self {
+        self.vpn_type = Some(VpnType::WireGuard);
+        self
+    }
+
+    /// Sets the VPN type.
+    ///
+    /// For most use cases, prefer using [`wireguard()`](Self::wireguard) instead.
+    pub fn vpn_type(mut self, vpn_type: VpnType) -> Self {
+        self.vpn_type = Some(vpn_type);
+        self
+    }
+
+    /// Sets the connection name.
+    ///
+    /// This is the unique identifier for the VPN connection profile.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets the VPN gateway endpoint.
+    ///
+    /// Should be in "host:port" format (e.g., "vpn.example.com:51820").
+    pub fn gateway(mut self, gateway: impl Into<String>) -> Self {
+        self.gateway = Some(gateway.into());
+        self
+    }
+
+    /// Sets the client's WireGuard private key.
+    ///
+    /// The private key should be base64 encoded.
+    pub fn private_key(mut self, private_key: impl Into<String>) -> Self {
+        self.private_key = Some(private_key.into());
+        self
+    }
+
+    /// Sets the client's IP address with CIDR notation.
+    ///
+    /// # Examples
+    ///
+    /// - "10.0.0.2/24" for a /24 subnet
+    /// - "192.168.1.10/32" for a single IP
+    pub fn address(mut self, address: impl Into<String>) -> Self {
+        self.address = Some(address.into());
+        self
+    }
+
+    /// Adds a WireGuard peer to the connection.
+    ///
+    /// Multiple peers can be added by calling this method multiple times.
+    pub fn add_peer(mut self, peer: WireGuardPeer) -> Self {
+        self.peers.push(peer);
+        self
+    }
+
+    /// Sets all WireGuard peers at once.
+    ///
+    /// This replaces any previously added peers.
+    pub fn peers(mut self, peers: Vec<WireGuardPeer>) -> Self {
+        self.peers = peers;
+        self
+    }
+
+    /// Sets the DNS servers to use when connected.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::VpnCredentials;
+    ///
+    /// let builder = VpnCredentials::builder()
+    ///     .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
+    /// ```
+    pub fn with_dns(mut self, dns: Vec<String>) -> Self {
+        self.dns = Some(dns);
+        self
+    }
+
+    /// Sets the MTU (Maximum Transmission Unit) size.
+    ///
+    /// Typical values are 1420 for WireGuard over standard networks.
+    pub fn with_mtu(mut self, mtu: u32) -> Self {
+        self.mtu = Some(mtu);
+        self
+    }
+
+    /// Sets a specific UUID for the connection.
+    ///
+    /// If not set, NetworkManager will generate one automatically.
+    pub fn with_uuid(mut self, uuid: Uuid) -> Self {
+        self.uuid = Some(uuid);
+        self
+    }
+
+    /// Builds the `VpnCredentials` from the configured values.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any required field is missing:
+    /// - `vpn_type` (use [`wireguard()`](Self::wireguard))
+    /// - `name` (use [`name()`](Self::name))
+    /// - `gateway` (use [`gateway()`](Self::gateway))
+    /// - `private_key` (use [`private_key()`](Self::private_key))
+    /// - `address` (use [`address()`](Self::address))
+    /// - At least one peer must be added (use [`add_peer()`](Self::add_peer))
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{VpnCredentials, WireGuardPeer};
+    ///
+    /// let peer = WireGuardPeer::new(
+    ///     "public_key",
+    ///     "vpn.example.com:51820",
+    ///     vec!["0.0.0.0/0".into()],
+    /// );
+    ///
+    /// let creds = VpnCredentials::builder()
+    ///     .name("MyVPN")
+    ///     .wireguard()
+    ///     .gateway("vpn.example.com:51820")
+    ///     .private_key("private_key")
+    ///     .address("10.0.0.2/24")
+    ///     .add_peer(peer)
+    ///     .build();
+    /// ```
+    pub fn build(self) -> VpnCredentials {
+        VpnCredentials {
+            vpn_type: self
+                .vpn_type
+                .expect("vpn_type is required (use .wireguard())"),
+            name: self.name.expect("name is required (use .name())"),
+            gateway: self.gateway.expect("gateway is required (use .gateway())"),
+            private_key: self
+                .private_key
+                .expect("private_key is required (use .private_key())"),
+            address: self.address.expect("address is required (use .address())"),
+            peers: {
+                if self.peers.is_empty() {
+                    panic!("at least one peer is required (use .add_peer())");
+                }
+                self.peers
+            },
+            dns: self.dns,
+            mtu: self.mtu,
+            uuid: self.uuid,
+        }
     }
 }
 
@@ -2369,5 +2853,319 @@ mod tests {
     fn test_connection_error_no_bluetooth_device() {
         let err = ConnectionError::NoBluetoothDevice;
         assert_eq!(format!("{}", err), "Bluetooth device not found");
+    }
+
+    // Builder pattern tests
+
+    #[test]
+    fn test_vpn_credentials_builder_basic() {
+        let peer = WireGuardPeer::new(
+            "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        );
+
+        let creds = VpnCredentials::builder()
+            .name("TestVPN")
+            .wireguard()
+            .gateway("vpn.example.com:51820")
+            .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
+            .address("10.0.0.2/24")
+            .add_peer(peer)
+            .build();
+
+        assert_eq!(creds.name, "TestVPN");
+        assert_eq!(creds.vpn_type, VpnType::WireGuard);
+        assert_eq!(creds.gateway, "vpn.example.com:51820");
+        assert_eq!(
+            creds.private_key,
+            "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM="
+        );
+        assert_eq!(creds.address, "10.0.0.2/24");
+        assert_eq!(creds.peers.len(), 1);
+        assert!(creds.dns.is_none());
+        assert!(creds.mtu.is_none());
+    }
+
+    #[test]
+    fn test_vpn_credentials_builder_with_optionals() {
+        let peer = WireGuardPeer::new(
+            "public_key",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        );
+
+        let uuid = Uuid::new_v4();
+        let creds = VpnCredentials::builder()
+            .name("TestVPN")
+            .wireguard()
+            .gateway("vpn.example.com:51820")
+            .private_key("private_key")
+            .address("10.0.0.2/24")
+            .add_peer(peer)
+            .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+            .with_mtu(1420)
+            .with_uuid(uuid)
+            .build();
+
+        assert_eq!(creds.dns, Some(vec!["1.1.1.1".into(), "8.8.8.8".into()]));
+        assert_eq!(creds.mtu, Some(1420));
+        assert_eq!(creds.uuid, Some(uuid));
+    }
+
+    #[test]
+    fn test_vpn_credentials_builder_multiple_peers() {
+        let peer1 =
+            WireGuardPeer::new("key1", "vpn1.example.com:51820", vec!["10.0.0.0/24".into()]);
+        let peer2 = WireGuardPeer::new(
+            "key2",
+            "vpn2.example.com:51820",
+            vec!["192.168.0.0/24".into()],
+        );
+
+        let creds = VpnCredentials::builder()
+            .name("MultiPeerVPN")
+            .wireguard()
+            .gateway("vpn.example.com:51820")
+            .private_key("private_key")
+            .address("10.0.0.2/24")
+            .add_peer(peer1)
+            .add_peer(peer2)
+            .build();
+
+        assert_eq!(creds.peers.len(), 2);
+    }
+
+    #[test]
+    fn test_vpn_credentials_builder_peers_method() {
+        let peers = vec![
+            WireGuardPeer::new("key1", "vpn1.example.com:51820", vec!["0.0.0.0/0".into()]),
+            WireGuardPeer::new("key2", "vpn2.example.com:51820", vec!["0.0.0.0/0".into()]),
+        ];
+
+        let creds = VpnCredentials::builder()
+            .name("TestVPN")
+            .wireguard()
+            .gateway("vpn.example.com:51820")
+            .private_key("private_key")
+            .address("10.0.0.2/24")
+            .peers(peers)
+            .build();
+
+        assert_eq!(creds.peers.len(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "name is required")]
+    fn test_vpn_credentials_builder_missing_name() {
+        let peer = WireGuardPeer::new("key", "vpn.example.com:51820", vec!["0.0.0.0/0".into()]);
+
+        VpnCredentials::builder()
+            .wireguard()
+            .gateway("vpn.example.com:51820")
+            .private_key("private_key")
+            .address("10.0.0.2/24")
+            .add_peer(peer)
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "vpn_type is required")]
+    fn test_vpn_credentials_builder_missing_vpn_type() {
+        let peer = WireGuardPeer::new("key", "vpn.example.com:51820", vec!["0.0.0.0/0".into()]);
+
+        VpnCredentials::builder()
+            .name("TestVPN")
+            .gateway("vpn.example.com:51820")
+            .private_key("private_key")
+            .address("10.0.0.2/24")
+            .add_peer(peer)
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "at least one peer is required")]
+    fn test_vpn_credentials_builder_missing_peers() {
+        VpnCredentials::builder()
+            .name("TestVPN")
+            .wireguard()
+            .gateway("vpn.example.com:51820")
+            .private_key("private_key")
+            .address("10.0.0.2/24")
+            .build();
+    }
+
+    #[test]
+    fn test_eap_options_builder_basic() {
+        let opts = EapOptions::builder()
+            .identity("user@example.com")
+            .password("password")
+            .method(EapMethod::Peap)
+            .phase2(Phase2::Mschapv2)
+            .build();
+
+        assert_eq!(opts.identity, "user@example.com");
+        assert_eq!(opts.password, "password");
+        assert_eq!(opts.method, EapMethod::Peap);
+        assert_eq!(opts.phase2, Phase2::Mschapv2);
+        assert!(opts.anonymous_identity.is_none());
+        assert!(opts.domain_suffix_match.is_none());
+        assert!(opts.ca_cert_path.is_none());
+        assert!(!opts.system_ca_certs);
+    }
+
+    #[test]
+    fn test_eap_options_builder_with_optionals() {
+        let opts = EapOptions::builder()
+            .identity("user@company.com")
+            .password("password")
+            .method(EapMethod::Ttls)
+            .phase2(Phase2::Pap)
+            .anonymous_identity("anonymous@company.com")
+            .domain_suffix_match("company.com")
+            .ca_cert_path("file:///etc/ssl/certs/ca.pem")
+            .system_ca_certs(true)
+            .build();
+
+        assert_eq!(opts.identity, "user@company.com");
+        assert_eq!(opts.password, "password");
+        assert_eq!(opts.method, EapMethod::Ttls);
+        assert_eq!(opts.phase2, Phase2::Pap);
+        assert_eq!(
+            opts.anonymous_identity,
+            Some("anonymous@company.com".into())
+        );
+        assert_eq!(opts.domain_suffix_match, Some("company.com".into()));
+        assert_eq!(
+            opts.ca_cert_path,
+            Some("file:///etc/ssl/certs/ca.pem".into())
+        );
+        assert!(opts.system_ca_certs);
+    }
+
+    #[test]
+    fn test_eap_options_builder_peap_mschapv2() {
+        let opts = EapOptions::builder()
+            .identity("employee@corp.com")
+            .password("secret")
+            .method(EapMethod::Peap)
+            .phase2(Phase2::Mschapv2)
+            .system_ca_certs(true)
+            .build();
+
+        assert_eq!(opts.method, EapMethod::Peap);
+        assert_eq!(opts.phase2, Phase2::Mschapv2);
+        assert!(opts.system_ca_certs);
+    }
+
+    #[test]
+    fn test_eap_options_builder_ttls_pap() {
+        let opts = EapOptions::builder()
+            .identity("student@university.edu")
+            .password("password")
+            .method(EapMethod::Ttls)
+            .phase2(Phase2::Pap)
+            .ca_cert_path("file:///etc/ssl/certs/university.pem")
+            .build();
+
+        assert_eq!(opts.method, EapMethod::Ttls);
+        assert_eq!(opts.phase2, Phase2::Pap);
+        assert_eq!(
+            opts.ca_cert_path,
+            Some("file:///etc/ssl/certs/university.pem".into())
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "identity is required")]
+    fn test_eap_options_builder_missing_identity() {
+        EapOptions::builder()
+            .password("password")
+            .method(EapMethod::Peap)
+            .phase2(Phase2::Mschapv2)
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "password is required")]
+    fn test_eap_options_builder_missing_password() {
+        EapOptions::builder()
+            .identity("user@example.com")
+            .method(EapMethod::Peap)
+            .phase2(Phase2::Mschapv2)
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "method is required")]
+    fn test_eap_options_builder_missing_method() {
+        EapOptions::builder()
+            .identity("user@example.com")
+            .password("password")
+            .phase2(Phase2::Mschapv2)
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "phase2 is required")]
+    fn test_eap_options_builder_missing_phase2() {
+        EapOptions::builder()
+            .identity("user@example.com")
+            .password("password")
+            .method(EapMethod::Peap)
+            .build();
+    }
+
+    #[test]
+    fn test_vpn_credentials_builder_equivalence_to_new() {
+        let peer = WireGuardPeer::new(
+            "public_key",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        );
+
+        let creds_new = VpnCredentials::new(
+            VpnType::WireGuard,
+            "TestVPN",
+            "vpn.example.com:51820",
+            "private_key",
+            "10.0.0.2/24",
+            vec![peer.clone()],
+        );
+
+        let creds_builder = VpnCredentials::builder()
+            .name("TestVPN")
+            .wireguard()
+            .gateway("vpn.example.com:51820")
+            .private_key("private_key")
+            .address("10.0.0.2/24")
+            .add_peer(peer)
+            .build();
+
+        assert_eq!(creds_new.name, creds_builder.name);
+        assert_eq!(creds_new.vpn_type, creds_builder.vpn_type);
+        assert_eq!(creds_new.gateway, creds_builder.gateway);
+        assert_eq!(creds_new.private_key, creds_builder.private_key);
+        assert_eq!(creds_new.address, creds_builder.address);
+        assert_eq!(creds_new.peers.len(), creds_builder.peers.len());
+    }
+
+    #[test]
+    fn test_eap_options_builder_equivalence_to_new() {
+        let opts_new = EapOptions::new("user@example.com", "password")
+            .with_method(EapMethod::Peap)
+            .with_phase2(Phase2::Mschapv2);
+
+        let opts_builder = EapOptions::builder()
+            .identity("user@example.com")
+            .password("password")
+            .method(EapMethod::Peap)
+            .phase2(Phase2::Mschapv2)
+            .build();
+
+        assert_eq!(opts_new.identity, opts_builder.identity);
+        assert_eq!(opts_new.password, opts_builder.password);
+        assert_eq!(opts_new.method, opts_builder.method);
+        assert_eq!(opts_new.phase2, opts_builder.phase2);
     }
 }
