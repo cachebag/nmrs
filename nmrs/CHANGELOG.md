@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+
+## [2.0.0] - 2026-01-19
 ### Added
 - Configurable timeout values for connection and disconnection operations ([#185](https://github.com/cachebag/nmrs/issues/185))
 - Builder pattern for `VpnCredentials` and `EapOptions` ([#188](https://github.com/cachebag/nmrs/issues/188))
@@ -146,7 +148,9 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [1.2.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.1.0...nmrs-v1.2.0
 [1.3.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v1.3.0
 [1.3.5]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v1.3.5
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v1.3.5...HEAD
+[2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
+[2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.0.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
