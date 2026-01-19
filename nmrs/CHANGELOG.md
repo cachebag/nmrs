@@ -4,6 +4,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- Builder pattern for `VpnCredentials` and `EapOptions` ([#188](https://github.com/cachebag/nmrs/issues/188))
 - Bluetooth device support ([#198](https://github.com/cachebag/nmrs/pull/198))
 - Input validation before any D-Bus operations ([#173](https://github.com/cachebag/nmrs/pull/173))
 - CI: adjust workflow to auto-update nix hashes on PRs ([#182](https://github.com/cachebag/nmrs/pull/182))
