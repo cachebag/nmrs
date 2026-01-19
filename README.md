@@ -95,6 +95,9 @@ async fn main() -> nmrs::Result<()> {
     Ok(())
 }
 ```
+
+To follow and/or discuss the development of nmrs, you can join the [public Discord channel](https://discord.gg/Sk3VfrHrN4).
+ 
 # <p align="center"> nmrs-gui </p>
 
 ![Version](https://img.shields.io/badge/nmrs--gui-1.1.0-orange?style=flat-square)
