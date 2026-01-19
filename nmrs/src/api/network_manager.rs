@@ -1,3 +1,4 @@
+use tokio::sync::watch;
 use zbus::Connection;
 
 use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
@@ -498,11 +499,15 @@ impl NetworkManager {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn monitor_network_changes<F>(&self, callback: F) -> Result<()>
+    pub async fn monitor_network_changes<F>(
+        &self,
+        shutdown: watch::Receiver<()>,
+        callback: F,
+    ) -> Result<()>
     where
         F: Fn() + 'static,
     {
-        network_monitor::monitor_network_changes(&self.conn, callback).await
+        network_monitor::monitor_network_changes(&self.conn, shutdown, callback).await
     }
 
     /// Monitors device state changes in real-time.
@@ -534,10 +539,14 @@ impl NetworkManager {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn monitor_device_changes<F>(&self, callback: F) -> Result<()>
+    pub async fn monitor_device_changes<F>(
+        &self,
+        shutdown: watch::Receiver<()>,
+        callback: F,
+    ) -> Result<()>
     where
         F: Fn() + 'static,
     {
-        device_monitor::monitor_device_changes(&self.conn, callback).await
+        device_monitor::monitor_device_changes(&self.conn, shutdown, callback).await
     }
 }

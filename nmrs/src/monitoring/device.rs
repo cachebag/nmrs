@@ -5,8 +5,10 @@
 //! to poll. This enables live UI updates for both wired and wireless devices.
 
 use futures::stream::{Stream, StreamExt};
-use log::{debug, warn};
+use log::debug;
 use std::pin::Pin;
+use tokio::select;
+use tokio::sync::watch;
 use zbus::Connection;
 
 use crate::api::models::ConnectionError;
@@ -30,7 +32,11 @@ use crate::Result;
 ///     println!("Device state changed, refresh UI!");
 /// }).await?;
 /// ```
-pub async fn monitor_device_changes<F>(conn: &Connection, callback: F) -> Result<()>
+pub async fn monitor_device_changes<F>(
+    conn: &Connection,
+    mut shutdown: watch::Receiver<()>,
+    callback: F,
+) -> Result<()>
 where
     F: Fn() + 'static,
 {
@@ -74,11 +80,25 @@ where
     // Merge all streams and listen for any signal
     let mut merged = futures::stream::select_all(streams);
 
+    loop {
+        select! {
+            _ = shutdown.changed() => {
+                debug!("Network monitoring shutdown requested");
+                break;
+            }
+            signal = merged.next() => {
+                match signal {
+                    Some(_) => callback(),
+                    None => break,
+                }
+            }
+        }
+    }
+
     while let Some(_signal) = merged.next().await {
         debug!("Device change detected");
         callback();
     }
 
-    warn!("Device monitoring stream ended unexpectedly");
     Err(ConnectionError::Stuck("monitoring stream ended".into()))
 }
