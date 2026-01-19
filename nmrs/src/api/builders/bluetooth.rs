@@ -16,10 +16,10 @@
 //! use nmrs::builders::build_bluetooth_connection;
 //! use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
 //!
-//! let bt_settings = BluetoothIdentity {
-//!    bdaddr: "00:1A:7D:DA:71:13".into(),
-//!    bt_device_type: BluetoothNetworkRole::PanU,
-//! };
+//! let bt_settings = BluetoothIdentity::new(
+//!    "00:1A:7D:DA:71:13".into(),
+//!    BluetoothNetworkRole::PanU,
+//! );
 //! ```
 
 use std::collections::HashMap;
@@ -99,17 +99,11 @@ mod tests {
     }
 
     fn create_test_identity_panu() -> BluetoothIdentity {
-        BluetoothIdentity {
-            bdaddr: "00:1A:7D:DA:71:13".into(),
-            bt_device_type: BluetoothNetworkRole::PanU,
-        }
+        BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU)
     }
 
     fn create_test_identity_dun() -> BluetoothIdentity {
-        BluetoothIdentity {
-            bdaddr: "C8:1F:E8:F0:51:57".into(),
-            bt_device_type: BluetoothNetworkRole::Dun,
-        }
+        BluetoothIdentity::new("C8:1F:E8:F0:51:57".into(), BluetoothNetworkRole::Dun)
     }
 
     #[test]
@@ -303,10 +297,8 @@ mod tests {
 
     #[test]
     fn test_bdaddr_format_preserved() {
-        let identity = BluetoothIdentity {
-            bdaddr: "AA:BB:CC:DD:EE:FF".into(),
-            bt_device_type: BluetoothNetworkRole::PanU,
-        };
+        let identity =
+            BluetoothIdentity::new("AA:BB:CC:DD:EE:FF".into(), BluetoothNetworkRole::PanU);
         let opts = create_test_opts();
         let conn = build_bluetooth_connection("Test", &identity, &opts);
 

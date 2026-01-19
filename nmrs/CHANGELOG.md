@@ -4,13 +4,19 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- Bluetooth device support ([#198](https://github.com/cachebag/nmrs/pull/198))
 - Input validation before any D-Bus operations ([#173](https://github.com/cachebag/nmrs/pull/173))
 - CI: adjust workflow to auto-update nix hashes on PRs ([#182](https://github.com/cachebag/nmrs/pull/182))
 - More helpful methods to `network_manager` facade ([#190](https://github.com/cachebag/nmrs/pull/190)) 
 - Explicitly clean up signal streams to ensure unsubscription ([#197](https://github.com/cachebag/nmrs/pull/197))
 
 ### Fixed
+- Better error message for empty passkeys ([#198](https://github.com/cachebag/nmrs/pull/198))
 - Race condition in signal subscription ([#191](https://github.com/cachebag/nmrs/pull/191))
+
+### Changed
+- Various enums and structs marked non-exhaustive ([#198](https://github.com/cachebag/nmrs/pull/198))
+- Expose `NMWiredProxy` and propogate speed through + write in field and display for BT device type ([#198](https://github.com/cachebag/nmrs/pull/198))
 
 ## [1.3.5] - 2026-01-13
 ### Changed

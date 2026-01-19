@@ -1106,10 +1106,7 @@ fn test_bluetooth_network_role() {
 fn test_bluetooth_identity_structure() {
     use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
 
-    let identity = BluetoothIdentity {
-        bdaddr: "00:1A:7D:DA:71:13".into(),
-        bt_device_type: BluetoothNetworkRole::PanU,
-    };
+    let identity = BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU);
 
     assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
     assert!(matches!(
@@ -1124,13 +1121,13 @@ fn test_bluetooth_device_structure() {
     use nmrs::models::{BluetoothDevice, BluetoothNetworkRole};
 
     let role = BluetoothNetworkRole::PanU as u32;
-    let device = BluetoothDevice {
-        bdaddr: "00:1A:7D:DA:71:13".into(),
-        name: Some("MyPhone".into()),
-        alias: Some("Phone".into()),
-        bt_caps: role,
-        state: DeviceState::Activated,
-    };
+    let device = BluetoothDevice::new(
+        "00:1A:7D:DA:71:13".into(),
+        Some("MyPhone".into()),
+        Some("Phone".into()),
+        role,
+        DeviceState::Activated,
+    );
 
     assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
     assert_eq!(device.name, Some("MyPhone".into()));
@@ -1144,13 +1141,13 @@ fn test_bluetooth_device_display() {
     use nmrs::models::{BluetoothDevice, BluetoothNetworkRole};
 
     let role = BluetoothNetworkRole::PanU as u32;
-    let device = BluetoothDevice {
-        bdaddr: "00:1A:7D:DA:71:13".into(),
-        name: Some("MyPhone".into()),
-        alias: Some("Phone".into()),
-        bt_caps: role,
-        state: DeviceState::Activated,
-    };
+    let device = BluetoothDevice::new(
+        "00:1A:7D:DA:71:13".into(),
+        Some("MyPhone".into()),
+        Some("Phone".into()),
+        role,
+        DeviceState::Activated,
+    );
 
     let display = format!("{}", device);
     assert!(display.contains("Phone"));

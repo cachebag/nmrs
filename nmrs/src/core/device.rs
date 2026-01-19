@@ -89,10 +89,7 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
         devices.push(Device {
             path: p.to_string(),
             interface,
-            identity: DeviceIdentity {
-                permanent_mac: perm_mac,
-                current_mac,
-            },
+            identity: DeviceIdentity::new(perm_mac, current_mac),
             device_type,
             state,
             managed,
@@ -136,13 +133,13 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
 
         let bluez_info = populate_bluez_info(conn, &bdaddr).await?;
 
-        devices.push(BluetoothDevice {
+        devices.push(BluetoothDevice::new(
             bdaddr,
-            name: bluez_info.0,
-            alias: bluez_info.1,
+            bluez_info.0,
+            bluez_info.1,
             bt_caps,
             state,
-        });
+        ));
     }
     Ok(devices)
 }
@@ -220,13 +217,13 @@ mod tests {
     #[test]
     fn test_bluetooth_device_construction() {
         let panu = BluetoothNetworkRole::PanU as u32;
-        let device = BluetoothDevice {
-            bdaddr: "00:1A:7D:DA:71:13".into(),
-            name: Some("TestDevice".into()),
-            alias: Some("Test".into()),
-            bt_caps: panu,
-            state: DeviceState::Activated,
-        };
+        let device = BluetoothDevice::new(
+            "00:1A:7D:DA:71:13".into(),
+            Some("TestDevice".into()),
+            Some("Test".into()),
+            panu,
+            DeviceState::Activated,
+        );
 
         assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
         assert_eq!(device.name, Some("TestDevice".into()));

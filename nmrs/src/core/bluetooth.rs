@@ -95,10 +95,10 @@ pub(crate) async fn find_bluetooth_device(
 /// ```no_run
 /// use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
 ///
-/// let settings = BluetoothIdentity {
-///     bdaddr: "C8:1F:E8:F0:51:57".into(),
-///     bt_device_type: BluetoothNetworkRole::PanU,
-/// };
+/// let settings = BluetoothIdentity::new(
+///     "C8:1F:E8:F0:51:57".into(),
+///     BluetoothNetworkRole::PanU,
+/// );
 /// // connect_bluetooth(&conn, "My Phone", &settings).await?;
 /// ```
 pub(crate) async fn connect_bluetooth(
@@ -254,10 +254,8 @@ mod tests {
 
     #[test]
     fn test_bluetooth_identity_structure() {
-        let identity = BluetoothIdentity {
-            bdaddr: "00:1A:7D:DA:71:13".into(),
-            bt_device_type: BluetoothNetworkRole::PanU,
-        };
+        let identity =
+            BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU);
 
         assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
         assert!(matches!(
