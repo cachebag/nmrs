@@ -22,15 +22,8 @@ uuid.workspace = true
 futures.workspace = true
 futures-timer.workspace = true
 base64.workspace = true
-<<<<<<< HEAD
 tokio.workspace = true
-async-trait = "0.1.89"
-=======
 async-trait.workspace = true
->>>>>>> 0884154 (fix: proxy field name for `bd_addr` replaced with correct `hw_addr`)
-
-[dev-dependencies]
-tokio.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
