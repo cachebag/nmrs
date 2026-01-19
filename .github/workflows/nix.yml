@@ -13,10 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: DeterminateSystems/determinate-nix-action@v3
-
-      - uses: DeterminateSystems/flakehub-cache-action@main
-
       - name: Install Nix
         uses: cachix/install-nix-action@v31
 
@@ -24,28 +20,3 @@ jobs:
         id: build
         continue-on-error: true
         run: nix build -f default.nix
-
-      - name: Fix hash mismatches
-        if: steps.build.outcome == 'failure' && github.event_name == 'pull_request'
-        id: fix-hashes
-        run: |
-          git stash --include-untracked
-          git fetch --depth=1 origin "$GITHUB_HEAD_REF"
-          git checkout -B "$GITHUB_HEAD_REF" "${{ github.event.pull_request.head.sha }}"
- 
-          determinate-nixd fix hashes --auto-apply
- 
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add --update --ignore-removal .
-            git commit -m "chore: automatically fix Nix hashes"
-            git push origin "$GITHUB_HEAD_REF"
-          fi
- 
-          git checkout -
-          git stash pop || true
-
-      - name: Fail if build failed and hashes weren't fixed
-        if: steps.build.outcome == 'failure'
-        run: exit 1
