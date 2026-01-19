@@ -43,9 +43,16 @@ const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Monitors the connection activation process by subscribing to the
 /// `StateChanged` signal on the active connection object. This provides
 /// more detailed error information than device-level monitoring.
+///
+/// # Arguments
+///
+/// * `conn` - D-Bus connection
+/// * `active_conn_path` - Path to the active connection object
+/// * `timeout` - Optional timeout duration (uses default if None)
 pub(crate) async fn wait_for_connection_activation(
     conn: &Connection,
     active_conn_path: &zvariant::OwnedObjectPath,
+    timeout: Option<Duration>,
 ) -> Result<()> {
     let active_conn = NMActiveConnectionProxy::builder(conn)
         .path(active_conn_path.clone())?
@@ -76,7 +83,8 @@ pub(crate) async fn wait_for_connection_activation(
     }
 
     // Wait for state change with timeout (runtime-agnostic)
-    let mut timeout_delay = pin!(Delay::new(CONNECTION_TIMEOUT).fuse());
+    let timeout_duration = timeout.unwrap_or(CONNECTION_TIMEOUT);
+    let mut timeout_delay = pin!(Delay::new(timeout_duration).fuse());
 
     loop {
         // Re-check state to catch any changes that occurred during subscription
@@ -100,7 +108,7 @@ pub(crate) async fn wait_for_connection_activation(
 
         select! {
             _ = timeout_delay => {
-                warn!("Connection activation timed out after {:?}", CONNECTION_TIMEOUT);
+                warn!("Connection activation timed out after {:?}", timeout_duration);
                 return Err(ConnectionError::Timeout);
             }
             signal_opt = stream.next() => {
@@ -139,7 +147,15 @@ pub(crate) async fn wait_for_connection_activation(
 }
 
 /// Waits for a device to reach the disconnected state using D-Bus signals.
-pub(crate) async fn wait_for_device_disconnect(dev: &NMDeviceProxy<'_>) -> Result<()> {
+///
+/// # Arguments
+///
+/// * `dev` - Device proxy
+/// * `timeout` - Optional timeout duration (uses default if None)
+pub(crate) async fn wait_for_device_disconnect(
+    dev: &NMDeviceProxy<'_>,
+    timeout: Option<Duration>,
+) -> Result<()> {
     // Subscribe to signals FIRST to avoid race condition
     let mut stream = dev.receive_device_state_changed().await?;
     debug!("Subscribed to device StateChanged signal for disconnect");
@@ -153,7 +169,8 @@ pub(crate) async fn wait_for_device_disconnect(dev: &NMDeviceProxy<'_>) -> Resul
     }
 
     // Wait for disconnect with timeout (runtime-agnostic)
-    let mut timeout_delay = pin!(Delay::new(DISCONNECT_TIMEOUT).fuse());
+    let timeout_duration = timeout.unwrap_or(DISCONNECT_TIMEOUT);
+    let mut timeout_delay = pin!(Delay::new(timeout_duration).fuse());
 
     loop {
         // Re-check state to catch any changes that occurred during subscription

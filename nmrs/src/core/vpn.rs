@@ -16,7 +16,8 @@ use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
 use crate::api::models::{
-    ConnectionOptions, DeviceState, VpnConnection, VpnConnectionInfo, VpnCredentials, VpnType,
+    ConnectionOptions, DeviceState, TimeoutConfig, VpnConnection, VpnConnectionInfo,
+    VpnCredentials, VpnType,
 };
 use crate::builders::build_wireguard_connection;
 use crate::core::state_wait::wait_for_connection_activation;
@@ -35,7 +36,11 @@ use crate::Result;
 ///
 /// WireGuard activations do not require binding to an underlying device.
 /// Use "/" so NetworkManager auto-selects.
-pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Result<()> {
+pub(crate) async fn connect_vpn(
+    conn: &Connection,
+    creds: VpnCredentials,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
     // Validate VPN credentials before attempting connection
     validate_vpn_credentials(&creds)?;
 
@@ -78,7 +83,8 @@ pub(crate) async fn connect_vpn(conn: &Connection, creds: VpnCredentials) -> Res
             .await?
     };
 
-    wait_for_connection_activation(conn, &active_conn).await?;
+    let timeout = timeout_config.map(|c| c.connection_timeout);
+    wait_for_connection_activation(conn, &active_conn, timeout).await?;
     debug!("Connection reached Activated state, waiting briefly...");
 
     match NMActiveConnectionProxy::builder(conn).path(active_conn.clone()) {

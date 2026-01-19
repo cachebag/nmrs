@@ -20,7 +20,11 @@ use crate::monitoring::transport::ActiveTransport;
 use crate::types::constants::device_state;
 use crate::types::constants::device_type;
 use crate::ConnectionError;
-use crate::{dbus::NMProxy, models::BluetoothIdentity, Result};
+use crate::{
+    dbus::NMProxy,
+    models::{BluetoothIdentity, TimeoutConfig},
+    Result,
+};
 
 /// Populated Bluetooth device information via BlueZ.
 ///
@@ -105,6 +109,7 @@ pub(crate) async fn connect_bluetooth(
     conn: &Connection,
     name: &str,
     settings: &BluetoothIdentity,
+    timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     debug!(
         "Connecting to '{}' (Bluetooth) | bdaddr={} type={:?}",
@@ -152,7 +157,9 @@ pub(crate) async fn connect_bluetooth(
                 .activate_connection(saved_path, bt_device.clone(), specific_object)
                 .await?;
 
-            crate::core::state_wait::wait_for_connection_activation(conn, &active_conn).await?;
+            let timeout = timeout_config.map(|c| c.connection_timeout);
+            crate::core::state_wait::wait_for_connection_activation(conn, &active_conn, timeout)
+                .await?;
         }
         None => {
             debug!("No saved connection found, creating new Bluetooth connection");
@@ -177,7 +184,8 @@ pub(crate) async fn connect_bluetooth(
                 )
                 .await?;
 
-            wait_for_connection_activation(conn, &active_conn).await?;
+            let timeout = timeout_config.map(|c| c.connection_timeout);
+            wait_for_connection_activation(conn, &active_conn, timeout).await?;
         }
     }
 
@@ -192,6 +200,7 @@ pub(crate) async fn connect_bluetooth(
 pub(crate) async fn disconnect_bluetooth_and_wait(
     conn: &Connection,
     dev_path: &OwnedObjectPath,
+    timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     let dev = NMDeviceProxy::builder(conn)
         .path(dev_path.clone())?
@@ -216,7 +225,8 @@ pub(crate) async fn disconnect_bluetooth_and_wait(
     let _ = raw.call_method("Disconnect", &()).await;
 
     // Wait for disconnect using signal-based monitoring
-    wait_for_device_disconnect(&dev).await?;
+    let timeout = timeout_config.map(|c| c.disconnect_timeout);
+    wait_for_device_disconnect(&dev, timeout).await?;
 
     // Brief stabilization delay
     // Delay::new(timeouts::stabilization_delay()).await;

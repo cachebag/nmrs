@@ -4,10 +4,11 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- Configurable timeout values for connection and disconnection operations ([#185](https://github.com/cachebag/nmrs/issues/185))
 - Builder pattern for `VpnCredentials` and `EapOptions` ([#188](https://github.com/cachebag/nmrs/issues/188))
 - Bluetooth device support ([#198](https://github.com/cachebag/nmrs/pull/198))
 - Input validation before any D-Bus operations ([#173](https://github.com/cachebag/nmrs/pull/173))
-- CI: adjust workflow to auto-update nix hashes on PRs ([#182](https://github.com/cachebag/nmrs/pull/182))
+~~- CI: adjust workflow to auto-update nix hashes on PRs ([#182](https://github.com/cachebag/nmrs/pull/182))~~
 - More helpful methods to `network_manager` facade ([#190](https://github.com/cachebag/nmrs/pull/190)) 
 - Explicitly clean up signal streams to ensure unsubscription ([#197](https://github.com/cachebag/nmrs/pull/197))
 

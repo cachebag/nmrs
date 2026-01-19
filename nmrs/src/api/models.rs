@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -847,6 +848,108 @@ impl EapOptionsBuilder {
             method: self.method.expect("method is required (use .method())"),
             phase2: self.phase2.expect("phase2 is required (use .phase2())"),
         }
+    }
+}
+
+/// Timeout configuration for NetworkManager operations.
+///
+/// Controls how long NetworkManager will wait for various network operations
+/// to complete before timing out. This allows customization for different
+/// network environments (slow networks, enterprise auth, etc.).
+///
+/// # Examples
+///
+/// ```rust
+/// use nmrs::TimeoutConfig;
+/// use std::time::Duration;
+///
+/// // Use default timeouts (30s connect, 10s disconnect)
+/// let config = TimeoutConfig::default();
+///
+/// // Custom timeouts for slow networks
+/// let config = TimeoutConfig::new()
+///     .with_connection_timeout(Duration::from_secs(60))
+///     .with_disconnect_timeout(Duration::from_secs(20));
+///
+/// // Quick timeouts for fast networks
+/// let config = TimeoutConfig::new()
+///     .with_connection_timeout(Duration::from_secs(15))
+///     .with_disconnect_timeout(Duration::from_secs(5));
+/// ```
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy)]
+pub struct TimeoutConfig {
+    /// Timeout for connection activation (default: 30 seconds)
+    pub connection_timeout: Duration,
+    /// Timeout for device disconnection (default: 10 seconds)
+    pub disconnect_timeout: Duration,
+}
+
+impl Default for TimeoutConfig {
+    /// Returns the default timeout configuration.
+    ///
+    /// Defaults:
+    /// - `connection_timeout`: 30 seconds
+    /// - `disconnect_timeout`: 10 seconds
+    fn default() -> Self {
+        Self {
+            connection_timeout: Duration::from_secs(30),
+            disconnect_timeout: Duration::from_secs(10),
+        }
+    }
+}
+
+impl TimeoutConfig {
+    /// Creates a new `TimeoutConfig` with default values.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::TimeoutConfig;
+    ///
+    /// let config = TimeoutConfig::new();
+    /// ```
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the connection activation timeout.
+    ///
+    /// This controls how long to wait for a network connection to activate
+    /// before giving up. Increase this for slow networks or enterprise
+    /// authentication that may take longer.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::TimeoutConfig;
+    /// use std::time::Duration;
+    ///
+    /// let config = TimeoutConfig::new()
+    ///     .with_connection_timeout(Duration::from_secs(60));
+    /// ```
+    pub fn with_connection_timeout(mut self, timeout: Duration) -> Self {
+        self.connection_timeout = timeout;
+        self
+    }
+
+    /// Sets the disconnection timeout.
+    ///
+    /// This controls how long to wait for a device to disconnect before
+    /// giving up.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::TimeoutConfig;
+    /// use std::time::Duration;
+    ///
+    /// let config = TimeoutConfig::new()
+    ///     .with_disconnect_timeout(Duration::from_secs(20));
+    /// ```
+    pub fn with_disconnect_timeout(mut self, timeout: Duration) -> Self {
+        self.disconnect_timeout = timeout;
+        self
     }
 }
 
@@ -3167,5 +3270,64 @@ mod tests {
         assert_eq!(opts_new.password, opts_builder.password);
         assert_eq!(opts_new.method, opts_builder.method);
         assert_eq!(opts_new.phase2, opts_builder.phase2);
+    }
+
+    // Timeout configuration tests
+
+    #[test]
+    fn test_timeout_config_default() {
+        let config = TimeoutConfig::default();
+        assert_eq!(config.connection_timeout, Duration::from_secs(30));
+        assert_eq!(config.disconnect_timeout, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_timeout_config_new() {
+        let config = TimeoutConfig::new();
+        assert_eq!(config.connection_timeout, Duration::from_secs(30));
+        assert_eq!(config.disconnect_timeout, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_timeout_config_with_connection_timeout() {
+        let config = TimeoutConfig::new().with_connection_timeout(Duration::from_secs(60));
+        assert_eq!(config.connection_timeout, Duration::from_secs(60));
+        assert_eq!(config.disconnect_timeout, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_timeout_config_with_disconnect_timeout() {
+        let config = TimeoutConfig::new().with_disconnect_timeout(Duration::from_secs(20));
+        assert_eq!(config.connection_timeout, Duration::from_secs(30));
+        assert_eq!(config.disconnect_timeout, Duration::from_secs(20));
+    }
+
+    #[test]
+    fn test_timeout_config_with_both_timeouts() {
+        let config = TimeoutConfig::new()
+            .with_connection_timeout(Duration::from_secs(90))
+            .with_disconnect_timeout(Duration::from_secs(30));
+        assert_eq!(config.connection_timeout, Duration::from_secs(90));
+        assert_eq!(config.disconnect_timeout, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_timeout_config_chaining() {
+        let config = TimeoutConfig::default()
+            .with_connection_timeout(Duration::from_secs(45))
+            .with_disconnect_timeout(Duration::from_secs(15))
+            .with_connection_timeout(Duration::from_secs(60)); // Override previous value
+
+        assert_eq!(config.connection_timeout, Duration::from_secs(60));
+        assert_eq!(config.disconnect_timeout, Duration::from_secs(15));
+    }
+
+    #[test]
+    fn test_timeout_config_copy() {
+        let config1 = TimeoutConfig::new().with_connection_timeout(Duration::from_secs(120));
+        let config2 = config1; // Should copy, not move
+
+        assert_eq!(config1.connection_timeout, Duration::from_secs(120));
+        assert_eq!(config2.connection_timeout, Duration::from_secs(120));
     }
 }

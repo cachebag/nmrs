@@ -5,7 +5,7 @@ use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
 use crate::api::builders::wifi::{build_ethernet_connection, build_wifi_connection};
-use crate::api::models::{ConnectionError, ConnectionOptions, WifiSecurity};
+use crate::api::models::{ConnectionError, ConnectionOptions, TimeoutConfig, WifiSecurity};
 use crate::core::connection_settings::{delete_connection, get_saved_connection_path};
 use crate::core::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWiredProxy, NMWirelessProxy};
@@ -36,7 +36,12 @@ enum SavedDecision {
 ///
 /// If a saved connection exists but fails, it will be deleted and a fresh
 /// connection will be attempted with the provided credentials.
-pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) -> Result<()> {
+pub(crate) async fn connect(
+    conn: &Connection,
+    ssid: &str,
+    creds: WifiSecurity,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
     // Validate inputs before attempting connection
     validate_ssid(ssid)?;
     validate_wifi_security(&creds)?;
@@ -76,11 +81,29 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
 
     match decision {
         SavedDecision::UseSaved(saved) => {
-            ensure_disconnected(conn, &nm, &wifi_device).await?;
-            connect_via_saved(conn, &nm, &wifi_device, &specific_object, &creds, saved).await?;
+            ensure_disconnected(conn, &nm, &wifi_device, timeout_config).await?;
+            connect_via_saved(
+                conn,
+                &nm,
+                &wifi_device,
+                &specific_object,
+                &creds,
+                saved,
+                timeout_config,
+            )
+            .await?;
         }
         SavedDecision::RebuildFresh => {
-            build_and_activate_new(conn, &nm, &wifi_device, &specific_object, ssid, creds).await?;
+            build_and_activate_new(
+                conn,
+                &nm,
+                &wifi_device,
+                &specific_object,
+                ssid,
+                creds,
+                timeout_config,
+            )
+            .await?;
         }
     }
 
@@ -101,7 +124,10 @@ pub(crate) async fn connect(conn: &Connection, ssid: &str, creds: WifiSecurity) 
 ///
 /// Ethernet connections are typically simpler than Wi-Fi - no scanning or
 /// access points needed. The connection will activate when a cable is plugged in.
-pub(crate) async fn connect_wired(conn: &Connection) -> Result<()> {
+pub(crate) async fn connect_wired(
+    conn: &Connection,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
     debug!("Connecting to wired device");
 
     let nm = NMProxy::new(conn).await?;
@@ -133,7 +159,8 @@ pub(crate) async fn connect_wired(conn: &Connection) -> Result<()> {
             let active_conn = nm
                 .activate_connection(saved_path, wired_device.clone(), specific_object)
                 .await?;
-            wait_for_connection_activation(conn, &active_conn).await?;
+            let timeout = timeout_config.map(|c| c.connection_timeout);
+            wait_for_connection_activation(conn, &active_conn, timeout).await?;
         }
         None => {
             debug!("No saved connection found, creating new wired connection");
@@ -147,7 +174,8 @@ pub(crate) async fn connect_wired(conn: &Connection) -> Result<()> {
             let (_, active_conn) = nm
                 .add_and_activate_connection(settings, wired_device.clone(), specific_object)
                 .await?;
-            wait_for_connection_activation(conn, &active_conn).await?;
+            let timeout = timeout_config.map(|c| c.connection_timeout);
+            wait_for_connection_activation(conn, &active_conn, timeout).await?;
         }
     }
 
@@ -184,6 +212,7 @@ pub(crate) async fn forget_by_name_and_type(
     conn: &Connection,
     name: &str,
     device_filter: Option<u32>,
+    timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     use std::collections::HashMap;
     use zvariant::{OwnedObjectPath, Value};
@@ -230,7 +259,9 @@ pub(crate) async fn forget_by_name_and_type(
                     if let Ok(bytes) = ap.ssid().await {
                         if decode_ssid_or_empty(&bytes) == name {
                             debug!("Disconnecting from active WiFi network: {name}");
-                            if let Err(e) = disconnect_wifi_and_wait(conn, dev_path).await {
+                            if let Err(e) =
+                                disconnect_wifi_and_wait(conn, dev_path, timeout_config).await
+                            {
                                 warn!("Disconnect wait failed: {e}");
                                 let final_state = dev.state().await?;
                                 if final_state != device_state::DISCONNECTED
@@ -257,8 +288,12 @@ pub(crate) async fn forget_by_name_and_type(
             let state = dev.state().await?;
             if state != device_state::DISCONNECTED && state != device_state::UNAVAILABLE {
                 debug!("Disconnecting from active Bluetooth device: {name}");
-                if let Err(e) =
-                    crate::core::bluetooth::disconnect_bluetooth_and_wait(conn, dev_path).await
+                if let Err(e) = crate::core::bluetooth::disconnect_bluetooth_and_wait(
+                    conn,
+                    dev_path,
+                    timeout_config,
+                )
+                .await
                 {
                     warn!("Bluetooth disconnect failed: {e}");
                     let final_state = dev.state().await?;
@@ -391,6 +426,7 @@ pub(crate) async fn forget_by_name_and_type(
 pub(crate) async fn disconnect_wifi_and_wait(
     conn: &Connection,
     dev_path: &OwnedObjectPath,
+    timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     let dev = NMDeviceProxy::builder(conn)
         .path(dev_path.clone())?
@@ -421,7 +457,8 @@ pub(crate) async fn disconnect_wifi_and_wait(
     }
 
     // Wait for disconnect using signal-based monitoring
-    wait_for_device_disconnect(&dev).await?;
+    let timeout = timeout_config.map(|c| c.disconnect_timeout);
+    wait_for_device_disconnect(&dev, timeout).await?;
 
     // Brief stabilization delay
     Delay::new(timeouts::stabilization_delay()).await;
@@ -506,6 +543,7 @@ async fn ensure_disconnected(
     conn: &Connection,
     nm: &NMProxy<'_>,
     wifi_device: &OwnedObjectPath,
+    timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     if let Some(active) = Wifi::current(conn).await {
         debug!("Disconnecting from {active}");
@@ -519,7 +557,7 @@ async fn ensure_disconnected(
             }
         }
 
-        disconnect_wifi_and_wait(conn, wifi_device).await?;
+        disconnect_wifi_and_wait(conn, wifi_device, timeout_config).await?;
     }
 
     Ok(())
@@ -540,6 +578,7 @@ async fn connect_via_saved(
     ap: &OwnedObjectPath,
     creds: &WifiSecurity,
     saved: OwnedObjectPath,
+    timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     debug!("Activating saved connection: {}", saved.as_str());
 
@@ -554,7 +593,8 @@ async fn connect_via_saved(
             );
 
             // Wait for connection activation using signal-based monitoring
-            match wait_for_connection_activation(conn, &active_conn).await {
+            let timeout = timeout_config.map(|c| c.connection_timeout);
+            match wait_for_connection_activation(conn, &active_conn, timeout).await {
                 Ok(()) => {
                     debug!("Saved connection activated successfully");
                 }
@@ -589,7 +629,8 @@ async fn connect_via_saved(
                         })?;
 
                     // Wait for the fresh connection to activate
-                    wait_for_connection_activation(conn, &new_active_conn).await?;
+                    let timeout = timeout_config.map(|c| c.connection_timeout);
+                    wait_for_connection_activation(conn, &new_active_conn, timeout).await?;
                 }
             }
         }
@@ -620,7 +661,8 @@ async fn connect_via_saved(
                 })?;
 
             // Wait for the fresh connection to activate
-            wait_for_connection_activation(conn, &active_conn).await?;
+            let timeout = timeout_config.map(|c| c.connection_timeout);
+            wait_for_connection_activation(conn, &active_conn, timeout).await?;
         }
     }
 
@@ -640,6 +682,7 @@ async fn build_and_activate_new(
     ap: &OwnedObjectPath,
     ssid: &str,
     creds: WifiSecurity,
+    timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     let opts = ConnectionOptions {
         autoconnect: true,
@@ -651,7 +694,7 @@ async fn build_and_activate_new(
 
     debug!("Creating new connection, settings: \n{settings:#?}");
 
-    ensure_disconnected(conn, nm, wifi_device).await?;
+    ensure_disconnected(conn, nm, wifi_device, timeout_config).await?;
 
     let (_, active_conn) = match nm
         .add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
@@ -673,7 +716,8 @@ async fn build_and_activate_new(
     debug!("Waiting for connection activation using signal monitoring...");
 
     // Wait for connection activation using the ActiveConnection signals
-    wait_for_connection_activation(conn, &active_conn).await?;
+    let timeout = timeout_config.map(|c| c.connection_timeout);
+    wait_for_connection_activation(conn, &active_conn, timeout).await?;
 
     info!("Connection to '{ssid}' activated successfully");
 
@@ -756,7 +800,10 @@ pub(crate) async fn is_connected(conn: &Connection, ssid: &str) -> Result<bool> 
 /// then waits for the device to reach disconnected state.
 ///
 /// Returns `Ok(())` if disconnected successfully or if no active connection exists.
-pub(crate) async fn disconnect(conn: &Connection) -> Result<()> {
+pub(crate) async fn disconnect(
+    conn: &Connection,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
     let nm = NMProxy::new(conn).await?;
 
     let wifi_device = match find_wifi_device(conn, &nm).await {
@@ -788,7 +835,7 @@ pub(crate) async fn disconnect(conn: &Connection) -> Result<()> {
         }
     }
 
-    disconnect_wifi_and_wait(conn, &wifi_device).await?;
+    disconnect_wifi_and_wait(conn, &wifi_device, timeout_config).await?;
 
     info!("Disconnected from network");
     Ok(())
