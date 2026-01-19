@@ -12,12 +12,13 @@ categories = ["gui"]
 publish = false
 
 [dependencies]
-nmrs = { path = "../nmrs", version = "1.1.0" }
-gtk = { version = "0.10.3", package = "gtk4" }
-glib = "0.21.5"
-tokio = { version = "1.48.0", features = ["full"] }
-log = "0.4.29"
-dirs = "6.0.0"
-fs2 = "0.4.3"
-anyhow = "1.0.100" 
-clap = { version = "4.5.53", features = ["derive"] }
+nmrs.workspace = true  
+gtk.workspace = true 
+glib.workspace = true 
+tokio.workspace = true
+log.workspace = true 
+dirs.workspace = true 
+fs2.workspace = true 
+anyhow.workspace = true  
+clap.workspace = true 
+tokio-util.workspace = true
