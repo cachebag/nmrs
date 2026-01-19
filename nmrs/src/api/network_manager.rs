@@ -2,21 +2,18 @@ use tokio::sync::watch;
 use zbus::Connection;
 
 use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
+use crate::core::bluetooth::connect_bluetooth;
 use crate::core::connection::{
-    connect, connect_wired, disconnect, forget, get_device_by_interface, is_connected,
+    connect, connect_wired, disconnect, forget_by_name_and_type, get_device_by_interface,
+    is_connected,
 };
 use crate::core::connection_settings::{
     get_saved_connection_path, has_saved_connection, list_saved_connections,
 };
-use crate::core::device::{list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled};
-use crate::core::scan::{current_network, list_networks, scan_networks};
-use crate::core::bluetooth::connect_bluetooth;
-use crate::core::connection::{connect, connect_wired, forget_by_name_and_type};
-use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
 use crate::core::device::{
     list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled,
 };
-use crate::core::scan::{list_networks, scan_networks};
+use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
 use crate::models::{
     BluetoothDevice, BluetoothIdentity, VpnConnection, VpnConnectionInfo, VpnCredentials,
