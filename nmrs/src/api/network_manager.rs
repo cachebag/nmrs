@@ -117,13 +117,67 @@ use crate::Result;
 #[derive(Debug, Clone)]
 pub struct NetworkManager {
     conn: Connection,
+    timeout_config: crate::api::models::TimeoutConfig,
 }
 
 impl NetworkManager {
-    /// Creates a new `NetworkManager` connected to the system D-Bus.
+    /// Creates a new `NetworkManager` connected to the system D-Bus with default timeout configuration.
+    ///
+    /// Uses default timeouts of 30 seconds for connection and 10 seconds for disconnection.
+    /// To customize timeouts, use [`with_config()`](Self::with_config) instead.
     pub async fn new() -> Result<Self> {
         let conn = Connection::system().await?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            timeout_config: crate::api::models::TimeoutConfig::default(),
+        })
+    }
+
+    /// Creates a new `NetworkManager` with custom timeout configuration.
+    ///
+    /// This allows you to customize how long NetworkManager will wait for
+    /// various operations to complete before timing out.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::{NetworkManager, TimeoutConfig};
+    /// use std::time::Duration;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// // Configure longer timeouts for slow networks
+    /// let config = TimeoutConfig::new()
+    ///     .with_connection_timeout(Duration::from_secs(60))
+    ///     .with_disconnect_timeout(Duration::from_secs(20));
+    ///
+    /// let nm = NetworkManager::with_config(config).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn with_config(timeout_config: crate::api::models::TimeoutConfig) -> Result<Self> {
+        let conn = Connection::system().await?;
+        Ok(Self {
+            conn,
+            timeout_config,
+        })
+    }
+
+    /// Returns the current timeout configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let config = nm.timeout_config();
+    /// println!("Connection timeout: {:?}", config.connection_timeout);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn timeout_config(&self) -> crate::api::models::TimeoutConfig {
+        self.timeout_config
     }
 
     /// List all network devices managed by NetworkManager.
@@ -161,7 +215,7 @@ impl NetworkManager {
     /// `ConnectionError::AuthFailed` if authentication fails, or other
     /// variants for specific failure reasons.
     pub async fn connect(&self, ssid: &str, creds: WifiSecurity) -> Result<()> {
-        connect(&self.conn, ssid, creds).await
+        connect(&self.conn, ssid, creds, Some(self.timeout_config)).await
     }
 
     /// Connects to a wired (Ethernet) device.
@@ -174,7 +228,7 @@ impl NetworkManager {
     ///
     /// Returns `ConnectionError::NoWiredDevice` if no wired device is found.
     pub async fn connect_wired(&self) -> Result<()> {
-        connect_wired(&self.conn).await
+        connect_wired(&self.conn, Some(self.timeout_config)).await
     }
 
     /// Connects to a bluetooth device using the provided identity.
@@ -198,7 +252,7 @@ impl NetworkManager {
     ///
     /// ```
     pub async fn connect_bluetooth(&self, name: &str, identity: &BluetoothIdentity) -> Result<()> {
-        connect_bluetooth(&self.conn, name, identity).await
+        connect_bluetooth(&self.conn, name, identity, Some(self.timeout_config)).await
     }
 
     /// Connects to a VPN using the provided credentials.
@@ -243,7 +297,7 @@ impl NetworkManager {
     /// - The credentials are invalid or incomplete
     /// - The VPN connection fails to activate
     pub async fn connect_vpn(&self, creds: VpnCredentials) -> Result<()> {
-        connect_vpn(&self.conn, creds).await
+        connect_vpn(&self.conn, creds, Some(self.timeout_config)).await
     }
 
     /// Disconnects from an active VPN connection by name.
@@ -394,7 +448,7 @@ impl NetworkManager {
     /// # }
     /// ```
     pub async fn disconnect(&self) -> Result<()> {
-        disconnect(&self.conn).await
+        disconnect(&self.conn, Some(self.timeout_config)).await
     }
 
     /// Returns the full `Network` object for the currently connected WiFi network.
@@ -504,7 +558,13 @@ impl NetworkManager {
     /// Returns `Ok(())` if at least one connection was deleted successfully.
     /// Returns `NoSavedConnection` if no matching connections were found.
     pub async fn forget(&self, ssid: &str) -> Result<()> {
-        forget_by_name_and_type(&self.conn, ssid, Some(device_type::WIFI)).await
+        forget_by_name_and_type(
+            &self.conn,
+            ssid,
+            Some(device_type::WIFI),
+            Some(self.timeout_config),
+        )
+        .await
     }
 
     /// Forgets (deletes) a saved Bluetooth connection.
@@ -521,7 +581,13 @@ impl NetworkManager {
     /// Returns `Ok(())` if the connection was deleted successfully.
     /// Returns `NoSavedConnection` if no matching connection was found.
     pub async fn forget_bluetooth(&self, name: &str) -> Result<()> {
-        forget_by_name_and_type(&self.conn, name, Some(device_type::BLUETOOTH)).await
+        forget_by_name_and_type(
+            &self.conn,
+            name,
+            Some(device_type::BLUETOOTH),
+            Some(self.timeout_config),
+        )
+        .await
     }
     ///
     /// Subscribes to D-Bus signals for access point additions and removals

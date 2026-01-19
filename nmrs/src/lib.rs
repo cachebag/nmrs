@@ -294,6 +294,7 @@ pub mod builders {
 /// - [`WifiSecurity`] - WiFi security types (Open, WPA-PSK, WPA-EAP)
 /// - [`EapOptions`] - Enterprise authentication options
 /// - [`ConnectionOptions`] - Connection settings (autoconnect, priority, etc.)
+/// - [`TimeoutConfig`] - Timeout configuration for network operations
 ///
 /// # Enums
 /// - [`DeviceType`] - Device types (Ethernet, WiFi, etc.)
@@ -318,8 +319,8 @@ pub use api::models::{
     connection_state_reason_to_error, reason_to_error, ActiveConnectionState, BluetoothDevice,
     BluetoothIdentity, BluetoothNetworkRole, ConnectionError, ConnectionOptions,
     ConnectionStateReason, Device, DeviceState, DeviceType, EapMethod, EapOptions, Network,
-    NetworkInfo, Phase2, StateReason, VpnConnection, VpnConnectionInfo, VpnCredentials, VpnType,
-    WifiSecurity, WireGuardPeer,
+    NetworkInfo, Phase2, StateReason, TimeoutConfig, VpnConnection, VpnConnectionInfo,
+    VpnCredentials, VpnType, WifiSecurity, WireGuardPeer,
 };
 pub use api::network_manager::NetworkManager;
 
