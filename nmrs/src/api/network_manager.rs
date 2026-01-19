@@ -187,10 +187,10 @@ impl NetworkManager {
     /// # async fn example() -> nmrs::Result<()> {
     ///    let nm = NetworkManager::new().await?;
     ///
-    ///    let identity = BluetoothIdentity {
-    ///         bdaddr: "C8:1F:E8:F0:51:57".into(),
-    ///         bt_device_type: BluetoothNetworkRole::PanU,
-    ///     };
+    ///    let identity = BluetoothIdentity::new(
+    ///         "C8:1F:E8:F0:51:57".into(),
+    ///         BluetoothNetworkRole::PanU,
+    ///     );
     ///
     ///    nm.connect_bluetooth("My Phone", &identity).await?;
     ///    Ok(())
@@ -216,23 +216,20 @@ impl NetworkManager {
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
     ///
-    /// let creds = VpnCredentials {
-    ///     vpn_type: VpnType::WireGuard,
-    ///     name: "MyVPN".into(),
-    ///     gateway: "vpn.example.com:51820".into(),
-    ///     private_key: "your_private_key".into(),
-    ///     address: "10.0.0.2/24".into(),
-    ///     peers: vec![WireGuardPeer {
-    ///         public_key: "peer_public_key".into(),
-    ///         gateway: "vpn.example.com:51820".into(),
-    ///         allowed_ips: vec!["0.0.0.0/0".into()],
-    ///         preshared_key: None,
-    ///         persistent_keepalive: Some(25),
-    ///     }],
-    ///     dns: Some(vec!["1.1.1.1".into()]),
-    ///     mtu: None,
-    ///     uuid: None,
-    /// };
+    /// let peer = WireGuardPeer::new(
+    ///     "peer_public_key",
+    ///     "vpn.example.com:51820",
+    ///     vec!["0.0.0.0/0".into()],
+    /// ).with_persistent_keepalive(25);
+    ///
+    /// let creds = VpnCredentials::new(
+    ///     VpnType::WireGuard,
+    ///     "MyVPN",
+    ///     "vpn.example.com:51820",
+    ///     "your_private_key",
+    ///     "10.0.0.2/24",
+    ///     vec![peer],
+    /// ).with_dns(vec!["1.1.1.1".into()]);
     ///
     /// nm.connect_vpn(creds).await?;
     /// # Ok(())
@@ -553,15 +550,12 @@ impl NetworkManager {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn monitor_network_changes<F>(
-        &self,
-        shutdown: watch::Receiver<()>,
-        callback: F,
-    ) -> Result<()>
+    pub async fn monitor_network_changes<F>(&self, callback: F) -> Result<()>
     where
         F: Fn() + 'static,
     {
-        network_monitor::monitor_network_changes(&self.conn, shutdown, callback).await
+        let (_tx, rx) = watch::channel(());
+        network_monitor::monitor_network_changes(&self.conn, rx, callback).await
     }
 
     /// Monitors device state changes in real-time.
@@ -593,14 +587,11 @@ impl NetworkManager {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn monitor_device_changes<F>(
-        &self,
-        shutdown: watch::Receiver<()>,
-        callback: F,
-    ) -> Result<()>
+    pub async fn monitor_device_changes<F>(&self, callback: F) -> Result<()>
     where
         F: Fn() + 'static,
     {
-        device_monitor::monitor_device_changes(&self.conn, shutdown, callback).await
+        let (_tx, rx) = watch::channel(());
+        device_monitor::monitor_device_changes(&self.conn, rx, callback).await
     }
 }

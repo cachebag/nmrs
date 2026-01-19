@@ -438,12 +438,28 @@ pub struct Device {
 /// Contains MAC addresses that uniquely identify the device. The permanent
 /// MAC is burned into the hardware, while the current MAC may be different
 /// if MAC address randomization or spoofing is enabled.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DeviceIdentity {
     /// The permanent (factory-assigned) MAC address.
     pub permanent_mac: String,
     /// The current MAC address in use (may differ if randomized/spoofed).
     pub current_mac: String,
+}
+
+impl DeviceIdentity {
+    /// Creates a new `DeviceIdentity`.
+    ///
+    /// # Arguments
+    ///
+    /// * `permanent_mac` - The permanent (factory-assigned) MAC address
+    /// * `current_mac` - The current MAC address in use
+    pub fn new(permanent_mac: String, current_mac: String) -> Self {
+        Self {
+            permanent_mac,
+            current_mac,
+        }
+    }
 }
 
 /// EAP (Extensible Authentication Protocol) method for WPA-Enterprise Wi-Fi.
@@ -1060,17 +1076,44 @@ pub enum BluetoothNetworkRole {
 ///```rust
 /// use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
 ///
-/// let bt_settings = BluetoothIdentity {
-///    bdaddr: "00:1A:7D:DA:71:13".into(),
-///    bt_device_type: BluetoothNetworkRole::Dun,
-/// };
+/// let bt_settings = BluetoothIdentity::new(
+///    "00:1A:7D:DA:71:13".into(),
+///    BluetoothNetworkRole::Dun,
+/// );
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct BluetoothIdentity {
     /// MAC address of Bluetooth device
     pub bdaddr: String,
     /// Bluetooth device type (DUN or PANU)
     pub bt_device_type: BluetoothNetworkRole,
+}
+
+impl BluetoothIdentity {
+    /// Creates a new `BluetoothIdentity`.
+    ///
+    /// # Arguments
+    ///
+    /// * `bdaddr` - Bluetooth MAC address (e.g., "00:1A:7D:DA:71:13")
+    /// * `bt_device_type` - Bluetooth network role (PanU or Dun)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
+    ///
+    /// let identity = BluetoothIdentity::new(
+    ///     "00:1A:7D:DA:71:13".into(),
+    ///     BluetoothNetworkRole::PanU,
+    /// );
+    /// ```
+    pub fn new(bdaddr: String, bt_device_type: BluetoothNetworkRole) -> Self {
+        Self {
+            bdaddr,
+            bt_device_type,
+        }
+    }
 }
 
 /// Bluetooth device with friendly name from BlueZ.
@@ -1083,18 +1126,21 @@ pub struct BluetoothIdentity {
 ///
 /// # Example
 ///
+/// # Example
+///
 /// ```rust
 /// use nmrs::models::{BluetoothDevice, BluetoothNetworkRole, DeviceState};
 ///
 /// let role = BluetoothNetworkRole::PanU as u32;
-/// let bt_device = BluetoothDevice {
-///    bdaddr: "00:1A:7D:DA:71:13".into(),
-///    name: Some("Foo".into()),
-///    alias: Some("Bar".into()),
-///    bt_caps: role,
-///    state: DeviceState::Activated,
-/// };
+/// let device = BluetoothDevice::new(
+///     "00:1A:7D:DA:71:13".into(),
+///     Some("My Phone".into()),
+///     Some("Phone".into()),
+///     role,
+///     DeviceState::Activated,
+/// );
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct BluetoothDevice {
     /// Bluetooth MAC address
@@ -1107,6 +1153,48 @@ pub struct BluetoothDevice {
     pub bt_caps: u32,
     /// Current device state
     pub state: DeviceState,
+}
+
+impl BluetoothDevice {
+    /// Creates a new `BluetoothDevice`.
+    ///
+    /// # Arguments
+    ///
+    /// * `bdaddr` - Bluetooth MAC address
+    /// * `name` - Friendly device name from BlueZ
+    /// * `alias` - Device alias from BlueZ
+    /// * `bt_caps` - Bluetooth device capabilities/type
+    /// * `state` - Current device state
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use nmrs::models::{BluetoothDevice, BluetoothNetworkRole, DeviceState};
+    ///
+    /// let role = BluetoothNetworkRole::PanU as u32;
+    /// let device = BluetoothDevice::new(
+    ///     "00:1A:7D:DA:71:13".into(),
+    ///     Some("My Phone".into()),
+    ///     Some("Phone".into()),
+    ///     role,
+    ///     DeviceState::Activated,
+    /// );
+    /// ```
+    pub fn new(
+        bdaddr: String,
+        name: Option<String>,
+        alias: Option<String>,
+        bt_caps: u32,
+        state: DeviceState,
+    ) -> Self {
+        Self {
+            bdaddr,
+            name,
+            alias,
+            bt_caps,
+            state,
+        }
+    }
 }
 
 /// NetworkManager device types.
@@ -2179,10 +2267,8 @@ mod tests {
 
     #[test]
     fn test_bluetooth_identity_creation() {
-        let identity = BluetoothIdentity {
-            bdaddr: "00:1A:7D:DA:71:13".into(),
-            bt_device_type: BluetoothNetworkRole::PanU,
-        };
+        let identity =
+            BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU);
 
         assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
         assert!(matches!(
@@ -2193,10 +2279,8 @@ mod tests {
 
     #[test]
     fn test_bluetooth_identity_dun() {
-        let identity = BluetoothIdentity {
-            bdaddr: "C8:1F:E8:F0:51:57".into(),
-            bt_device_type: BluetoothNetworkRole::Dun,
-        };
+        let identity =
+            BluetoothIdentity::new("C8:1F:E8:F0:51:57".into(), BluetoothNetworkRole::Dun);
 
         assert_eq!(identity.bdaddr, "C8:1F:E8:F0:51:57");
         assert!(matches!(identity.bt_device_type, BluetoothNetworkRole::Dun));
@@ -2205,13 +2289,13 @@ mod tests {
     #[test]
     fn test_bluetooth_device_creation() {
         let role = BluetoothNetworkRole::PanU as u32;
-        let device = BluetoothDevice {
-            bdaddr: "00:1A:7D:DA:71:13".into(),
-            name: Some("MyPhone".into()),
-            alias: Some("Phone".into()),
-            bt_caps: role,
-            state: DeviceState::Activated,
-        };
+        let device = BluetoothDevice::new(
+            "00:1A:7D:DA:71:13".into(),
+            Some("MyPhone".into()),
+            Some("Phone".into()),
+            role,
+            DeviceState::Activated,
+        );
 
         assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
         assert_eq!(device.name, Some("MyPhone".into()));
@@ -2223,13 +2307,13 @@ mod tests {
     #[test]
     fn test_bluetooth_device_display() {
         let role = BluetoothNetworkRole::PanU as u32;
-        let device = BluetoothDevice {
-            bdaddr: "00:1A:7D:DA:71:13".into(),
-            name: Some("MyPhone".into()),
-            alias: Some("Phone".into()),
-            bt_caps: role,
-            state: DeviceState::Activated,
-        };
+        let device = BluetoothDevice::new(
+            "00:1A:7D:DA:71:13".into(),
+            Some("MyPhone".into()),
+            Some("Phone".into()),
+            role,
+            DeviceState::Activated,
+        );
 
         let display_str = format!("{}", device);
         assert!(display_str.contains("Phone"));
@@ -2240,13 +2324,13 @@ mod tests {
     #[test]
     fn test_bluetooth_device_display_no_alias() {
         let role = BluetoothNetworkRole::Dun as u32;
-        let device = BluetoothDevice {
-            bdaddr: "00:1A:7D:DA:71:13".into(),
-            name: Some("MyPhone".into()),
-            alias: None,
-            bt_caps: role,
-            state: DeviceState::Disconnected,
-        };
+        let device = BluetoothDevice::new(
+            "00:1A:7D:DA:71:13".into(),
+            Some("MyPhone".into()),
+            None,
+            role,
+            DeviceState::Disconnected,
+        );
 
         let display_str = format!("{}", device);
         assert!(display_str.contains("unknown"));
@@ -2259,10 +2343,7 @@ mod tests {
         let bt_device = Device {
             path: "/org/freedesktop/NetworkManager/Devices/1".into(),
             interface: "bt0".into(),
-            identity: DeviceIdentity {
-                permanent_mac: "00:1A:7D:DA:71:13".into(),
-                current_mac: "00:1A:7D:DA:71:13".into(),
-            },
+            identity: DeviceIdentity::new("00:1A:7D:DA:71:13".into(), "00:1A:7D:DA:71:13".into()),
             device_type: DeviceType::Bluetooth,
             state: DeviceState::Activated,
             managed: Some(true),
