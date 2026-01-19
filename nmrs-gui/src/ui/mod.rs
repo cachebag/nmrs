@@ -12,6 +12,7 @@ use gtk::{
 };
 use std::cell::Cell;
 use std::rc::Rc;
+use tokio::sync::watch;
 
 use crate::ui::header::THEMES;
 
@@ -47,6 +48,8 @@ pub fn build_ui(app: &Application) {
             win.add_css_class("dark-theme");
         }
     }
+
+    let (_shutdown_tx, shutdown_rx) = watch::channel(());
 
     let vbox = GtkBox::new(Orientation::Vertical, 0);
     let status = Label::new(None);
@@ -161,6 +164,7 @@ pub fn build_ui(app: &Application) {
                     let is_scanning_device = is_scanning_clone.clone();
                     let ctx_device = ctx.clone();
                     let pending_device_refresh = Rc::new(std::cell::RefCell::new(false));
+                    let shutdown_rx_device = shutdown_rx.clone();
 
                     glib::MainContext::default().spawn_local(async move {
                         loop {
@@ -168,9 +172,10 @@ pub fn build_ui(app: &Application) {
                             let list_container_clone = list_container_device.clone();
                             let is_scanning_clone = is_scanning_device.clone();
                             let pending_device_refresh_clone = pending_device_refresh.clone();
+                            let shutdown_rx_monitor = shutdown_rx_device.clone();
 
                             let result = nm_device_monitor
-                                .monitor_device_changes(move || {
+                                .monitor_device_changes(shutdown_rx_monitor, move || {
                                     let ctx = ctx_device_clone.clone();
                                     let list_container = list_container_clone.clone();
                                     let is_scanning = is_scanning_clone.clone();
@@ -214,6 +219,7 @@ pub fn build_ui(app: &Application) {
                     let is_scanning_network = is_scanning_clone.clone();
                     let ctx_network = ctx.clone();
                     let pending_network_refresh = Rc::new(std::cell::RefCell::new(false));
+                    let shutdown_rx_network = shutdown_rx.clone();
 
                     glib::MainContext::default().spawn_local(async move {
                         loop {
@@ -221,9 +227,10 @@ pub fn build_ui(app: &Application) {
                             let list_container_clone = list_container_network.clone();
                             let is_scanning_clone = is_scanning_network.clone();
                             let pending_network_refresh_clone = pending_network_refresh.clone();
+                            let shutdown_rx_monitor = shutdown_rx_network.clone();
 
                             let result = nm_network_monitor
-                                .monitor_network_changes(move || {
+                                .monitor_network_changes(shutdown_rx_monitor, move || {
                                     let ctx = ctx_network_clone.clone();
                                     let list_container = list_container_clone.clone();
                                     let is_scanning = is_scanning_clone.clone();
