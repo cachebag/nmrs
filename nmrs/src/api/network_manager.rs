@@ -366,8 +366,8 @@ impl NetworkManager {
     ///
     /// # Errors
     ///
-    /// Returns `ConnectionError::NoSavedConnection` if no VPN with the given
-    /// name is found.
+    /// Returns an error only if the operation fails unexpectedly.
+    /// Returns `Ok(())` if no matching VPN connection is found.
     pub async fn forget_vpn(&self, name: &str) -> Result<()> {
         crate::core::vpn::forget_vpn(&self.conn, name).await
     }
@@ -555,8 +555,8 @@ impl NetworkManager {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(())` if at least one connection was deleted successfully.
-    /// Returns `NoSavedConnection` if no matching connections were found.
+    /// Returns `Ok(())` if one or more connections were deleted successfully,
+    /// or if no matching connections were found.
     pub async fn forget(&self, ssid: &str) -> Result<()> {
         forget_by_name_and_type(
             &self.conn,
