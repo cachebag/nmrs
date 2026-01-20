@@ -571,7 +571,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
     }
 
     debug!("No saved VPN connection found for '{name}'");
-    Err(crate::api::models::ConnectionError::NoSavedConnection)
+    Ok(())
 }
 
 /// Gets detailed information about a WireGuard connection.
