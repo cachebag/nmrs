@@ -412,7 +412,7 @@ pub(crate) async fn forget_by_name_and_type(
             debug!("Bluetooth device '{name}' has no NetworkManager connection profile (device may only be paired in BlueZ)");
             Ok(())
         } else {
-            Err(ConnectionError::NoSavedConnection)
+            Ok(())
         }
     }
 }
