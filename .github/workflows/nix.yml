@@ -12,11 +12,32 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
 
-      - name: Build package
-        id: build
-        continue-on-error: true
-        run: nix build -f default.nix
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Install fixsha
+        run: cargo install fixsha
+
+      - name: Run fixsha
+        run: fixsha
+
+      - name: Commit hash fixes
+        if: github.event_name == 'pull_request'
+        run: |
+          if [[ -n $(git status -s package.nix) ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add package.nix
+            git commit -m "chore(nix): fix cargoHash"
+            git push
+          fi
