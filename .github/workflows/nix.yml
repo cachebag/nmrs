@@ -35,8 +35,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           if [[ -n $(git status -s package.nix) ]]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "Akrm Al-Hakimi"
+            git config user.email "alhakimiakrmj@gmail.com"
             git add package.nix
             git commit -m "chore(nix): fix cargoHash"
             git push
