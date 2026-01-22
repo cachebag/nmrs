@@ -139,7 +139,7 @@ nix-shell -p nmrs
 **Tiling Window Managers** (Hyprland, Sway, i3)
 
 ```
-windowrulev2 = float, class:^(org\.nmrs\.ui)$
+windowrule = float 1, match:class org.nmrs.ui
 ```
 
 **Custom Styling**
