@@ -10,7 +10,10 @@ use crate::api::models::Network;
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
 use crate::types::constants::{device_type, security_flags};
-use crate::util::utils::{decode_ssid_or_empty, decode_ssid_or_hidden, for_each_access_point};
+use crate::util::utils::{
+    decode_ssid_or_empty, decode_ssid_or_hidden, for_each_access_point,
+    get_ip_addresses_from_active_connection,
+};
 use crate::Result;
 
 /// Triggers a Wi-Fi scan on all wireless devices.
@@ -78,6 +81,8 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
                 secured,
                 is_psk,
                 is_eap,
+                ip4_address: None,
+                ip6_address: None,
             };
 
             Ok(Some((ssid, frequency, network)))
@@ -156,6 +161,18 @@ pub(crate) async fn current_network(conn: &Connection) -> Result<Option<Network>
 
         let interface = dev.interface().await.unwrap_or_default();
 
+        // Get IP addresses from active connection
+        let (ip4_address, ip6_address) = if let Ok(active_conn_path) = dev.active_connection().await
+        {
+            if active_conn_path.as_str() != "/" {
+                get_ip_addresses_from_active_connection(conn, &active_conn_path).await
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
+
         return Ok(Some(Network {
             device: interface,
             ssid: ssid.to_string(),
@@ -165,6 +182,8 @@ pub(crate) async fn current_network(conn: &Connection) -> Result<Option<Network>
             secured,
             is_psk,
             is_eap,
+            ip4_address,
+            ip6_address,
         }));
     }
 

@@ -12,7 +12,7 @@ use crate::try_log;
 use crate::types::constants::{device_type, rate, security_flags};
 use crate::util::utils::{
     bars_from_strength, channel_from_freq, decode_ssid_or_empty, for_each_access_point,
-    mode_to_string, strength_or_zero,
+    get_ip_addresses_from_active_connection, mode_to_string, strength_or_zero,
 };
 use crate::Result;
 
@@ -31,6 +31,43 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
     let is_connected_outer = active_ssid.as_deref() == Some(&net.ssid);
     let target_ssid_outer = net.ssid.clone();
     let target_strength = net.strength;
+
+    // Get IP addresses if connected
+    let (ip4_address, ip6_address) = if is_connected_outer {
+        // Find the WiFi device and get its active connection
+        let nm = NMProxy::new(conn).await?;
+        let devices = nm.get_devices().await?;
+
+        let mut ip_addrs = (None, None);
+        for dev_path in devices {
+            let dev = match async {
+                NMDeviceProxy::builder(conn)
+                    .path(dev_path.clone())
+                    .ok()?
+                    .build()
+                    .await
+                    .ok()
+            }
+            .await
+            {
+                Some(d) => d,
+                None => continue,
+            };
+
+            if dev.device_type().await.ok() == Some(device_type::WIFI) {
+                if let Ok(active_conn_path) = dev.active_connection().await {
+                    if active_conn_path.as_str() != "/" {
+                        ip_addrs =
+                            get_ip_addresses_from_active_connection(conn, &active_conn_path).await;
+                        break;
+                    }
+                }
+            }
+        }
+        ip_addrs
+    } else {
+        (None, None)
+    };
 
     let results = for_each_access_point(conn, |ap| {
         let target_ssid = target_ssid_outer.clone();
@@ -122,12 +159,23 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
                 bars,
                 security,
                 status,
+                ip4_address: None,
+                ip6_address: None,
             }))
         })
     })
     .await?;
 
-    results.into_iter().next().ok_or(ConnectionError::NotFound)
+    let mut info = results
+        .into_iter()
+        .next()
+        .ok_or(ConnectionError::NotFound)?;
+
+    // Set IP addresses
+    info.ip4_address = ip4_address;
+    info.ip6_address = ip6_address;
+
+    Ok(info)
 }
 
 /// Returns the SSID of the currently connected Wi-Fi network.

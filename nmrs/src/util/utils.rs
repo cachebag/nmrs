@@ -5,6 +5,7 @@
 
 use log::{debug, warn};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::str;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
@@ -251,6 +252,72 @@ macro_rules! try_log {
             }
         }
     };
+}
+
+/// Helper to extract IP address from AddressData property.
+async fn extract_ip_address(
+    conn: &Connection,
+    config_path: OwnedObjectPath,
+    interface: &str,
+) -> Option<String> {
+    let proxy = nm_proxy(conn, config_path, interface).await.ok()?;
+    let addr_array: Vec<HashMap<String, zvariant::Value>> =
+        proxy.get_property("AddressData").await.ok()?;
+
+    addr_array.first().and_then(|addr_map| {
+        let address = match addr_map.get("address")? {
+            zvariant::Value::Str(s) => s.as_str().to_string(),
+            _ => return None,
+        };
+        let prefix = match addr_map.get("prefix")? {
+            zvariant::Value::U32(p) => *p,
+            _ => return None,
+        };
+        Some(format!("{}/{}", address, prefix))
+    })
+}
+
+/// Extracts IPv4 and IPv6 addresses from an active connection.
+///
+/// Returns a tuple of (ipv4_address, ipv6_address) where each is an Option<String>
+/// in CIDR notation (e.g., "192.168.1.100/24" or "2001:db8::1/64").
+///
+/// Returns (None, None) if the connection has no IP configuration.
+pub(crate) async fn get_ip_addresses_from_active_connection(
+    conn: &Connection,
+    active_conn_path: &OwnedObjectPath,
+) -> (Option<String>, Option<String>) {
+    let ac_proxy = match async {
+        NMActiveConnectionProxy::builder(conn)
+            .path(active_conn_path.clone())
+            .ok()?
+            .build()
+            .await
+            .ok()
+    }
+    .await
+    {
+        Some(proxy) => proxy,
+        None => return (None, None),
+    };
+
+    // Get IPv4 address
+    let ip4_address = match ac_proxy.ip4_config().await {
+        Ok(path) if path.as_str() != "/" => {
+            extract_ip_address(conn, path, "org.freedesktop.NetworkManager.IP4Config").await
+        }
+        _ => None,
+    };
+
+    // Get IPv6 address
+    let ip6_address = match ac_proxy.ip6_config().await {
+        Ok(path) if path.as_str() != "/" => {
+            extract_ip_address(conn, path, "org.freedesktop.NetworkManager.IP6Config").await
+        }
+        _ => None,
+    };
+
+    (ip4_address, ip6_address)
 }
 
 #[cfg(test)]
