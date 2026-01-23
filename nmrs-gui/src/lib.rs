@@ -33,9 +33,7 @@ pub fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let app = Application::builder()
-        .application_id("org.netrs.ui")
-        .build();
+    let app = Application::builder().application_id("org.nmrs.ui").build();
 
     let _lock = match acquire_app_lock() {
         Ok(lock) => lock,
