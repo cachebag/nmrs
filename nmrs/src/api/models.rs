@@ -323,6 +323,10 @@ pub struct Network {
     pub is_psk: bool,
     /// Whether the network uses WPA-EAP (Enterprise) authentication
     pub is_eap: bool,
+    /// Assigned IPv4 address with CIDR notation (only present when connected)
+    pub ip4_address: Option<String>,
+    /// Assigned IPv6 address with CIDR notation (only present when connected)
+    pub ip6_address: Option<String>,
 }
 
 /// Detailed information about a Wi-Fi network.
@@ -377,6 +381,10 @@ pub struct NetworkInfo {
     pub security: String,
     /// Connection status
     pub status: String,
+    /// Assigned IPv4 address with CIDR notation (only present when connected)
+    pub ip4_address: Option<String>,
+    /// Assigned IPv6 address with CIDR notation (only present when connected)
+    pub ip6_address: Option<String>,
 }
 
 /// Represents a network device managed by NetworkManager.
@@ -430,6 +438,10 @@ pub struct Device {
     pub managed: Option<bool>,
     /// Kernel driver name
     pub driver: Option<String>,
+    /// Assigned IPv4 address with CIDR notation (only present when connected)
+    pub ip4_address: Option<String>,
+    /// Assigned IPv6 address with CIDR notation (only present when connected)
+    pub ip6_address: Option<String>,
     // Link speed in Mb/s (wired devices)
     // pub speed: Option<u32>,
 }
@@ -2933,6 +2945,8 @@ mod tests {
             state: DeviceState::Activated,
             managed: Some(true),
             driver: Some("btusb".into()),
+            ip4_address: None,
+            ip6_address: None,
         };
 
         assert!(bt_device.is_bluetooth());

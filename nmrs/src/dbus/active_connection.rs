@@ -61,6 +61,16 @@ pub trait NMActiveConnection {
     #[zbus(property)]
     fn devices(&self) -> Result<Vec<OwnedObjectPath>>;
 
+    /// Path to the IPv4 configuration object.
+    /// Returns "/" if no IPv4 configuration is available.
+    #[zbus(property)]
+    fn ip4_config(&self) -> Result<OwnedObjectPath>;
+
+    /// Path to the IPv6 configuration object.
+    /// Returns "/" if no IPv6 configuration is available.
+    #[zbus(property)]
+    fn ip6_config(&self) -> Result<OwnedObjectPath>;
+
     /// Signal emitted when the connection activation state changes.
     ///
     /// The method is named `activation_state_changed` to avoid conflicts with

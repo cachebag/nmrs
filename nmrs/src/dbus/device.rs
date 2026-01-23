@@ -1,6 +1,7 @@
 //! NetworkManager Device proxy.
 
 use zbus::{proxy, Result};
+use zvariant::OwnedObjectPath;
 
 /// Proxy for NetworkManager device interface.
 ///
@@ -57,6 +58,11 @@ pub trait NMDevice {
     /// Note: This property may not be available on all device types or systems.
     #[zbus(property, name = "PermHwAddress")]
     fn perm_hw_address(&self) -> Result<String>;
+
+    /// Path to the active connection object for this device.
+    /// Returns "/" if the device is not connected.
+    #[zbus(property)]
+    fn active_connection(&self) -> Result<OwnedObjectPath>;
 
     /// Signal emitted when device state changes.
     ///

@@ -12,6 +12,7 @@ use crate::core::bluetooth::populate_bluez_info;
 use crate::core::state_wait::wait_for_wifi_device_ready;
 use crate::dbus::{NMBluetoothProxy, NMDeviceProxy, NMProxy};
 use crate::types::constants::device_type;
+use crate::util::utils::get_ip_addresses_from_active_connection;
 use crate::Result;
 
 /// Lists all network devices managed by NetworkManager.
@@ -74,6 +75,18 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
             }
         };
 
+        // Get IP addresses from active connection
+        let (ip4_address, ip6_address) =
+            if let Ok(active_conn_path) = d_proxy.active_connection().await {
+                if active_conn_path.as_str() != "/" {
+                    get_ip_addresses_from_active_connection(conn, &active_conn_path).await
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            };
+
         // Avoiding this breaking change for now
         // Get link speed for wired devices
         /* let speed = if raw_type == device_type::ETHERNET {
@@ -94,6 +107,8 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
             state,
             managed,
             driver,
+            ip4_address,
+            ip6_address,
             // speed,
         });
     }
