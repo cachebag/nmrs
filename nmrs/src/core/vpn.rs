@@ -762,8 +762,33 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             (None, vec![])
         };
 
-        // IPv6 config parsing not implemented
-        let ip6_address = None;
+        // IPv6 config
+        let ip6_path: OwnedObjectPath = ac_proxy.get_property("Ip6Config").await?;
+        let ip6_address = if ip6_path.as_str() != "/" {
+            let ip6_proxy =
+                nm_proxy(conn, ip6_path, "org.freedesktop.NetworkManager.IP6Config").await?;
+
+            if let Ok(addr_array) = ip6_proxy
+                .get_property::<Vec<HashMap<String, zvariant::Value>>>("AddressData")
+                .await
+            {
+                addr_array.first().and_then(|addr_map| {
+                    let address = addr_map.get("address").and_then(|v| match v {
+                        zvariant::Value::Str(s) => Some(s.as_str().to_string()),
+                        _ => None,
+                    })?;
+                    let prefix = addr_map.get("prefix").and_then(|v| match v {
+                        zvariant::Value::U32(p) => Some(p),
+                        _ => None,
+                    })?;
+                    Some(format!("{}/{}", address, prefix))
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         return Ok(VpnConnectionInfo {
             name: id.to_string(),
