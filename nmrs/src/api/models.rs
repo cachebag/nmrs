@@ -1604,11 +1604,6 @@ pub struct VpnConnection {
 /// Provides comprehensive information about an active VPN connection,
 /// including IP configuration and connection details.
 ///
-/// # Limitations
-///
-/// - `ip6_address`: IPv6 address parsing is not currently implemented and will
-///   always return `None`. IPv4 addresses are fully supported.
-///
 /// # Example
 ///
 /// ```no_run
@@ -1616,7 +1611,10 @@ pub struct VpnConnection {
 /// # // This struct is returned by the library, not constructed directly
 /// # let info: VpnConnectionInfo = todo!();
 /// if let Some(ip) = &info.ip4_address {
-///     println!("VPN IP: {}", ip);
+///     println!("VPN IPv4: {}", ip);
+/// }
+/// if let Some(ip) = &info.ip6_address {
+///     println!("VPN IPv6: {}", ip);
 /// }
 /// ```
 #[non_exhaustive]
@@ -1634,7 +1632,7 @@ pub struct VpnConnectionInfo {
     pub gateway: Option<String>,
     /// Assigned IPv4 address with CIDR notation.
     pub ip4_address: Option<String>,
-    /// IPv6 address (currently always `None` - IPv6 parsing not yet implemented).
+    /// Assigned IPv6 address with CIDR notation.
     pub ip6_address: Option<String>,
     /// DNS servers configured for this VPN.
     pub dns_servers: Vec<String>,
