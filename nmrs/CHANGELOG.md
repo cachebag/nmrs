@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Changed
+- Completed IPv6 support ([#208](https://github.com/cachebag/nmrs/issues/208))
 
 ## [2.0.0] - 2026-01-19
 ### Added
