@@ -9,7 +9,7 @@ use zbus::Connection;
 use crate::dbus::{NMBluetoothProxy, NMDeviceProxy, NMProxy};
 use crate::monitoring::transport::ActiveTransport;
 use crate::try_log;
-use crate::types::constants::device_type;
+use crate::types::constants::{device_state, device_type};
 
 pub(crate) struct Bluetooth;
 
@@ -65,7 +65,7 @@ pub(crate) async fn current_bluetooth_bdaddr(conn: &Connection) -> Option<String
         // Check if device is in an active/connected state
         let state = try_log!(dev.state().await, "Failed to get device state");
         // State 100 = Activated (connected)
-        if state != 100 {
+        if state != device_state::ACTIVATED {
             continue;
         }
 
@@ -109,7 +109,7 @@ pub(crate) async fn current_bluetooth_info(conn: &Connection) -> Option<(String,
         // Check if device is in an active/connected state
         let state = try_log!(dev.state().await, "Failed to get device state");
         // State 100 = Activated (connected)
-        if state != 100 {
+        if state != device_state::ACTIVATED {
             continue;
         }
 
