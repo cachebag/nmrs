@@ -11,9 +11,13 @@ A Rust API for [NetworkManager](https://networkmanager.dev/) over [D-Bus](https:
 The project is divided into the following crates:
 
 * `nmrs`: The core library providing NetworkManager bindings and Wi-Fi management API.
-* `nmrs-gui`: A Wayland-compatible GTK4 graphical interface for NetworkManager. [Jump to the GUI section of this repo](#installation)
+* `nmrs-gui`: A Wayland-compatible GTK4 graphical interface for NetworkManager.
+
+[Jump to the GUI section of this repo](#installation)
 
 ## Getting Started
+
+_Please consider joining the [**Discord**](https://discord.gg/Sk3VfrHrN4). It's a welcoming community to both developers who want to contribute and/or learn about and discuss nmrs as well as users that would like to be engaged with the development process._
 
 The best way to get started with `nmrs` is the [API documentation](https://docs.rs/nmrs), which includes examples for common operations like scanning networks, connecting to Wi-Fi, and managing connection profiles.
 
