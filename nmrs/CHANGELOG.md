@@ -5,6 +5,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ## [Unreleased]
 ### Changed
 - Completed IPv6 support ([#208](https://github.com/cachebag/nmrs/issues/208))
+- Replace magic number with named constant for device states ([#230](https://github.com/cachebag/nmrs/pull/230))
 
 ## [2.0.0] - 2026-01-19
 ### Added
