@@ -171,7 +171,7 @@ pub(crate) async fn connect_bluetooth(
 
             let connection_settings = bluetooth::build_bluetooth_connection(name, settings, &opts);
 
-            println!(
+            debug!(
                 "Creating Bluetooth connection with settings: {:#?}",
                 connection_settings
             );
