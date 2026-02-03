@@ -30,9 +30,14 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
             .build()
             .await?;
 
-        let dev_type = d_proxy.device_type().await
+        let dev_type = d_proxy
+            .device_type()
+            .await
             .map_err(|e| ConnectionError::DbusOperation {
-                context: format!("failed to get device type for {} during Wi-Fi scan", dp.as_str()),
+                context: format!(
+                    "failed to get device type for {} during Wi-Fi scan",
+                    dp.as_str()
+                ),
                 source: e,
             })?;
 
@@ -46,7 +51,8 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
             .await?;
 
         let opts = std::collections::HashMap::new();
-        wifi.request_scan(opts).await
+        wifi.request_scan(opts)
+            .await
             .map_err(|e| ConnectionError::DbusOperation {
                 context: format!("failed to request Wi-Fi scan on device {}", dp.as_str()),
                 source: e,

@@ -16,8 +16,8 @@ use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
 use crate::api::models::{
-    ConnectionOptions, ConnectionError, DeviceState, TimeoutConfig, VpnConnection, VpnConnectionInfo,
-    VpnCredentials, VpnType,
+    ConnectionError, ConnectionOptions, DeviceState, TimeoutConfig, VpnConnection,
+    VpnConnectionInfo, VpnCredentials, VpnType,
 };
 use crate::builders::build_wireguard_connection;
 use crate::core::state_wait::wait_for_connection_activation;
@@ -273,7 +273,9 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
     )
     .await?;
 
-    let list_reply = settings.call_method("ListConnections", &()).await
+    let list_reply = settings
+        .call_method("ListConnections", &())
+        .await
         .map_err(|e| ConnectionError::DbusOperation {
             context: "failed to list saved connections".to_string(),
             source: e,
@@ -568,11 +570,12 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
 
             if id_ok && type_ok {
                 debug!("Found WireGuard connection, deleting: {name}");
-                cproxy.call_method("Delete", &()).await
-                    .map_err(|e| ConnectionError::DbusOperation {
+                cproxy.call_method("Delete", &()).await.map_err(|e| {
+                    ConnectionError::DbusOperation {
                         context: format!("failed to delete VPN connection '{}'", name),
                         source: e,
-                    })?;
+                    }
+                })?;
                 info!("Successfully deleted VPN connection: {name}");
                 return Ok(());
             }

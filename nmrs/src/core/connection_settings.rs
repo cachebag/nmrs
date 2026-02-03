@@ -53,13 +53,12 @@ pub(crate) async fn get_saved_connection_path(
     for cpath in conns {
         let cproxy = connection_settings_proxy(conn, cpath.clone()).await?;
 
-        let msg = cproxy
-            .call_method("GetSettings", &())
-            .await
-            .map_err(|e| ConnectionError::DbusOperation {
+        let msg = cproxy.call_method("GetSettings", &()).await.map_err(|e| {
+            ConnectionError::DbusOperation {
                 context: format!("failed to get settings for {}", cpath.as_str()),
                 source: e,
-            })?;
+            }
+        })?;
 
         let body = msg.body();
         let all: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
