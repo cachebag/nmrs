@@ -1,0 +1,3 @@
+# Waybar
+
+Documentation coming soon.
