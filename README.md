@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/nmrs)](https://crates.io/crates/nmrs)
 [![Discord](https://img.shields.io/badge/chat-on%20discord-7289da?logo=discord&logoColor=white)](https://discord.gg/Sk3VfrHrN4)
 [![Documentation](https://docs.rs/nmrs/badge.svg)](https://docs.rs/nmrs)
+[![User Guide](https://img.shields.io/badge/docs-mdBook-blue)](https://cachebag.github.io/nmrs/)
 [![CI](https://github.com/cachebag/nmrs/actions/workflows/ci.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/nmrs)](LICENSE)
 
@@ -15,11 +16,17 @@ The project is divided into the following crates:
 
 [Jump to the GUI section of this repo](#installation)
 
+## Documentation
+
+- **[User Guide](https://cachebag.github.io/nmrs/)** - Comprehensive guide with tutorials and examples
+- **[API Documentation](https://docs.rs/nmrs)** - Complete API reference on docs.rs
+- **[Discord](https://discord.gg/Sk3VfrHrN4)** - Join our community for help and discussion
+
 ## Getting Started
 
 _Please consider joining the [**Discord**](https://discord.gg/Sk3VfrHrN4). It's a welcoming community to both developers who want to contribute and/or learn about and discuss nmrs as well as users that would like to be engaged with the development process._
 
-The best way to get started with `nmrs` is the [API documentation](https://docs.rs/nmrs), which includes examples for common operations like scanning networks, connecting to Wi-Fi, and managing connection profiles.
+The best way to get started with `nmrs` is the [User Guide](https://cachebag.github.io/nmrs/), which includes comprehensive tutorials and examples. For detailed API information, see the [API documentation](https://docs.rs/nmrs).
 
 ## Sample usage
 We'll create a simple example that scans for available networks and connects to one. Note that these examples require NetworkManager to be running on your Linux system with D-Bus access, obviously.

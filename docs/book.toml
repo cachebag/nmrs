@@ -1,0 +1,53 @@
+[book]
+title = "nmrs Documentation"
+description = "Comprehensive guide to using nmrs - A Rust API for NetworkManager"
+authors = ["Akrm Al-Hakimi"]
+language = "en"
+src = "src"
+
+[rust]
+edition = "2021"
+
+[build]
+build-dir = "book"
+create-missing = true
+use-default-preprocessors = true
+
+[preprocessor.links]
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/cachebag/nmrs"
+edit-url-template = "https://github.com/cachebag/nmrs/edit/master/docs/{path}"
+site-url = "/nmrs/"
+cname = ""
+additional-css = ["theme/custom.css"]
+additional-js = []
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editable = true
+copyable = true
+copy-js = true
+line-numbers = true
+runnable = true
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[output.html.print]
+enable = true
+
+[output.html.redirect]
