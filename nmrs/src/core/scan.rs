@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use zbus::Connection;
 
-use crate::api::models::Network;
+use crate::api::models::{ConnectionError, Network};
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
 use crate::types::constants::{device_type, security_flags};
@@ -30,7 +30,13 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
             .build()
             .await?;
 
-        if d_proxy.device_type().await? != device_type::WIFI {
+        let dev_type = d_proxy.device_type().await
+            .map_err(|e| ConnectionError::DbusOperation {
+                context: format!("failed to get device type for {} during Wi-Fi scan", dp.as_str()),
+                source: e,
+            })?;
+
+        if dev_type != device_type::WIFI {
             continue;
         }
 
@@ -40,7 +46,11 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
             .await?;
 
         let opts = std::collections::HashMap::new();
-        wifi.request_scan(opts).await?;
+        wifi.request_scan(opts).await
+            .map_err(|e| ConnectionError::DbusOperation {
+                context: format!("failed to request Wi-Fi scan on device {}", dp.as_str()),
+                source: e,
+            })?;
     }
 
     Ok(())
