@@ -21,7 +21,13 @@ use crate::Result;
 /// type (Ethernet, Wi-Fi, etc.), current state, and driver.
 pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
     let proxy = NMProxy::new(conn).await?;
-    let paths = proxy.get_devices().await?;
+    let paths = proxy
+        .get_devices()
+        .await
+        .map_err(|e| ConnectionError::DbusOperation {
+            context: "failed to get device paths from NetworkManager".to_string(),
+            source: e,
+        })?;
 
     let mut devices = Vec::new();
     for p in paths {
@@ -30,8 +36,17 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
             .build()
             .await?;
 
-        let interface = d_proxy.interface().await?;
-        let raw_type = d_proxy.device_type().await?;
+        let interface = d_proxy.interface().await
+            .map_err(|e| ConnectionError::DbusOperation {
+                context: format!("failed to get interface name for device {}", p.as_str()),
+                source: e,
+            })?;
+
+        let raw_type = d_proxy.device_type().await
+            .map_err(|e| ConnectionError::DbusOperation {
+                context: format!("failed to get device type for {}", interface),
+                source: e,
+            })?;
         let current_mac = match d_proxy.hw_address().await {
             Ok(addr) => addr,
             Err(e) => {
@@ -128,9 +143,18 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
             .await?;
 
         // Only process Bluetooth devices
-        if d_proxy.device_type().await? != device_type::BLUETOOTH {
+        let dev_type = d_proxy
+            .device_type()
+            .await
+            .map_err(|e| ConnectionError::DbusOperation {
+                context: format!("failed to get device type for {} during Bluetooth scan", p.as_str()),
+                source: e,
+            })?;
+
+        if dev_type != device_type::BLUETOOTH {
             continue;
         }
+
         // Bluetooth-specific proxy
         // to get BD_ADDR and capabilities
         let bd_proxy = NMBluetoothProxy::builder(conn)
