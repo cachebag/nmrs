@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::{OwnedObjectPath, Value};
 
+use crate::api::models::ConnectionError;
 use crate::util::utils::{connection_settings_proxy, settings_proxy};
 use crate::util::validation::validate_ssid;
 use crate::Result;
@@ -39,13 +40,27 @@ pub(crate) async fn get_saved_connection_path(
 
     let settings = settings_proxy(conn).await?;
 
-    let reply = settings.call_method("ListConnections", &()).await?;
+    let reply = settings
+        .call_method("ListConnections", &())
+        .await
+        .map_err(|e| ConnectionError::DbusOperation {
+            context: "failed to list saved connections".to_string(),
+            source: e,
+        })?;
+
     let conns: Vec<OwnedObjectPath> = reply.body().deserialize()?;
 
     for cpath in conns {
         let cproxy = connection_settings_proxy(conn, cpath.clone()).await?;
 
-        let msg = cproxy.call_method("GetSettings", &()).await?;
+        let msg = cproxy
+            .call_method("GetSettings", &())
+            .await
+            .map_err(|e| ConnectionError::DbusOperation {
+                context: format!("failed to get settings for {}", cpath.as_str()),
+                source: e,
+            })?;
+
         let body = msg.body();
         let all: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
 
@@ -75,7 +90,14 @@ pub(crate) async fn has_saved_connection(conn: &Connection, ssid: &str) -> Resul
 pub(crate) async fn delete_connection(conn: &Connection, conn_path: OwnedObjectPath) -> Result<()> {
     let cproxy = connection_settings_proxy(conn, conn_path.clone()).await?;
 
-    cproxy.call_method("Delete", &()).await?;
+    cproxy
+        .call_method("Delete", &())
+        .await
+        .map_err(|e| ConnectionError::DbusOperation {
+            context: format!("failed to delete connection {}", conn_path.as_str()),
+            source: e,
+        })?;
+
     debug!("Deleted connection: {}", conn_path.as_str());
     Ok(())
 }
@@ -87,7 +109,14 @@ pub(crate) async fn delete_connection(conn: &Connection, conn_path: OwnedObjectP
 pub(crate) async fn list_saved_connections(conn: &Connection) -> Result<Vec<String>> {
     let settings = settings_proxy(conn).await?;
 
-    let reply = settings.call_method("ListConnections", &()).await?;
+    let reply = settings
+        .call_method("ListConnections", &())
+        .await
+        .map_err(|e| ConnectionError::DbusOperation {
+            context: "failed to list saved connections".to_string(),
+            source: e,
+        })?;
+
     let conns: Vec<OwnedObjectPath> = reply.body().deserialize()?;
 
     let mut connection_names = Vec::new();
