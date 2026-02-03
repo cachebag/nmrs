@@ -36,13 +36,17 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
             .build()
             .await?;
 
-        let interface = d_proxy.interface().await
+        let interface = d_proxy
+            .interface()
+            .await
             .map_err(|e| ConnectionError::DbusOperation {
                 context: format!("failed to get interface name for device {}", p.as_str()),
                 source: e,
             })?;
 
-        let raw_type = d_proxy.device_type().await
+        let raw_type = d_proxy
+            .device_type()
+            .await
             .map_err(|e| ConnectionError::DbusOperation {
                 context: format!("failed to get device type for {}", interface),
                 source: e,
@@ -147,7 +151,10 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
             .device_type()
             .await
             .map_err(|e| ConnectionError::DbusOperation {
-                context: format!("failed to get device type for {} during Bluetooth scan", p.as_str()),
+                context: format!(
+                    "failed to get device type for {} during Bluetooth scan",
+                    p.as_str()
+                ),
                 source: e,
             })?;
 
