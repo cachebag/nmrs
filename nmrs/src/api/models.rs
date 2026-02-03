@@ -2132,6 +2132,14 @@ pub enum ConnectionError {
     /// Bluetooth device not found
     #[error("Bluetooth device not found")]
     NoBluetoothDevice,
+
+    /// A D-Bus operation failed with context about what was being attempted
+    #[error("{context}: {source}")]
+    DbusOperation {
+        context: String,
+        #[source]
+        source: zbus::Error,
+    },
 }
 
 /// NetworkManager device state reason codes.
