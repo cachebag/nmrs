@@ -34,9 +34,16 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           if [[ -n $(git status -s package.nix) ]]; then
-            git config user.name "Akrm Al-Hakimi"
-            git config user.email "alhakimiakrmj@gmail.com"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
             git add package.nix
-            git commit -m "chore(nix): fix cargoHash"
-            git push origin HEAD:${{ github.head_ref }}
+            
+            # Amend for bots (dependabot, renovate), new commit for everyone else
+            if [[ "${{ github.actor }}" == "dependabot[bot]" ]] || [[ "${{ github.actor }}" == "renovate[bot]" ]]; then
+              git commit --amend --no-edit
+              git push --force origin HEAD:${{ github.head_ref }}
+            else
+              git commit -m "chore(nix): fix cargoHash"
+              git push origin HEAD:${{ github.head_ref }}
+            fi
           fi
