@@ -38,5 +38,5 @@ jobs:
             git config user.email "alhakimiakrmj@gmail.com"
             git add package.nix
             git commit -m "chore(nix): fix cargoHash"
-            git push
+            git push origin HEAD:${{ github.head_ref }}
           fi
