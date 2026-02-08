@@ -4,6 +4,7 @@
 //! D-Bus operations, providing clear error messages to users.
 
 use nmrs::{ConnectionError, EapOptions, VpnCredentials, VpnType, WifiSecurity, WireGuardPeer};
+use zvariant::OwnedObjectPath;
 
 #[test]
 fn test_invalid_ssid_empty() {
@@ -245,6 +246,12 @@ fn test_valid_vpn_credentials() {
     assert!(creds.gateway.contains(':'));
     assert!(!creds.peers.is_empty());
     assert!(creds.mtu.unwrap() >= 576 && creds.mtu.unwrap() <= 9000);
+}
+
+#[test]
+fn test_default_object_path() {
+    let object_path = OwnedObjectPath::try_from("/").unwrap();
+    assert_eq!(object_path, OwnedObjectPath::default())
 }
 
 #[test]
