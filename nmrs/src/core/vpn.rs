@@ -53,8 +53,8 @@ pub(crate) async fn connect_vpn(
         crate::core::connection_settings::get_saved_connection_path(conn, &creds.name).await?;
 
     // For WireGuard activation, always use "/" as device path - NetworkManager will auto-select
-    let vpn_device_path = OwnedObjectPath::try_from("/").unwrap();
-    let specific_object = OwnedObjectPath::try_from("/").unwrap();
+    let vpn_device_path = OwnedObjectPath::default();
+    let specific_object = OwnedObjectPath::default();
 
     let active_conn = if let Some(saved_path) = saved {
         debug!("Activating existent VPN connection");

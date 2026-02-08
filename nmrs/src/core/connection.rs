@@ -151,7 +151,7 @@ pub(crate) async fn connect_wired(
     let saved = get_saved_connection_path(conn, &interface).await?;
 
     // For Ethernet, we use "/" as the specific_object (no access point needed)
-    let specific_object = OwnedObjectPath::try_from("/").unwrap();
+    let specific_object = OwnedObjectPath::default();
 
     match saved {
         Some(saved_path) => {
