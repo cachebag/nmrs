@@ -19,6 +19,7 @@ use crate::monitoring::bluetooth::Bluetooth;
 use crate::monitoring::transport::ActiveTransport;
 use crate::types::constants::device_state;
 use crate::types::constants::device_type;
+use crate::util::validation::validate_bluetooth_address;
 use crate::ConnectionError;
 use crate::{
     dbus::NMProxy,
@@ -32,6 +33,9 @@ use crate::{
 /// over D-Bus to retrieve the device's name and alias. It constructs the
 /// appropriate D-Bus object path based on the BDADDR format.
 ///
+/// If the given address is not a valid bluetooth device address,
+/// the function will return error.
+///
 /// NetworkManager does not expose Bluetooth device names/aliases directly,
 /// hence this additional step is necessary to obtain user-friendly
 /// identifiers for Bluetooth devices. (See `BluezDeviceExtProxy` for details.)
@@ -39,6 +43,8 @@ pub(crate) async fn populate_bluez_info(
     conn: &Connection,
     bdaddr: &str,
 ) -> Result<(Option<String>, Option<String>)> {
+    validate_bluetooth_address(bdaddr)?;
+
     // [variable prefix]/{hci0,hci1,...}/dev_XX_XX_XX_XX_XX_XX
     // This replaces ':' with '_' in the BDADDR to form the correct D-Bus object path.
     // TODO: Instead of hardcoding hci0, we should determine the actual adapter name.
