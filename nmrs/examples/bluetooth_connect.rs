@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     if let Some(device) = devices.first() {
         println!("\nConnecting to: {}", device);
 
-        let settings = BluetoothIdentity::new(device.bdaddr.clone(), device.bt_caps.into());
+        let settings = BluetoothIdentity::new(device.bdaddr.clone(), device.bt_caps.into())?;
 
         let name = device
             .alias
