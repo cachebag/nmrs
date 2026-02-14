@@ -19,7 +19,7 @@
 //! let bt_settings = BluetoothIdentity::new(
 //!    "00:1A:7D:DA:71:13".into(),
 //!    BluetoothNetworkRole::PanU,
-//! );
+//! ).unwrap();
 //! ```
 
 use std::collections::HashMap;
@@ -99,11 +99,11 @@ mod tests {
     }
 
     fn create_test_identity_panu() -> BluetoothIdentity {
-        BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU)
+        BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU).unwrap()
     }
 
     fn create_test_identity_dun() -> BluetoothIdentity {
-        BluetoothIdentity::new("C8:1F:E8:F0:51:57".into(), BluetoothNetworkRole::Dun)
+        BluetoothIdentity::new("C8:1F:E8:F0:51:57".into(), BluetoothNetworkRole::Dun).unwrap()
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_bdaddr_format_preserved() {
         let identity =
-            BluetoothIdentity::new("AA:BB:CC:DD:EE:FF".into(), BluetoothNetworkRole::PanU);
+            BluetoothIdentity::new("AA:BB:CC:DD:EE:FF".into(), BluetoothNetworkRole::PanU).unwrap();
         let opts = create_test_opts();
         let conn = build_bluetooth_connection("Test", &identity, &opts);
 

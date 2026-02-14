@@ -532,6 +532,35 @@ fn validate_ip_address(ip: &str) -> Result<(), ConnectionError> {
     Ok(())
 }
 
+/// Validates a Bluetooth address against the EUI-48 format (using colons).
+///
+/// # Errors
+/// Returns `ConnectionError::InvalidAddress` if the Bluetooth address is invalid.
+pub fn validate_bluetooth_address(bdaddr: &str) -> Result<(), ConnectionError> {
+    if bdaddr.len() != 17 {
+        return Err(ConnectionError::InvalidAddress(format!(
+            "Invalid Bluetooth Address '{}' (expected length 17)",
+            bdaddr
+        )));
+    }
+    for (index, c) in bdaddr.chars().enumerate() {
+        if (index + 1) % 3 == 0 {
+            if c != ':' {
+                return Err(ConnectionError::InvalidAddress(format!(
+                    "Invalid Bluetooth Address '{}' (expected ':', found {})",
+                    bdaddr, c
+                )));
+            }
+        } else if !c.is_ascii_hexdigit() {
+            return Err(ConnectionError::InvalidAddress(format!(
+                "Invalid Bluetooth Address '{}' ('{}' is not a hex digit)",
+                bdaddr, c
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -713,5 +742,32 @@ mod tests {
     fn test_validate_wireguard_key_invalid_base64() {
         let key = "!!!invalid-base64-characters-here!!!";
         assert!(validate_wireguard_key(key, "Test key").is_err());
+    }
+
+    #[test]
+    fn test_validate_bluetooth_address_valid() {
+        assert!(validate_bluetooth_address("00:1A:7D:DA:71:13").is_ok());
+        assert!(validate_bluetooth_address("00:1a:7d:da:71:13").is_ok());
+        assert!(validate_bluetooth_address("aA:bB:cC:dD:eE:fF").is_ok());
+    }
+
+    #[test]
+    fn test_validate_bluetooth_address_invalid_format() {
+        assert!(validate_bluetooth_address("00-1A-7D-DA-71-13").is_err());
+        assert!(validate_bluetooth_address("001A7DDA7113").is_err());
+        assert!(validate_bluetooth_address("00:1A:7D:DA:711:3").is_err());
+    }
+
+    #[test]
+    fn test_validate_bluetooth_address_invalid_char() {
+        assert!(validate_bluetooth_address("00:1A:7D:DA:71:GG").is_err());
+        assert!(validate_bluetooth_address("00:1A:7D:DA:71:!!").is_err());
+    }
+
+    #[test]
+    fn test_validate_bluetooth_address_invalid_length() {
+        assert!(validate_bluetooth_address("00:1A:7D").is_err());
+        assert!(validate_bluetooth_address("00:1A:7D:DA:71:13:FF").is_err());
+        assert!(validate_bluetooth_address("").is_err());
     }
 }

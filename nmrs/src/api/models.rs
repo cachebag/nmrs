@@ -4,6 +4,8 @@ use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::util::validation::validate_bluetooth_address;
+
 /// NetworkManager active connection state.
 ///
 /// These values represent the lifecycle states of an active connection
@@ -1676,7 +1678,7 @@ pub enum BluetoothNetworkRole {
 /// let bt_settings = BluetoothIdentity::new(
 ///    "00:1A:7D:DA:71:13".into(),
 ///    BluetoothNetworkRole::Dun,
-/// );
+/// ).unwrap();
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -1695,6 +1697,11 @@ impl BluetoothIdentity {
     /// * `bdaddr` - Bluetooth MAC address (e.g., "00:1A:7D:DA:71:13")
     /// * `bt_device_type` - Bluetooth network role (PanU or Dun)
     ///
+    /// # Errors
+    ///
+    /// Returns a `ConnectionError` if the provided `bdaddr` is not a
+    /// valid Bluetooth MAC address format.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -1703,13 +1710,17 @@ impl BluetoothIdentity {
     /// let identity = BluetoothIdentity::new(
     ///     "00:1A:7D:DA:71:13".into(),
     ///     BluetoothNetworkRole::PanU,
-    /// );
+    /// ).unwrap();
     /// ```
-    pub fn new(bdaddr: String, bt_device_type: BluetoothNetworkRole) -> Self {
-        Self {
+    pub fn new(
+        bdaddr: String,
+        bt_device_type: BluetoothNetworkRole,
+    ) -> Result<Self, ConnectionError> {
+        validate_bluetooth_address(&bdaddr)?;
+        Ok(Self {
             bdaddr,
             bt_device_type,
-        }
+        })
     }
 }
 
@@ -2873,7 +2884,7 @@ mod tests {
     #[test]
     fn test_bluetooth_identity_creation() {
         let identity =
-            BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU);
+            BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU).unwrap();
 
         assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
         assert!(matches!(
@@ -2885,10 +2896,16 @@ mod tests {
     #[test]
     fn test_bluetooth_identity_dun() {
         let identity =
-            BluetoothIdentity::new("C8:1F:E8:F0:51:57".into(), BluetoothNetworkRole::Dun);
+            BluetoothIdentity::new("C8:1F:E8:F0:51:57".into(), BluetoothNetworkRole::Dun).unwrap();
 
         assert_eq!(identity.bdaddr, "C8:1F:E8:F0:51:57");
         assert!(matches!(identity.bt_device_type, BluetoothNetworkRole::Dun));
+    }
+
+    #[test]
+    fn test_bluetooth_identity_creation_error() {
+        let res = BluetoothIdentity::new("SomeInvalidAddress".into(), BluetoothNetworkRole::Dun);
+        assert!(res.is_err());
     }
 
     #[test]

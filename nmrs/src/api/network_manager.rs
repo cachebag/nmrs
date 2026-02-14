@@ -244,7 +244,7 @@ impl NetworkManager {
     ///    let identity = BluetoothIdentity::new(
     ///         "C8:1F:E8:F0:51:57".into(),
     ///         BluetoothNetworkRole::PanU,
-    ///     );
+    ///     )?;
     ///
     ///    nm.connect_bluetooth("My Phone", &identity).await?;
     ///    Ok(())

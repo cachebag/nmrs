@@ -1108,7 +1108,8 @@ fn test_bluetooth_network_role() {
 fn test_bluetooth_identity_structure() {
     use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
 
-    let identity = BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU);
+    let identity =
+        BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU).unwrap();
 
     assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
     assert!(matches!(
