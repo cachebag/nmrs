@@ -39,7 +39,7 @@ glib = "0.21.5"
 dirs = "6.0.0"
 fs2 = "0.4.3"
 anyhow = "1.0.101" 
-clap = { version = "4.5.58", features = ["derive"] }
+clap = { version = "4.5.59", features = ["derive"] }
 async-trait = "0.1.89"
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-util = { version = "0.7.18" }
