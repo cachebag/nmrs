@@ -24,7 +24,7 @@ type_complexity = "allow"
 
 [workspace.dependencies]
 # Core dependencies
-zbus = "5.12.0"
+zbus = "5.13.2"
 zvariant = "5.8.0"
 log = "0.4.29"
 serde = { version = "1.0.228", features = ["derive"] }
