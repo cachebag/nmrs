@@ -29,7 +29,7 @@ zvariant = "5.8.0"
 log = "0.4.29"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
-uuid = { version = "1.19.0", features = ["v4", "v5"] }
+uuid = { version = "1.21.0", features = ["v4", "v5"] }
 futures = "0.3.32"
 futures-timer = "3.0.3"
 base64 = "0.22.1"
