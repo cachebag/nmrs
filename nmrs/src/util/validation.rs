@@ -537,27 +537,31 @@ fn validate_ip_address(ip: &str) -> Result<(), ConnectionError> {
 /// # Errors
 /// Returns `ConnectionError::InvalidAddress` if the Bluetooth address is invalid.
 pub fn validate_bluetooth_address(bdaddr: &str) -> Result<(), ConnectionError> {
-    if bdaddr.len() != 17 {
+    let parts: Vec<&str> = bdaddr.split(':').collect();
+
+    if parts.len() != 6 {
         return Err(ConnectionError::InvalidAddress(format!(
-            "Invalid Bluetooth Address '{}' (expected length 17)",
-            bdaddr
+            "Invalid Bluetooth Address '{}' (must have 6 segments)",
+            bdaddr,
         )));
     }
-    for (index, c) in bdaddr.chars().enumerate() {
-        if (index + 1) % 3 == 0 {
-            if c != ':' {
-                return Err(ConnectionError::InvalidAddress(format!(
-                    "Invalid Bluetooth Address '{}' (expected ':', found {})",
-                    bdaddr, c
-                )));
-            }
-        } else if !c.is_ascii_hexdigit() {
+
+    for part in parts {
+        if part.len() != 2 {
             return Err(ConnectionError::InvalidAddress(format!(
-                "Invalid Bluetooth Address '{}' ('{}' is not a hex digit)",
-                bdaddr, c
+                "Invalid segment '{}' in Bluetooth Address '{}' (must be 2 characters)",
+                part, bdaddr
+            )));
+        }
+
+        if !part.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(ConnectionError::InvalidAddress(format!(
+                "Invalid segment '{}' in Bluetooth Address '{}' (must be hex digits)",
+                part, bdaddr
             )));
         }
     }
+
     Ok(())
 }
 
