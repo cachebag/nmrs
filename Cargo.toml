@@ -38,7 +38,7 @@ gtk = { version = "0.10.3", package = "gtk4" }
 glib = "0.21.5"
 dirs = "6.0.0"
 fs2 = "0.4.3"
-anyhow = "1.0.101" 
+anyhow = "1.0.102" 
 clap = { version = "4.5.60", features = ["derive"] }
 async-trait = "0.1.89"
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
