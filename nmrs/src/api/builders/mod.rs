@@ -77,7 +77,7 @@ pub mod wireguard_builder;
 
 // Re-export core builder types
 pub use connection_builder::{ConnectionBuilder, IpConfig, Route};
-pub use wifi_builder::{WifiBand, WifiConnectionBuilder};
+pub use wifi_builder::{WifiBand, WifiConnectionBuilder, WifiMode};
 pub use wireguard_builder::WireGuardBuilder;
 
 // Re-export builder functions for convenience
