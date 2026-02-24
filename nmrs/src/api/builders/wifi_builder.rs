@@ -18,6 +18,35 @@ pub enum WifiBand {
     A,
 }
 
+/// WiFi operating mode.
+///
+/// Determines whether the device acts as a client connecting to an existing
+/// network or creates its own network for other devices to join.
+#[non_exhaustive]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum WifiMode {
+    /// Standard client mode — connects to an existing access point.
+    #[default]
+    Infrastructure,
+    /// Access point mode — the device acts as a WiFi hotspot.
+    ///
+    /// Typically paired with `.ipv4_shared()` so NetworkManager sets up
+    /// DHCP and NAT for connected clients.
+    Ap,
+    /// Ad-hoc (IBSS) mode — peer-to-peer networking without an access point.
+    Adhoc,
+}
+
+impl WifiMode {
+    fn as_nm_str(self) -> &'static str {
+        match self {
+            Self::Infrastructure => "infrastructure",
+            Self::Ap => "ap",
+            Self::Adhoc => "adhoc",
+        }
+    }
+}
+
 /// Builder for WiFi (802.11) connections.
 ///
 /// This builder provides a type-safe, ergonomic API for creating WiFi connection
@@ -65,9 +94,23 @@ pub enum WifiBand {
 ///     .autoconnect(false)
 ///     .build();
 /// ```
+///
+/// ## Access Point (Hotspot)
+///
+/// ```rust
+/// use nmrs::builders::{WifiConnectionBuilder, WifiMode};
+///
+/// let settings = WifiConnectionBuilder::new("MyHotspot")
+///     .mode(WifiMode::Ap)
+///     .wpa_psk("hotspot_password")
+///     .ipv4_shared()
+///     .ipv6_ignore()
+///     .build();
+/// ```
 pub struct WifiConnectionBuilder {
     inner: ConnectionBuilder,
     ssid: String,
+    mode: WifiMode,
     security_configured: bool,
     hidden: Option<bool>,
     band: Option<WifiBand>,
@@ -86,6 +129,7 @@ impl WifiConnectionBuilder {
         Self {
             inner,
             ssid,
+            mode: WifiMode::default(),
             security_configured: false,
             hidden: None,
             band: None,
@@ -194,6 +238,27 @@ impl WifiConnectionBuilder {
         self
     }
 
+    /// Sets the WiFi operating mode.
+    ///
+    /// Defaults to [`WifiMode::Infrastructure`] (standard client mode).
+    ///
+    /// # Example: Access Point
+    ///
+    /// ```rust
+    /// use nmrs::builders::{WifiConnectionBuilder, WifiMode};
+    ///
+    /// let settings = WifiConnectionBuilder::new("MyHotspot")
+    ///     .mode(WifiMode::Ap)
+    ///     .wpa_psk("hotspot_password")
+    ///     .ipv4_shared()
+    ///     .ipv6_ignore()
+    ///     .build();
+    /// ```
+    pub fn mode(mut self, mode: WifiMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
     // Delegation methods to inner ConnectionBuilder
 
     /// Applies connection options (autoconnect settings).
@@ -226,6 +291,15 @@ impl WifiConnectionBuilder {
         self
     }
 
+    /// Configures IPv4 for internet connection sharing (DHCP + NAT).
+    ///
+    /// This is the typical IPv4 setting for [`WifiMode::Ap`] connections,
+    /// where the device provides network access to connected clients.
+    pub fn ipv4_shared(mut self) -> Self {
+        self.inner = self.inner.ipv4_shared();
+        self
+    }
+
     /// Configures IPv6 to use SLAAC/DHCPv6.
     pub fn ipv6_auto(mut self) -> Self {
         self.inner = self.inner.ipv6_auto();
@@ -246,7 +320,7 @@ impl WifiConnectionBuilder {
         // Build the 802-11-wireless section
         let mut wireless = HashMap::new();
         wireless.insert("ssid", Value::from(self.ssid.as_bytes().to_vec()));
-        wireless.insert("mode", Value::from("infrastructure"));
+        wireless.insert("mode", Value::from(self.mode.as_nm_str()));
 
         // Add optional WiFi settings
         if let Some(hidden) = self.hidden {
@@ -407,6 +481,48 @@ mod tests {
             wireless.get("bssid"),
             Some(&Value::from("00:11:22:33:44:55"))
         );
+    }
+
+    #[test]
+    fn defaults_to_infrastructure_mode() {
+        let settings = WifiConnectionBuilder::new("DefaultMode")
+            .open()
+            .ipv4_auto()
+            .build();
+
+        let wireless = settings.get("802-11-wireless").unwrap();
+        assert_eq!(wireless.get("mode"), Some(&Value::from("infrastructure")));
+    }
+
+    #[test]
+    fn builds_ap_mode_hotspot() {
+        let settings = WifiConnectionBuilder::new("MyHotspot")
+            .mode(WifiMode::Ap)
+            .wpa_psk("hotspot_pass")
+            .ipv4_shared()
+            .ipv6_ignore()
+            .build();
+
+        let wireless = settings.get("802-11-wireless").unwrap();
+        assert_eq!(wireless.get("mode"), Some(&Value::from("ap")));
+
+        let ipv4 = settings.get("ipv4").unwrap();
+        assert_eq!(ipv4.get("method"), Some(&Value::from("shared")));
+
+        let ipv6 = settings.get("ipv6").unwrap();
+        assert_eq!(ipv6.get("method"), Some(&Value::from("ignore")));
+    }
+
+    #[test]
+    fn builds_adhoc_mode() {
+        let settings = WifiConnectionBuilder::new("PeerNet")
+            .mode(WifiMode::Adhoc)
+            .open()
+            .ipv4_auto()
+            .build();
+
+        let wireless = settings.get("802-11-wireless").unwrap();
+        assert_eq!(wireless.get("mode"), Some(&Value::from("adhoc")));
     }
 
     #[test]

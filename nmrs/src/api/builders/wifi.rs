@@ -51,6 +51,10 @@ use crate::api::models::{self, ConnectionOptions};
 ///
 /// # Note
 ///
+/// This function always creates an infrastructure-mode connection. For access
+/// point (hotspot) or ad-hoc connections, use [`WifiConnectionBuilder`] directly
+/// with [`WifiMode`](super::wifi_builder::WifiMode).
+///
 /// This function is maintained for backward compatibility. For new code,
 /// consider using `WifiConnectionBuilder` for a more ergonomic API.
 pub fn build_wifi_connection(
