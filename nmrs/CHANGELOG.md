@@ -6,6 +6,14 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ### Changed
 - Completed IPv6 support ([#208](https://github.com/cachebag/nmrs/issues/208))
 - Replace magic number with named constant for device states ([#230](https://github.com/cachebag/nmrs/pull/230))
+- Replaced hardcoded root paths with `Default` impl ([#224](https://github.com/cachebag/nmrs/issues/224))
+- Add context to D-Bus operation errors ([#240](https://github.com/cachebag/nmrs/issues/240))
+- Replace `println!` with `debug!` ([#234](https://github.com/cachebag/nmrs/issues/234))
+- Idempotence enforcement for `forget_vpn()` ([#232](https://github.com/cachebag/nmrs/issues/232))
+
+### Added
+- validate bluetooth address in `populate_bluez_info` & `BluetoothIdentity::new` ([#215](https://github.com/cachebag/nmrs/issues/215))
+- `WifiMode` enum for WiFi connection mode ([#263](https://github.com/cachebag/nmrs/issues/263))
 
 ## [2.0.0] - 2026-01-19
 ### Added
