@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+
+## [2.0.1] - 2026-02-25
 ### Changed
 - Completed IPv6 support ([#208](https://github.com/cachebag/nmrs/issues/208))
 - Replace magic number with named constant for device states ([#230](https://github.com/cachebag/nmrs/pull/230))
@@ -161,7 +163,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [1.3.5]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v1.3.5
 [2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
 [2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.0.0...HEAD
+[2.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.1
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.0.1...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
