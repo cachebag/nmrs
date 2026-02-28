@@ -31,6 +31,7 @@ use crate::{
 };
 
 /// Builds the `connection` section with type, id, uuid, and autoconnect settings.
+#[must_use]
 pub fn base_connection_section(
     name: &str,
     opts: &ConnectionOptions,
@@ -64,6 +65,7 @@ fn bluetooth_section(settings: &BluetoothIdentity) -> HashMap<&'static str, Valu
     s
 }
 
+#[must_use]
 pub fn build_bluetooth_connection(
     name: &str,
     settings: &BluetoothIdentity,
