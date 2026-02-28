@@ -34,7 +34,7 @@ futures = "0.3.32"
 futures-timer = "3.0.3"
 base64 = "0.22.1"
 nmrs = { path = "nmrs" }
-gtk = { version = "0.10.3", package = "gtk4" }
+gtk = { version = "0.11.0", package = "gtk4" }
 glib = "0.22.2"
 dirs = "6.0.0"
 fs2 = "0.4.3"
