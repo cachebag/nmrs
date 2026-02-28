@@ -53,6 +53,7 @@ impl WireGuardBuilder {
     /// # Arguments
     ///
     /// * `name` - Human-readable connection name
+    #[must_use]
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         let inner = ConnectionBuilder::new("wireguard", &name);
@@ -72,6 +73,7 @@ impl WireGuardBuilder {
     /// Sets the WireGuard private key.
     ///
     /// The key must be a valid base64-encoded 32-byte WireGuard key (44 characters).
+    #[must_use]
     pub fn private_key(mut self, key: impl Into<String>) -> Self {
         self.private_key = Some(key.into());
         self
@@ -86,6 +88,7 @@ impl WireGuardBuilder {
     /// let builder = WireGuardBuilder::new("MyVPN")
     ///     .address("10.0.0.2/24");
     /// ```
+    #[must_use]
     pub fn address(mut self, address: impl Into<String>) -> Self {
         self.address = Some(address.into());
         self
@@ -94,12 +97,14 @@ impl WireGuardBuilder {
     /// Adds a WireGuard peer to the connection.
     ///
     /// At least one peer must be added before building.
+    #[must_use]
     pub fn add_peer(mut self, peer: WireGuardPeer) -> Self {
         self.peers.push(peer);
         self
     }
 
     /// Adds multiple WireGuard peers at once.
+    #[must_use]
     pub fn add_peers(mut self, peers: impl IntoIterator<Item = WireGuardPeer>) -> Self {
         self.peers.extend(peers);
         self
@@ -114,6 +119,7 @@ impl WireGuardBuilder {
     /// let builder = WireGuardBuilder::new("MyVPN")
     ///     .dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
     /// ```
+    #[must_use]
     pub fn dns(mut self, servers: Vec<String>) -> Self {
         self.dns = Some(servers);
         self
@@ -122,6 +128,7 @@ impl WireGuardBuilder {
     /// Sets the MTU (Maximum Transmission Unit) for the WireGuard interface.
     ///
     /// Typical value is 1420 for WireGuard over IPv4.
+    #[must_use]
     pub fn mtu(mut self, mtu: u32) -> Self {
         self.mtu = Some(mtu);
         self
@@ -131,6 +138,7 @@ impl WireGuardBuilder {
     ///
     /// If not set, a deterministic UUID will be generated based on the
     /// connection name.
+    #[must_use]
     pub fn uuid(mut self, uuid: Uuid) -> Self {
         self.uuid = Some(uuid);
         self
@@ -139,24 +147,28 @@ impl WireGuardBuilder {
     // Delegation methods to inner ConnectionBuilder
 
     /// Applies connection options.
+    #[must_use]
     pub fn options(mut self, opts: &ConnectionOptions) -> Self {
         self.inner = self.inner.options(opts);
         self
     }
 
     /// Enables or disables automatic connection.
+    #[must_use]
     pub fn autoconnect(mut self, enabled: bool) -> Self {
         self.inner = self.inner.autoconnect(enabled);
         self
     }
 
     /// Sets autoconnect priority.
+    #[must_use]
     pub fn autoconnect_priority(mut self, priority: i32) -> Self {
         self.inner = self.inner.autoconnect_priority(priority);
         self
     }
 
     /// Sets autoconnect retry limit.
+    #[must_use]
     pub fn autoconnect_retries(mut self, retries: i32) -> Self {
         self.inner = self.inner.autoconnect_retries(retries);
         self

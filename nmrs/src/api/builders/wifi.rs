@@ -57,6 +57,7 @@ use crate::api::models::{self, ConnectionOptions};
 ///
 /// This function is maintained for backward compatibility. For new code,
 /// consider using `WifiConnectionBuilder` for a more ergonomic API.
+#[must_use]
 pub fn build_wifi_connection(
     ssid: &str,
     security: &models::WifiSecurity,
@@ -91,6 +92,7 @@ pub fn build_wifi_connection(
 ///
 /// This function is maintained for backward compatibility. For new code,
 /// consider using `EthernetConnectionBuilder` for a more ergonomic API.
+#[must_use]
 pub fn build_ethernet_connection(
     connection_id: &str,
     opts: &ConnectionOptions,
