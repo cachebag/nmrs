@@ -38,16 +38,11 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add package.nix
             
-            # Amend for bots (dependabot, renovate), new commit for everyone else
-            if [[ "${{ github.actor }}" == "dependabot[bot]" ]] || [[ "${{ github.actor }}" == "renovate[bot]" ]]; then
-              git commit --amend --no-edit
-              # Rebase onto latest master before pushing - prevents "Base branch was modified"
-              # when multiple Renovate PRs merge in quick succession
-              git fetch origin ${{ github.base_ref }}
-              git rebase origin/${{ github.base_ref }}
-              git push --force origin HEAD:${{ github.head_ref }}
-            else
-              git commit -m "chore(nix): fix cargoHash"
-              git push origin HEAD:${{ github.head_ref }}
-            fi
+            git commit --amend --no-edit
+
+            # Rebase onto latest base branch before pushing - prevents "Base branch was modified"
+            # when multiple PRs merge in quick succession
+            git fetch origin ${{ github.base_ref }}
+            git rebase origin/${{ github.base_ref }}
+            git push --force origin HEAD:${{ github.head_ref }}
           fi
