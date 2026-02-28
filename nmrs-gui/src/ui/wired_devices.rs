@@ -2,32 +2,25 @@ use gtk::prelude::*;
 use gtk::Align;
 use gtk::GestureClick;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
-use nmrs::{models, NetworkManager};
+use nmrs::models;
 use std::rc::Rc;
 
+use crate::ui::networks::NetworksContext;
 use crate::ui::wired_page::WiredPage;
 
 pub struct WiredDeviceRowController {
     pub row: gtk::ListBoxRow,
     pub arrow: gtk::Image,
-    pub ctx: Rc<WiredDevicesContext>,
+    pub ctx: Rc<NetworksContext>,
     pub device: models::Device,
     pub details_page: Rc<WiredPage>,
-}
-
-pub struct WiredDevicesContext {
-    pub nm: Rc<NetworkManager>,
-    pub on_success: Rc<dyn Fn()>,
-    pub status: Label,
-    pub stack: gtk::Stack,
-    pub parent_window: gtk::ApplicationWindow,
 }
 
 impl WiredDeviceRowController {
     pub fn new(
         row: gtk::ListBoxRow,
         arrow: gtk::Image,
-        ctx: Rc<WiredDevicesContext>,
+        ctx: Rc<NetworksContext>,
         device: models::Device,
         details_page: Rc<WiredPage>,
     ) -> Self {
@@ -108,7 +101,7 @@ impl WiredDeviceRowController {
 }
 
 pub fn wired_devices_view(
-    ctx: Rc<WiredDevicesContext>,
+    ctx: Rc<NetworksContext>,
     devices: &[models::Device],
     details_page: Rc<WiredPage>,
 ) -> ListBox {
