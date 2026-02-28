@@ -122,6 +122,7 @@ impl WifiConnectionBuilder {
     ///
     /// By default, the connection is configured as an open network. Use
     /// `.wpa_psk()` or `.wpa_eap()` to add security.
+    #[must_use]
     pub fn new(ssid: impl Into<String>) -> Self {
         let ssid = ssid.into();
         let inner = ConnectionBuilder::new("802-11-wireless", &ssid);
@@ -140,6 +141,7 @@ impl WifiConnectionBuilder {
     /// Configures this as an open (unsecured) network.
     ///
     /// This is the default, but can be called explicitly for clarity.
+    #[must_use]
     pub fn open(self) -> Self {
         // Open networks don't need a security section
         Self {
@@ -151,6 +153,7 @@ impl WifiConnectionBuilder {
     /// Configures WPA-PSK (Personal) security with the given passphrase.
     ///
     /// Uses WPA2 (RSN) with CCMP encryption.
+    #[must_use]
     pub fn wpa_psk(mut self, psk: impl Into<String>) -> Self {
         let mut security = HashMap::new();
         security.insert("key-mgmt", Value::from("wpa-psk"));
@@ -173,6 +176,7 @@ impl WifiConnectionBuilder {
     /// Configures WPA-EAP (Enterprise) security with 802.1X authentication.
     ///
     /// Supports PEAP and TTLS methods with various inner authentication protocols.
+    #[must_use]
     pub fn wpa_eap(mut self, opts: models::EapOptions) -> Self {
         let mut security = HashMap::new();
         security.insert("key-mgmt", Value::from("wpa-eap"));
@@ -219,12 +223,14 @@ impl WifiConnectionBuilder {
     }
 
     /// Marks this network as hidden (doesn't broadcast SSID).
+    #[must_use]
     pub fn hidden(mut self, hidden: bool) -> Self {
         self.hidden = Some(hidden);
         self
     }
 
     /// Restricts connection to a specific WiFi band.
+    #[must_use]
     pub fn band(mut self, band: WifiBand) -> Self {
         self.band = Some(band);
         self
@@ -233,6 +239,7 @@ impl WifiConnectionBuilder {
     /// Restricts connection to a specific access point by BSSID (MAC address).
     ///
     /// Format: "00:11:22:33:44:55"
+    #[must_use]
     pub fn bssid(mut self, bssid: impl Into<String>) -> Self {
         self.bssid = Some(bssid.into());
         self
@@ -254,6 +261,7 @@ impl WifiConnectionBuilder {
     ///     .ipv6_ignore()
     ///     .build();
     /// ```
+    #[must_use]
     pub fn mode(mut self, mode: WifiMode) -> Self {
         self.mode = mode;
         self
@@ -262,30 +270,35 @@ impl WifiConnectionBuilder {
     // Delegation methods to inner ConnectionBuilder
 
     /// Applies connection options (autoconnect settings).
+    #[must_use]
     pub fn options(mut self, opts: &ConnectionOptions) -> Self {
         self.inner = self.inner.options(opts);
         self
     }
 
     /// Enables or disables automatic connection.
+    #[must_use]
     pub fn autoconnect(mut self, enabled: bool) -> Self {
         self.inner = self.inner.autoconnect(enabled);
         self
     }
 
     /// Sets autoconnect priority (higher values preferred).
+    #[must_use]
     pub fn autoconnect_priority(mut self, priority: i32) -> Self {
         self.inner = self.inner.autoconnect_priority(priority);
         self
     }
 
     /// Sets autoconnect retry limit.
+    #[must_use]
     pub fn autoconnect_retries(mut self, retries: i32) -> Self {
         self.inner = self.inner.autoconnect_retries(retries);
         self
     }
 
     /// Configures IPv4 to use DHCP.
+    #[must_use]
     pub fn ipv4_auto(mut self) -> Self {
         self.inner = self.inner.ipv4_auto();
         self
@@ -295,18 +308,21 @@ impl WifiConnectionBuilder {
     ///
     /// This is the typical IPv4 setting for [`WifiMode::Ap`] connections,
     /// where the device provides network access to connected clients.
+    #[must_use]
     pub fn ipv4_shared(mut self) -> Self {
         self.inner = self.inner.ipv4_shared();
         self
     }
 
     /// Configures IPv6 to use SLAAC/DHCPv6.
+    #[must_use]
     pub fn ipv6_auto(mut self) -> Self {
         self.inner = self.inner.ipv6_auto();
         self
     }
 
     /// Disables IPv6.
+    #[must_use]
     pub fn ipv6_ignore(mut self) -> Self {
         self.inner = self.inner.ipv6_ignore();
         self
@@ -316,6 +332,7 @@ impl WifiConnectionBuilder {
     ///
     /// This method adds the WiFi-specific "802-11-wireless" section and links
     /// it to the security section if configured.
+    #[must_use]
     pub fn build(mut self) -> HashMap<&'static str, HashMap<&'static str, Value<'static>>> {
         // Build the 802-11-wireless section
         let mut wireless = HashMap::new();

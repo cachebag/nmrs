@@ -176,6 +176,7 @@ impl NetworkManager {
     /// # Ok(())
     /// # }
     /// ```
+    #[must_use]
     pub fn timeout_config(&self) -> crate::api::models::TimeoutConfig {
         self.timeout_config
     }

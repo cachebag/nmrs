@@ -145,6 +145,7 @@ impl Display for ConnectionStateReason {
 ///
 /// Maps authentication-related failures to `AuthFailed`, timeout issues to `Timeout`,
 /// and other failures to the appropriate variant.
+#[must_use]
 pub fn connection_state_reason_to_error(code: u32) -> ConnectionError {
     let reason = ConnectionStateReason::from(code);
     match reason {
@@ -469,6 +470,7 @@ impl DeviceIdentity {
     ///
     /// * `permanent_mac` - The permanent (factory-assigned) MAC address
     /// * `current_mac` - The current MAC address in use
+    #[must_use]
     pub fn new(permanent_mac: String, current_mac: String) -> Self {
         Self {
             permanent_mac,
@@ -612,41 +614,48 @@ impl EapOptions {
     ///     .system_ca_certs(true)
     ///     .build();
     /// ```
+    #[must_use]
     pub fn builder() -> EapOptionsBuilder {
         EapOptionsBuilder::default()
     }
 
     /// Sets the anonymous identity for privacy.
+    #[must_use]
     pub fn with_anonymous_identity(mut self, anonymous_identity: impl Into<String>) -> Self {
         self.anonymous_identity = Some(anonymous_identity.into());
         self
     }
 
     /// Sets the domain suffix to match against the server certificate.
+    #[must_use]
     pub fn with_domain_suffix_match(mut self, domain: impl Into<String>) -> Self {
         self.domain_suffix_match = Some(domain.into());
         self
     }
 
     /// Sets the path to the CA certificate file (must start with `file://`).
+    #[must_use]
     pub fn with_ca_cert_path(mut self, path: impl Into<String>) -> Self {
         self.ca_cert_path = Some(path.into());
         self
     }
 
     /// Sets whether to use the system CA certificate store.
+    #[must_use]
     pub fn with_system_ca_certs(mut self, use_system: bool) -> Self {
         self.system_ca_certs = use_system;
         self
     }
 
     /// Sets the EAP method (PEAP or TTLS).
+    #[must_use]
     pub fn with_method(mut self, method: EapMethod) -> Self {
         self.method = method;
         self
     }
 
     /// Sets the Phase 2 authentication method.
+    #[must_use]
     pub fn with_phase2(mut self, phase2: Phase2) -> Self {
         self.phase2 = phase2;
         self
@@ -705,6 +714,7 @@ impl EapOptionsBuilder {
     /// Sets the user identity (usually email or username).
     ///
     /// This is a required field.
+    #[must_use]
     pub fn identity(mut self, identity: impl Into<String>) -> Self {
         self.identity = Some(identity.into());
         self
@@ -713,6 +723,7 @@ impl EapOptionsBuilder {
     /// Sets the password for authentication.
     ///
     /// This is a required field.
+    #[must_use]
     pub fn password(mut self, password: impl Into<String>) -> Self {
         self.password = Some(password.into());
         self
@@ -731,6 +742,7 @@ impl EapOptionsBuilder {
     /// let builder = EapOptions::builder()
     ///     .anonymous_identity("anonymous@company.com");
     /// ```
+    #[must_use]
     pub fn anonymous_identity(mut self, anonymous_identity: impl Into<String>) -> Self {
         self.anonymous_identity = Some(anonymous_identity.into());
         self
@@ -749,6 +761,7 @@ impl EapOptionsBuilder {
     /// let builder = EapOptions::builder()
     ///     .domain_suffix_match("company.com");
     /// ```
+    #[must_use]
     pub fn domain_suffix_match(mut self, domain: impl Into<String>) -> Self {
         self.domain_suffix_match = Some(domain.into());
         self
@@ -766,6 +779,7 @@ impl EapOptionsBuilder {
     /// let builder = EapOptions::builder()
     ///     .ca_cert_path("file:///etc/ssl/certs/company-ca.pem");
     /// ```
+    #[must_use]
     pub fn ca_cert_path(mut self, path: impl Into<String>) -> Self {
         self.ca_cert_path = Some(path.into());
         self
@@ -784,6 +798,7 @@ impl EapOptionsBuilder {
     /// let builder = EapOptions::builder()
     ///     .system_ca_certs(true);
     /// ```
+    #[must_use]
     pub fn system_ca_certs(mut self, use_system: bool) -> Self {
         self.system_ca_certs = use_system;
         self
@@ -802,6 +817,7 @@ impl EapOptionsBuilder {
     /// let builder = EapOptions::builder()
     ///     .method(EapMethod::Peap);
     /// ```
+    #[must_use]
     pub fn method(mut self, method: EapMethod) -> Self {
         self.method = Some(method);
         self
@@ -820,6 +836,7 @@ impl EapOptionsBuilder {
     /// let builder = EapOptions::builder()
     ///     .phase2(Phase2::Mschapv2);
     /// ```
+    #[must_use]
     pub fn phase2(mut self, phase2: Phase2) -> Self {
         self.phase2 = Some(phase2);
         self
@@ -847,6 +864,7 @@ impl EapOptionsBuilder {
     ///     .phase2(Phase2::Mschapv2)
     ///     .build();
     /// ```
+    #[must_use]
     pub fn build(self) -> EapOptions {
         EapOptions {
             identity: self
@@ -923,6 +941,7 @@ impl TimeoutConfig {
     ///
     /// let config = TimeoutConfig::new();
     /// ```
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -942,6 +961,7 @@ impl TimeoutConfig {
     /// let config = TimeoutConfig::new()
     ///     .with_connection_timeout(Duration::from_secs(60));
     /// ```
+    #[must_use]
     pub fn with_connection_timeout(mut self, timeout: Duration) -> Self {
         self.connection_timeout = timeout;
         self
@@ -961,6 +981,7 @@ impl TimeoutConfig {
     /// let config = TimeoutConfig::new()
     ///     .with_disconnect_timeout(Duration::from_secs(20));
     /// ```
+    #[must_use]
     pub fn with_disconnect_timeout(mut self, timeout: Duration) -> Self {
         self.disconnect_timeout = timeout;
         self
@@ -1025,6 +1046,7 @@ impl ConnectionOptions {
     ///
     /// let opts = ConnectionOptions::new(true);
     /// ```
+    #[must_use]
     pub fn new(autoconnect: bool) -> Self {
         Self {
             autoconnect,
@@ -1034,12 +1056,14 @@ impl ConnectionOptions {
     }
 
     /// Sets the auto-connection priority.
+    #[must_use]
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.autoconnect_priority = Some(priority);
         self
     }
 
     /// Sets the maximum number of auto-connect retry attempts.
+    #[must_use]
     pub fn with_retries(mut self, retries: i32) -> Self {
         self.autoconnect_retries = Some(retries);
         self
@@ -1259,23 +1283,27 @@ impl VpnCredentials {
     ///     .with_dns(vec!["1.1.1.1".into()])
     ///     .build();
     /// ```
+    #[must_use]
     pub fn builder() -> VpnCredentialsBuilder {
         VpnCredentialsBuilder::default()
     }
 
     /// Sets the DNS servers to use when connected.
+    #[must_use]
     pub fn with_dns(mut self, dns: Vec<String>) -> Self {
         self.dns = Some(dns);
         self
     }
 
     /// Sets the MTU (Maximum Transmission Unit) size.
+    #[must_use]
     pub fn with_mtu(mut self, mtu: u32) -> Self {
         self.mtu = Some(mtu);
         self
     }
 
     /// Sets the UUID for the connection.
+    #[must_use]
     pub fn with_uuid(mut self, uuid: Uuid) -> Self {
         self.uuid = Some(uuid);
         self
@@ -1350,6 +1378,7 @@ impl VpnCredentialsBuilder {
     /// Sets the VPN type to WireGuard.
     ///
     /// Currently, WireGuard is the only supported VPN type.
+    #[must_use]
     pub fn wireguard(mut self) -> Self {
         self.vpn_type = Some(VpnType::WireGuard);
         self
@@ -1358,6 +1387,7 @@ impl VpnCredentialsBuilder {
     /// Sets the VPN type.
     ///
     /// For most use cases, prefer using [`wireguard()`](Self::wireguard) instead.
+    #[must_use]
     pub fn vpn_type(mut self, vpn_type: VpnType) -> Self {
         self.vpn_type = Some(vpn_type);
         self
@@ -1366,6 +1396,7 @@ impl VpnCredentialsBuilder {
     /// Sets the connection name.
     ///
     /// This is the unique identifier for the VPN connection profile.
+    #[must_use]
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
@@ -1374,6 +1405,7 @@ impl VpnCredentialsBuilder {
     /// Sets the VPN gateway endpoint.
     ///
     /// Should be in "host:port" format (e.g., "vpn.example.com:51820").
+    #[must_use]
     pub fn gateway(mut self, gateway: impl Into<String>) -> Self {
         self.gateway = Some(gateway.into());
         self
@@ -1382,6 +1414,7 @@ impl VpnCredentialsBuilder {
     /// Sets the client's WireGuard private key.
     ///
     /// The private key should be base64 encoded.
+    #[must_use]
     pub fn private_key(mut self, private_key: impl Into<String>) -> Self {
         self.private_key = Some(private_key.into());
         self
@@ -1393,6 +1426,7 @@ impl VpnCredentialsBuilder {
     ///
     /// - "10.0.0.2/24" for a /24 subnet
     /// - "192.168.1.10/32" for a single IP
+    #[must_use]
     pub fn address(mut self, address: impl Into<String>) -> Self {
         self.address = Some(address.into());
         self
@@ -1401,6 +1435,7 @@ impl VpnCredentialsBuilder {
     /// Adds a WireGuard peer to the connection.
     ///
     /// Multiple peers can be added by calling this method multiple times.
+    #[must_use]
     pub fn add_peer(mut self, peer: WireGuardPeer) -> Self {
         self.peers.push(peer);
         self
@@ -1409,6 +1444,7 @@ impl VpnCredentialsBuilder {
     /// Sets all WireGuard peers at once.
     ///
     /// This replaces any previously added peers.
+    #[must_use]
     pub fn peers(mut self, peers: Vec<WireGuardPeer>) -> Self {
         self.peers = peers;
         self
@@ -1424,6 +1460,7 @@ impl VpnCredentialsBuilder {
     /// let builder = VpnCredentials::builder()
     ///     .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
     /// ```
+    #[must_use]
     pub fn with_dns(mut self, dns: Vec<String>) -> Self {
         self.dns = Some(dns);
         self
@@ -1432,6 +1469,7 @@ impl VpnCredentialsBuilder {
     /// Sets the MTU (Maximum Transmission Unit) size.
     ///
     /// Typical values are 1420 for WireGuard over standard networks.
+    #[must_use]
     pub fn with_mtu(mut self, mtu: u32) -> Self {
         self.mtu = Some(mtu);
         self
@@ -1440,6 +1478,7 @@ impl VpnCredentialsBuilder {
     /// Sets a specific UUID for the connection.
     ///
     /// If not set, NetworkManager will generate one automatically.
+    #[must_use]
     pub fn with_uuid(mut self, uuid: Uuid) -> Self {
         self.uuid = Some(uuid);
         self
@@ -1477,6 +1516,7 @@ impl VpnCredentialsBuilder {
     ///     .add_peer(peer)
     ///     .build();
     /// ```
+    #[must_use]
     pub fn build(self) -> VpnCredentials {
         VpnCredentials {
             vpn_type: self
@@ -1568,12 +1608,14 @@ impl WireGuardPeer {
     }
 
     /// Sets the pre-shared key for additional security.
+    #[must_use]
     pub fn with_preshared_key(mut self, psk: impl Into<String>) -> Self {
         self.preshared_key = Some(psk.into());
         self
     }
 
     /// Sets the persistent keepalive interval in seconds.
+    #[must_use]
     pub fn with_persistent_keepalive(mut self, interval: u32) -> Self {
         self.persistent_keepalive = Some(interval);
         self
@@ -1788,6 +1830,7 @@ impl BluetoothDevice {
     ///     DeviceState::Activated,
     /// );
     /// ```
+    #[must_use]
     pub fn new(
         bdaddr: String,
         name: Option<String>,
@@ -1835,6 +1878,7 @@ impl DeviceType {
     ///
     /// Currently only WiFi and WiFi P2P devices support scanning.
     /// For unknown device types, consults the internal device type registry.
+    #[must_use]
     pub fn supports_scanning(&self) -> bool {
         match self {
             Self::Wifi | Self::WifiP2P => true,
@@ -1848,6 +1892,7 @@ impl DeviceType {
     /// WiFi devices require an access point to connect to, while Ethernet can connect
     /// without a specific target.
     /// For unknown device types, consults the internal device type registry.
+    #[must_use]
     pub fn requires_specific_object(&self) -> bool {
         match self {
             Self::Wifi | Self::WifiP2P => true,
@@ -1862,6 +1907,7 @@ impl DeviceType {
     ///
     /// WiFi has a global radio killswitch that can enable/disable all WiFi devices.
     /// For unknown device types, consults the internal device type registry.
+    #[must_use]
     pub fn has_global_enabled_state(&self) -> bool {
         match self {
             Self::Wifi => true,
@@ -1876,6 +1922,7 @@ impl DeviceType {
     ///
     /// This is used when creating connection profiles for this device type.
     /// For unknown device types, consults the internal device type registry.
+    #[must_use]
     pub fn connection_type_str(&self) -> &'static str {
         match self {
             Self::Ethernet => "802-3-ethernet",
@@ -1891,6 +1938,7 @@ impl DeviceType {
     }
 
     /// Returns the raw NetworkManager type code for this device.
+    #[must_use]
     pub fn to_code(&self) -> u32 {
         match self {
             Self::Ethernet => 1,
@@ -1931,16 +1979,19 @@ pub enum DeviceState {
 
 impl Device {
     /// Returns `true` if this is a wired (Ethernet) device.
+    #[must_use]
     pub fn is_wired(&self) -> bool {
         matches!(self.device_type, DeviceType::Ethernet)
     }
 
     /// Returns `true` if this is a wireless (Wi-Fi) device.
+    #[must_use]
     pub fn is_wireless(&self) -> bool {
         matches!(self.device_type, DeviceType::Wifi)
     }
 
     /// Returns 'true' if this is a Bluetooth (DUN or PANU) device.
+    #[must_use]
     pub fn is_bluetooth(&self) -> bool {
         matches!(self.device_type, DeviceType::Bluetooth)
     }
@@ -2273,6 +2324,7 @@ impl Display for StateReason {
 ///
 /// Maps authentication-related failures to `AuthFailed`, DHCP issues to `DhcpFailed`,
 /// and other failures to the appropriate variant.
+#[must_use]
 pub fn reason_to_error(code: u32) -> ConnectionError {
     let reason = StateReason::from(code);
     match reason {
@@ -2375,16 +2427,19 @@ impl From<u32> for BluetoothNetworkRole {
 
 impl WifiSecurity {
     /// Returns `true` if this security type requires authentication.
+    #[must_use]
     pub fn secured(&self) -> bool {
         !matches!(self, WifiSecurity::Open)
     }
 
     /// Returns `true` if this is a WPA-PSK (password-based) security type.
+    #[must_use]
     pub fn is_psk(&self) -> bool {
         matches!(self, WifiSecurity::WpaPsk { .. })
     }
 
     /// Returns `true` if this is a WPA-EAP (Enterprise/802.1X) security type.
+    #[must_use]
     pub fn is_eap(&self) -> bool {
         matches!(self, WifiSecurity::WpaEap { .. })
     }
@@ -3100,7 +3155,7 @@ mod tests {
     fn test_vpn_credentials_builder_missing_name() {
         let peer = WireGuardPeer::new("key", "vpn.example.com:51820", vec!["0.0.0.0/0".into()]);
 
-        VpnCredentials::builder()
+        let _ = VpnCredentials::builder()
             .wireguard()
             .gateway("vpn.example.com:51820")
             .private_key("private_key")
@@ -3114,7 +3169,7 @@ mod tests {
     fn test_vpn_credentials_builder_missing_vpn_type() {
         let peer = WireGuardPeer::new("key", "vpn.example.com:51820", vec!["0.0.0.0/0".into()]);
 
-        VpnCredentials::builder()
+        let _ = VpnCredentials::builder()
             .name("TestVPN")
             .gateway("vpn.example.com:51820")
             .private_key("private_key")
@@ -3126,7 +3181,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "at least one peer is required")]
     fn test_vpn_credentials_builder_missing_peers() {
-        VpnCredentials::builder()
+        let _ = VpnCredentials::builder()
             .name("TestVPN")
             .wireguard()
             .gateway("vpn.example.com:51820")
@@ -3219,7 +3274,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "identity is required")]
     fn test_eap_options_builder_missing_identity() {
-        EapOptions::builder()
+        let _ = EapOptions::builder()
             .password("password")
             .method(EapMethod::Peap)
             .phase2(Phase2::Mschapv2)
@@ -3229,7 +3284,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "password is required")]
     fn test_eap_options_builder_missing_password() {
-        EapOptions::builder()
+        let _ = EapOptions::builder()
             .identity("user@example.com")
             .method(EapMethod::Peap)
             .phase2(Phase2::Mschapv2)
@@ -3239,7 +3294,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "method is required")]
     fn test_eap_options_builder_missing_method() {
-        EapOptions::builder()
+        let _ = EapOptions::builder()
             .identity("user@example.com")
             .password("password")
             .phase2(Phase2::Mschapv2)
@@ -3249,7 +3304,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "phase2 is required")]
     fn test_eap_options_builder_missing_phase2() {
-        EapOptions::builder()
+        let _ = EapOptions::builder()
             .identity("user@example.com")
             .password("password")
             .method(EapMethod::Peap)

@@ -41,6 +41,7 @@ pub struct IpConfig {
 
 impl IpConfig {
     /// Creates a new IP configuration.
+    #[must_use]
     pub fn new(address: impl Into<String>, prefix: u32) -> Self {
         Self {
             address: address.into(),
@@ -60,6 +61,7 @@ pub struct Route {
 
 impl Route {
     /// Creates a new route configuration.
+    #[must_use]
     pub fn new(dest: impl Into<String>, prefix: u32) -> Self {
         Self {
             dest: dest.into(),
@@ -70,12 +72,14 @@ impl Route {
     }
 
     /// Sets the next hop gateway for this route.
+    #[must_use]
     pub fn next_hop(mut self, gateway: impl Into<String>) -> Self {
         self.next_hop = Some(gateway.into());
         self
     }
 
     /// Sets the metric (priority) for this route.
+    #[must_use]
     pub fn metric(mut self, metric: u32) -> Self {
         self.metric = Some(metric);
         self
@@ -130,6 +134,7 @@ impl ConnectionBuilder {
     ///
     /// let builder = ConnectionBuilder::new("802-11-wireless", "HomeNetwork");
     /// ```
+    #[must_use]
     pub fn new(connection_type: &str, id: impl Into<String>) -> Self {
         let mut settings = HashMap::new();
         let mut connection = HashMap::new();
@@ -147,6 +152,7 @@ impl ConnectionBuilder {
     ///
     /// By default, a random UUID is generated. Use this to specify a deterministic
     /// UUID for testing or when recreating existing connections.
+    #[must_use]
     pub fn uuid(mut self, uuid: Uuid) -> Self {
         if let Some(conn) = self.settings.get_mut("connection") {
             conn.insert("uuid", Value::from(uuid.to_string()));
@@ -157,6 +163,7 @@ impl ConnectionBuilder {
     /// Sets the network interface name for this connection.
     ///
     /// This restricts the connection to a specific interface (e.g., "wlan0", "eth0").
+    #[must_use]
     pub fn interface_name(mut self, name: impl Into<String>) -> Self {
         if let Some(conn) = self.settings.get_mut("connection") {
             conn.insert("interface-name", Value::from(name.into()));
@@ -165,6 +172,7 @@ impl ConnectionBuilder {
     }
 
     /// Enables or disables automatic connection on boot/availability.
+    #[must_use]
     pub fn autoconnect(mut self, enabled: bool) -> Self {
         if let Some(conn) = self.settings.get_mut("connection") {
             conn.insert("autoconnect", Value::from(enabled));
@@ -176,6 +184,7 @@ impl ConnectionBuilder {
     ///
     /// When multiple connections are available, NetworkManager connects to the
     /// one with the highest priority. Default is 0.
+    #[must_use]
     pub fn autoconnect_priority(mut self, priority: i32) -> Self {
         if let Some(conn) = self.settings.get_mut("connection") {
             conn.insert("autoconnect-priority", Value::from(priority));
@@ -187,6 +196,7 @@ impl ConnectionBuilder {
     ///
     /// After this many failed attempts, the connection won't auto-retry.
     /// Default is -1 (unlimited retries).
+    #[must_use]
     pub fn autoconnect_retries(mut self, retries: i32) -> Self {
         if let Some(conn) = self.settings.get_mut("connection") {
             conn.insert("autoconnect-retries", Value::from(retries));
@@ -197,6 +207,7 @@ impl ConnectionBuilder {
     /// Applies multiple connection options at once.
     ///
     /// This is a convenience method to apply all fields from `ConnectionOptions`.
+    #[must_use]
     pub fn options(mut self, opts: &ConnectionOptions) -> Self {
         if let Some(conn) = self.settings.get_mut("connection") {
             conn.insert("autoconnect", Value::from(opts.autoconnect));
@@ -213,6 +224,7 @@ impl ConnectionBuilder {
     }
 
     /// Configures IPv4 to use automatic configuration (DHCP).
+    #[must_use]
     pub fn ipv4_auto(mut self) -> Self {
         let mut ipv4 = HashMap::new();
         ipv4.insert("method", Value::from("auto"));
@@ -233,6 +245,7 @@ impl ConnectionBuilder {
     ///     ])
     ///     .build();
     /// ```
+    #[must_use]
     pub fn ipv4_manual(mut self, addresses: Vec<IpConfig>) -> Self {
         let mut ipv4 = HashMap::new();
         ipv4.insert("method", Value::from("manual"));
@@ -254,6 +267,7 @@ impl ConnectionBuilder {
     }
 
     /// Disables IPv4 for this connection.
+    #[must_use]
     pub fn ipv4_disabled(mut self) -> Self {
         let mut ipv4 = HashMap::new();
         ipv4.insert("method", Value::from("disabled"));
@@ -262,6 +276,7 @@ impl ConnectionBuilder {
     }
 
     /// Configures IPv4 to use link-local addressing (169.254.x.x).
+    #[must_use]
     pub fn ipv4_link_local(mut self) -> Self {
         let mut ipv4 = HashMap::new();
         ipv4.insert("method", Value::from("link-local"));
@@ -272,6 +287,7 @@ impl ConnectionBuilder {
     /// Configures IPv4 for internet connection sharing.
     ///
     /// The connection will provide DHCP and NAT for other devices.
+    #[must_use]
     pub fn ipv4_shared(mut self) -> Self {
         let mut ipv4 = HashMap::new();
         ipv4.insert("method", Value::from("shared"));
@@ -282,6 +298,7 @@ impl ConnectionBuilder {
     /// Sets IPv4 DNS servers.
     ///
     /// DNS servers are specified as integers (network byte order).
+    #[must_use]
     pub fn ipv4_dns(mut self, servers: Vec<Ipv4Addr>) -> Self {
         let dns_u32: Vec<u32> = servers.into_iter().map(u32::from).collect();
 
@@ -292,6 +309,7 @@ impl ConnectionBuilder {
     }
 
     /// Sets the IPv4 gateway.
+    #[must_use]
     pub fn ipv4_gateway(mut self, gateway: Ipv4Addr) -> Self {
         if let Some(ipv4) = self.settings.get_mut("ipv4") {
             ipv4.insert("gateway", Value::from(gateway.to_string()));
@@ -300,6 +318,7 @@ impl ConnectionBuilder {
     }
 
     /// Adds IPv4 static routes.
+    #[must_use]
     pub fn ipv4_routes(mut self, routes: Vec<Route>) -> Self {
         let route_data: Vec<HashMap<String, Value<'static>>> = routes
             .into_iter()
@@ -327,6 +346,7 @@ impl ConnectionBuilder {
     }
 
     /// Configures IPv6 to use automatic configuration (SLAAC/DHCPv6).
+    #[must_use]
     pub fn ipv6_auto(mut self) -> Self {
         let mut ipv6 = HashMap::new();
         ipv6.insert("method", Value::from("auto"));
@@ -335,6 +355,7 @@ impl ConnectionBuilder {
     }
 
     /// Configures IPv6 with manual (static) addresses.
+    #[must_use]
     pub fn ipv6_manual(mut self, addresses: Vec<IpConfig>) -> Self {
         let mut ipv6 = HashMap::new();
         ipv6.insert("method", Value::from("manual"));
@@ -355,6 +376,7 @@ impl ConnectionBuilder {
     }
 
     /// Disables IPv6 for this connection.
+    #[must_use]
     pub fn ipv6_ignore(mut self) -> Self {
         let mut ipv6 = HashMap::new();
         ipv6.insert("method", Value::from("ignore"));
@@ -363,6 +385,7 @@ impl ConnectionBuilder {
     }
 
     /// Configures IPv6 to use link-local addressing only.
+    #[must_use]
     pub fn ipv6_link_local(mut self) -> Self {
         let mut ipv6 = HashMap::new();
         ipv6.insert("method", Value::from("link-local"));
@@ -371,6 +394,7 @@ impl ConnectionBuilder {
     }
 
     /// Sets IPv6 DNS servers.
+    #[must_use]
     pub fn ipv6_dns(mut self, servers: Vec<Ipv6Addr>) -> Self {
         let dns_strings: Vec<String> = servers.into_iter().map(|s| s.to_string()).collect();
 
@@ -381,6 +405,7 @@ impl ConnectionBuilder {
     }
 
     /// Sets the IPv6 gateway.
+    #[must_use]
     pub fn ipv6_gateway(mut self, gateway: Ipv6Addr) -> Self {
         if let Some(ipv6) = self.settings.get_mut("ipv6") {
             ipv6.insert("gateway", Value::from(gateway.to_string()));
@@ -389,6 +414,7 @@ impl ConnectionBuilder {
     }
 
     /// Adds IPv6 static routes.
+    #[must_use]
     pub fn ipv6_routes(mut self, routes: Vec<Route>) -> Self {
         let route_data: Vec<HashMap<String, Value<'static>>> = routes
             .into_iter()
@@ -435,6 +461,7 @@ impl ConnectionBuilder {
     ///     .with_section("bridge", bridge_section)
     ///     .build();
     /// ```
+    #[must_use]
     pub fn with_section(
         mut self,
         name: &'static str,
@@ -462,6 +489,7 @@ impl ConnectionBuilder {
     ///     })
     ///     .build();
     /// ```
+    #[must_use]
     pub fn update_section<F>(mut self, name: &'static str, f: F) -> Self
     where
         F: FnOnce(&mut HashMap<&'static str, Value<'static>>),
@@ -476,6 +504,7 @@ impl ConnectionBuilder {
     ///
     /// This consumes the builder and returns the complete settings structure
     /// ready to be passed to NetworkManager's D-Bus API.
+    #[must_use]
     pub fn build(self) -> HashMap<&'static str, HashMap<&'static str, Value<'static>>> {
         self.settings
     }
