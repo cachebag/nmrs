@@ -278,18 +278,8 @@ pub async fn refresh_networks(
                 wired_header.set_margin_start(12);
                 list_container.append(&wired_header);
 
-                // Create a wired devices context
-                let wired_ctx = wired_devices::WiredDevicesContext {
-                    nm: ctx.nm.clone(),
-                    on_success: ctx.on_success.clone(),
-                    status: ctx.status.clone(),
-                    stack: ctx.stack.clone(),
-                    parent_window: ctx.parent_window.clone(),
-                };
-                let wired_ctx = Rc::new(wired_ctx);
-
                 let wired_list = wired_devices::wired_devices_view(
-                    wired_ctx,
+                    ctx.clone(),
                     &available_devices,
                     ctx.wired_details_page.clone(),
                 );
@@ -442,17 +432,8 @@ pub async fn refresh_networks_no_scan(
             wired_header.set_margin_start(12);
             list_container.append(&wired_header);
 
-            let wired_ctx = wired_devices::WiredDevicesContext {
-                nm: ctx.nm.clone(),
-                on_success: ctx.on_success.clone(),
-                status: ctx.status.clone(),
-                stack: ctx.stack.clone(),
-                parent_window: ctx.parent_window.clone(),
-            };
-            let wired_ctx = Rc::new(wired_ctx);
-
             let wired_list = wired_devices::wired_devices_view(
-                wired_ctx,
+                ctx.clone(),
                 &available_devices,
                 ctx.wired_details_page.clone(),
             );
