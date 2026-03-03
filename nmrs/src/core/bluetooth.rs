@@ -43,10 +43,11 @@ use crate::{
 pub(crate) async fn populate_bluez_info(
     conn: &Connection,
     bdaddr: &str,
+    adapter: Option<&str>,
 ) -> Result<(Option<String>, Option<String>)> {
     validate_bluetooth_address(bdaddr)?;
 
-    let bluez_path = bluez_device_path(bdaddr);
+    let bluez_path = bluez_device_path(bdaddr, adapter);
 
     match BluezDeviceExtProxy::builder(conn)
         .path(bluez_path)?
@@ -142,8 +143,11 @@ pub(crate) async fn connect_bluetooth(
     // Check for saved connection
     let saved = get_saved_connection_path(conn, name).await?;
 
-    let specific_object = OwnedObjectPath::try_from(bluez_device_path(&settings.bdaddr))
-        .map_err(|e| ConnectionError::InvalidAddress(format!("Invalid BlueZ path: {e}")))?;
+    let specific_object = OwnedObjectPath::try_from(bluez_device_path(
+        &settings.bdaddr,
+        settings.adapter.as_deref(),
+    ))
+    .map_err(|e| ConnectionError::InvalidAddress(format!("Invalid BlueZ path: {e}")))?;
 
     match saved {
         Some(saved_path) => {
@@ -238,10 +242,18 @@ mod tests {
     use crate::models::BluetoothNetworkRole;
 
     #[test]
-    fn test_bluez_path_format() {
+    fn test_bluez_path_format_default_adapter() {
         assert_eq!(
-            bluez_device_path("00:1A:7D:DA:71:13"),
+            bluez_device_path("00:1A:7D:DA:71:13", None),
             "/org/bluez/hci0/dev_00_1A_7D_DA_71_13"
+        );
+    }
+
+    #[test]
+    fn test_bluez_path_format_specific_adapter() {
+        assert_eq!(
+            bluez_device_path("00:1A:7D:DA:71:13", Some("hci1")),
+            "/org/bluez/hci1/dev_00_1A_7D_DA_71_13"
         );
     }
 
@@ -255,7 +267,7 @@ mod tests {
 
         for (bdaddr, expected) in test_cases {
             assert_eq!(
-                bluez_device_path(bdaddr),
+                bluez_device_path(bdaddr, None),
                 expected,
                 "Failed for bdaddr: {bdaddr}"
             );
@@ -268,10 +280,24 @@ mod tests {
             BluetoothIdentity::new("00:1A:7D:DA:71:13".into(), BluetoothNetworkRole::PanU).unwrap();
 
         assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
+        assert_eq!(identity.adapter, None);
         assert!(matches!(
             identity.bt_device_type,
             BluetoothNetworkRole::PanU
         ));
+    }
+
+    #[test]
+    fn test_bluetooth_identity_with_adapter() {
+        let identity = BluetoothIdentity::with_adapter(
+            "00:1A:7D:DA:71:13".into(),
+            BluetoothNetworkRole::PanU,
+            "hci1".into(),
+        )
+        .unwrap();
+
+        assert_eq!(identity.bdaddr, "00:1A:7D:DA:71:13");
+        assert_eq!(identity.adapter, Some("hci1".into()));
     }
 
     // Note: Most of the core connection functions require a real D-Bus connection
