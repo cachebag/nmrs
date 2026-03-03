@@ -11,7 +11,8 @@ use crate::core::connection_settings::{
     get_saved_connection_path, has_saved_connection, list_saved_connections,
 };
 use crate::core::device::{
-    list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready, wifi_enabled,
+    is_connecting, list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready,
+    wifi_enabled,
 };
 use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
@@ -114,6 +115,14 @@ use crate::Result;
 ///
 /// `NetworkManager` is `Clone` and can be safely shared across async tasks.
 /// Each clone shares the same underlying D-Bus connection.
+///
+/// # Concurrency
+///
+/// Concurrent connection operations (e.g. calling [`connect`](Self::connect)
+/// from multiple tasks simultaneously) are **not supported** and may cause
+/// race conditions. Use [`is_connecting`](Self::is_connecting) to check
+/// whether a connection operation is already in progress before starting
+/// a new one.
 #[derive(Debug, Clone)]
 pub struct NetworkManager {
     conn: Connection,
@@ -423,6 +432,32 @@ impl NetworkManager {
     /// Triggers a Wi-Fi scan on all wireless devices.
     pub async fn scan_networks(&self) -> Result<()> {
         scan_networks(&self.conn).await
+    }
+
+    /// Returns whether any network device is currently in a transitional state.
+    ///
+    /// A device is considered "connecting" when its state is one of:
+    /// Prepare, Config, NeedAuth, IpConfig, IpCheck, Secondaries, or Deactivating.
+    ///
+    /// Use this to guard against concurrent connection attempts, which are
+    /// not supported and may cause undefined behavior.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    ///
+    /// if nm.is_connecting().await? {
+    ///     eprintln!("A connection operation is already in progress");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn is_connecting(&self) -> Result<bool> {
+        is_connecting(&self.conn).await
     }
 
     /// Check if a network is connected
