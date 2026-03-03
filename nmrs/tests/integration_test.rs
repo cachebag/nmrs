@@ -1130,6 +1130,7 @@ fn test_bluetooth_device_structure() {
         Some("Phone".into()),
         role,
         DeviceState::Activated,
+        None,
     );
 
     assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
@@ -1150,6 +1151,7 @@ fn test_bluetooth_device_display() {
         Some("Phone".into()),
         role,
         DeviceState::Activated,
+        None,
     );
 
     let display = format!("{}", device);

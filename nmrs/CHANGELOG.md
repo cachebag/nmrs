@@ -3,6 +3,9 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Added
+- Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
+
 ### Changed
 - Convert BDADDR to BlueZ device path via `bluez_device_path` helper ([#266](https://github.com/cachebag/nmrs/pull/266))
 

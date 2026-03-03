@@ -177,7 +177,7 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
         let raw_state = d_proxy.state().await?;
         let state = raw_state.into();
 
-        let bluez_info = populate_bluez_info(conn, &bdaddr).await?;
+        let bluez_info = populate_bluez_info(conn, &bdaddr, None).await?;
 
         devices.push(BluetoothDevice::new(
             bdaddr,
@@ -185,6 +185,7 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
             bluez_info.1,
             bt_caps,
             state,
+            None,
         ));
     }
     Ok(devices)
@@ -269,6 +270,7 @@ mod tests {
             Some("Test".into()),
             panu,
             DeviceState::Activated,
+            None,
         );
 
         assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
