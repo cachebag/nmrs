@@ -134,6 +134,37 @@ pub(crate) async fn list_devices(conn: &Connection) -> Result<Vec<Device>> {
     Ok(devices)
 }
 
+/// Returns `true` if any network device is in a transitional state
+/// (preparing, configuring, authenticating, obtaining IP, etc.).
+///
+/// Useful for guarding against concurrent connection attempts.
+pub(crate) async fn is_connecting(conn: &Connection) -> Result<bool> {
+    let nm = NMProxy::new(conn).await?;
+    let devices = nm.get_devices().await?;
+
+    for dp in devices {
+        let dev = NMDeviceProxy::builder(conn)
+            .path(dp.clone())?
+            .build()
+            .await?;
+
+        let raw_state = dev
+            .state()
+            .await
+            .map_err(|e| ConnectionError::DbusOperation {
+                context: format!("failed to get state for device {}", dp.as_str()),
+                source: e,
+            })?;
+
+        let state: DeviceState = raw_state.into();
+        if state.is_transitional() {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<BluetoothDevice>> {
     let proxy = NMProxy::new(conn).await?;
     let paths = proxy.get_devices().await?;
