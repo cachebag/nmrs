@@ -567,12 +567,14 @@ async fn test_device_states() {
             | DeviceState::Disconnected
             | DeviceState::Prepare
             | DeviceState::Config
+            | DeviceState::NeedAuth
+            | DeviceState::IpConfig
+            | DeviceState::IpCheck
+            | DeviceState::Secondaries
             | DeviceState::Activated
             | DeviceState::Deactivating
             | DeviceState::Failed
-            | DeviceState::Other(_) => {
-                // Valid state
-            }
+            | DeviceState::Other(_) => {}
             _ => {
                 panic!("Invalid device state: {:?}", device.state);
             }

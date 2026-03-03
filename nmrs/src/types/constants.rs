@@ -12,11 +12,20 @@ pub mod device_type {
     // pub const LOOPBACK: u32 = 32;
 }
 
-/// NetworkManager device state constants
+/// NetworkManager device state constants.
+///
+/// Reference: <https://networkmanager.dev/docs/api/latest/nm-dbus-types.html>
 pub mod device_state {
     pub const UNAVAILABLE: u32 = 20;
     pub const DISCONNECTED: u32 = 30;
+    // pub const PREPARE: u32 = 40;
+    // pub const CONFIG: u32 = 50;
+    // pub const NEED_AUTH: u32 = 60;
+    // pub const IP_CONFIG: u32 = 70;
+    // pub const IP_CHECK: u32 = 80;
+    // pub const SECONDARIES: u32 = 90;
     pub const ACTIVATED: u32 = 100;
+    // pub const DEACTIVATING: u32 = 110;
 }
 
 /// WiFi security flag constants
