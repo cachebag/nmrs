@@ -1965,8 +1965,16 @@ pub enum DeviceState {
     Disconnected,
     /// Device is preparing to connect.
     Prepare,
-    /// Device is being configured (IP, etc.).
+    /// Device is being configured.
     Config,
+    /// Device requires authentication credentials.
+    NeedAuth,
+    /// Device is requesting IP configuration.
+    IpConfig,
+    /// Device is verifying IP connectivity.
+    IpCheck,
+    /// Device is waiting for secondary connections.
+    Secondaries,
     /// Device is fully connected and operational.
     Activated,
     /// Device is disconnecting.
@@ -1975,6 +1983,27 @@ pub enum DeviceState {
     Failed,
     /// Unknown or unsupported state with raw code.
     Other(u32),
+}
+
+impl DeviceState {
+    /// Returns `true` if the device is in a transitional (in-progress) state.
+    ///
+    /// Transitional states indicate an active connection or disconnection
+    /// operation: Prepare, Config, NeedAuth, IpConfig, IpCheck, Secondaries,
+    /// or Deactivating.
+    #[must_use]
+    pub fn is_transitional(&self) -> bool {
+        matches!(
+            self,
+            Self::Prepare
+                | Self::Config
+                | Self::NeedAuth
+                | Self::IpConfig
+                | Self::IpCheck
+                | Self::Secondaries
+                | Self::Deactivating
+        )
+    }
 }
 
 impl Device {
@@ -2369,15 +2398,19 @@ impl From<u32> for DeviceType {
 impl From<u32> for DeviceState {
     fn from(value: u32) -> Self {
         match value {
-            10 => DeviceState::Unmanaged,
-            20 => DeviceState::Unavailable,
-            30 => DeviceState::Disconnected,
-            40 => DeviceState::Prepare,
-            50 => DeviceState::Config,
-            100 => DeviceState::Activated,
-            110 => DeviceState::Deactivating,
-            120 => DeviceState::Failed,
-            v => DeviceState::Other(v),
+            10 => Self::Unmanaged,
+            20 => Self::Unavailable,
+            30 => Self::Disconnected,
+            40 => Self::Prepare,
+            50 => Self::Config,
+            60 => Self::NeedAuth,
+            70 => Self::IpConfig,
+            80 => Self::IpCheck,
+            90 => Self::Secondaries,
+            100 => Self::Activated,
+            110 => Self::Deactivating,
+            120 => Self::Failed,
+            v => Self::Other(v),
         }
     }
 }
@@ -2402,15 +2435,19 @@ impl Display for DeviceType {
 impl Display for DeviceState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            DeviceState::Unmanaged => write!(f, "Unmanaged"),
-            DeviceState::Unavailable => write!(f, "Unavailable"),
-            DeviceState::Disconnected => write!(f, "Disconnected"),
-            DeviceState::Prepare => write!(f, "Preparing"),
-            DeviceState::Config => write!(f, "Configuring"),
-            DeviceState::Activated => write!(f, "Activated"),
-            DeviceState::Deactivating => write!(f, "Deactivating"),
-            DeviceState::Failed => write!(f, "Failed"),
-            DeviceState::Other(v) => write!(f, "Other({v})"),
+            Self::Unmanaged => write!(f, "Unmanaged"),
+            Self::Unavailable => write!(f, "Unavailable"),
+            Self::Disconnected => write!(f, "Disconnected"),
+            Self::Prepare => write!(f, "Preparing"),
+            Self::Config => write!(f, "Configuring"),
+            Self::NeedAuth => write!(f, "NeedAuth"),
+            Self::IpConfig => write!(f, "IpConfig"),
+            Self::IpCheck => write!(f, "IpCheck"),
+            Self::Secondaries => write!(f, "Secondaries"),
+            Self::Activated => write!(f, "Activated"),
+            Self::Deactivating => write!(f, "Deactivating"),
+            Self::Failed => write!(f, "Failed"),
+            Self::Other(v) => write!(f, "Other({v})"),
         }
     }
 }
@@ -3421,5 +3458,47 @@ mod tests {
 
         assert_eq!(config1.connection_timeout, Duration::from_secs(120));
         assert_eq!(config2.connection_timeout, Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_device_state_is_transitional() {
+        let transitional = [
+            DeviceState::Prepare,
+            DeviceState::Config,
+            DeviceState::NeedAuth,
+            DeviceState::IpConfig,
+            DeviceState::IpCheck,
+            DeviceState::Secondaries,
+            DeviceState::Deactivating,
+        ];
+        for state in &transitional {
+            assert!(state.is_transitional(), "{state:?} should be transitional");
+        }
+
+        let stable = [
+            DeviceState::Unmanaged,
+            DeviceState::Unavailable,
+            DeviceState::Disconnected,
+            DeviceState::Activated,
+            DeviceState::Failed,
+            DeviceState::Other(999),
+        ];
+        for state in &stable {
+            assert!(
+                !state.is_transitional(),
+                "{state:?} should not be transitional"
+            );
+        }
+    }
+
+    #[test]
+    fn test_device_state_from_u32_intermediate_states() {
+        assert_eq!(DeviceState::from(40), DeviceState::Prepare);
+        assert_eq!(DeviceState::from(50), DeviceState::Config);
+        assert_eq!(DeviceState::from(60), DeviceState::NeedAuth);
+        assert_eq!(DeviceState::from(70), DeviceState::IpConfig);
+        assert_eq!(DeviceState::from(80), DeviceState::IpCheck);
+        assert_eq!(DeviceState::from(90), DeviceState::Secondaries);
+        assert_eq!(DeviceState::from(110), DeviceState::Deactivating);
     }
 }
