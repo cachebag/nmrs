@@ -1729,15 +1729,12 @@ pub struct BluetoothIdentity {
     pub bdaddr: String,
     /// Bluetooth device type (DUN or PANU)
     pub bt_device_type: BluetoothNetworkRole,
+    /// BlueZ adapter name (e.g. `"hci0"`, `"hci1"`). Defaults to `"hci0"` when `None`.
+    pub adapter: Option<String>,
 }
 
 impl BluetoothIdentity {
-    /// Creates a new `BluetoothIdentity`.
-    ///
-    /// # Arguments
-    ///
-    /// * `bdaddr` - Bluetooth MAC address (e.g., "00:1A:7D:DA:71:13")
-    /// * `bt_device_type` - Bluetooth network role (PanU or Dun)
+    /// Creates a new `BluetoothIdentity` using the default adapter.
     ///
     /// # Errors
     ///
@@ -1762,6 +1759,38 @@ impl BluetoothIdentity {
         Ok(Self {
             bdaddr,
             bt_device_type,
+            adapter: None,
+        })
+    }
+
+    /// Creates a new `BluetoothIdentity` targeting a specific adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ConnectionError` if the provided `bdaddr` is not a
+    /// valid Bluetooth MAC address format.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole};
+    ///
+    /// let identity = BluetoothIdentity::with_adapter(
+    ///     "00:1A:7D:DA:71:13".into(),
+    ///     BluetoothNetworkRole::PanU,
+    ///     "hci1".into(),
+    /// ).unwrap();
+    /// ```
+    pub fn with_adapter(
+        bdaddr: String,
+        bt_device_type: BluetoothNetworkRole,
+        adapter: String,
+    ) -> Result<Self, ConnectionError> {
+        validate_bluetooth_address(&bdaddr)?;
+        Ok(Self {
+            bdaddr,
+            bt_device_type,
+            adapter: Some(adapter),
         })
     }
 }
@@ -1776,8 +1805,6 @@ impl BluetoothIdentity {
 ///
 /// # Example
 ///
-/// # Example
-///
 /// ```rust
 /// use nmrs::models::{BluetoothDevice, BluetoothNetworkRole, DeviceState};
 ///
@@ -1788,6 +1815,7 @@ impl BluetoothIdentity {
 ///     Some("Phone".into()),
 ///     role,
 ///     DeviceState::Activated,
+///     Some("hci0".into()),
 /// );
 /// ```
 #[non_exhaustive]
@@ -1803,18 +1831,12 @@ pub struct BluetoothDevice {
     pub bt_caps: u32,
     /// Current device state
     pub state: DeviceState,
+    /// BlueZ adapter name (e.g. `"hci0"`)
+    pub adapter: Option<String>,
 }
 
 impl BluetoothDevice {
     /// Creates a new `BluetoothDevice`.
-    ///
-    /// # Arguments
-    ///
-    /// * `bdaddr` - Bluetooth MAC address
-    /// * `name` - Friendly device name from BlueZ
-    /// * `alias` - Device alias from BlueZ
-    /// * `bt_caps` - Bluetooth device capabilities/type
-    /// * `state` - Current device state
     ///
     /// # Example
     ///
@@ -1828,6 +1850,7 @@ impl BluetoothDevice {
     ///     Some("Phone".into()),
     ///     role,
     ///     DeviceState::Activated,
+    ///     Some("hci0".into()),
     /// );
     /// ```
     #[must_use]
@@ -1837,6 +1860,7 @@ impl BluetoothDevice {
         alias: Option<String>,
         bt_caps: u32,
         state: DeviceState,
+        adapter: Option<String>,
     ) -> Self {
         Self {
             bdaddr,
@@ -1844,6 +1868,7 @@ impl BluetoothDevice {
             alias,
             bt_caps,
             state,
+            adapter,
         }
     }
 }
@@ -2972,6 +2997,7 @@ mod tests {
             Some("Phone".into()),
             role,
             DeviceState::Activated,
+            Some("hci0".into()),
         );
 
         assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
@@ -2979,6 +3005,7 @@ mod tests {
         assert_eq!(device.alias, Some("Phone".into()));
         assert!(matches!(device.bt_caps, _role));
         assert_eq!(device.state, DeviceState::Activated);
+        assert_eq!(device.adapter, Some("hci0".into()));
     }
 
     #[test]
@@ -2990,6 +3017,7 @@ mod tests {
             Some("Phone".into()),
             role,
             DeviceState::Activated,
+            None,
         );
 
         let display_str = format!("{}", device);
@@ -3007,6 +3035,7 @@ mod tests {
             None,
             role,
             DeviceState::Disconnected,
+            None,
         );
 
         let display_str = format!("{}", device);
