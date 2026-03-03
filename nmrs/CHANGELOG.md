@@ -3,6 +3,9 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Added
+- Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
+
 ### Changed
 - Introduce `VpnConfig` trait and refactor `connect_vpn` signature ([#303](https://github.com/cachebag/nmrs/pull/303))
 
