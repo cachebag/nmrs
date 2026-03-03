@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Changed
+- Convert BDADDR to BlueZ device path via `bluez_device_path` helper ([#266](https://github.com/cachebag/nmrs/pull/266))
 
 ## [2.1.0] - 2026-02-28
 ### Added

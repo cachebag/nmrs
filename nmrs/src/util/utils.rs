@@ -239,6 +239,15 @@ pub(crate) async fn extract_connection_state_reason(
     }
 }
 
+/// Constructs a BlueZ D-Bus object path from a Bluetooth device address.
+///
+/// Converts a BDADDR like `"00:1A:7D:DA:71:13"` into
+/// `"/org/bluez/hci0/dev_00_1A_7D_DA_71_13"`.
+// TODO: Instead of hardcoding hci0, determine the actual adapter name.
+pub(crate) fn bluez_device_path(bdaddr: &str) -> String {
+    format!("/org/bluez/hci0/dev_{}", bdaddr.replace(':', "_"))
+}
+
 /// Macro to convert Result to Option with error logging.
 /// Usage: `try_log!(result, "context message")?`
 #[macro_export]

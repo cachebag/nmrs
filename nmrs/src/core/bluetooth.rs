@@ -19,6 +19,7 @@ use crate::monitoring::bluetooth::Bluetooth;
 use crate::monitoring::transport::ActiveTransport;
 use crate::types::constants::device_state;
 use crate::types::constants::device_type;
+use crate::util::utils::bluez_device_path;
 use crate::util::validation::validate_bluetooth_address;
 use crate::ConnectionError;
 use crate::{
@@ -45,10 +46,7 @@ pub(crate) async fn populate_bluez_info(
 ) -> Result<(Option<String>, Option<String>)> {
     validate_bluetooth_address(bdaddr)?;
 
-    // [variable prefix]/{hci0,hci1,...}/dev_XX_XX_XX_XX_XX_XX
-    // This replaces ':' with '_' in the BDADDR to form the correct D-Bus object path.
-    // TODO: Instead of hardcoding hci0, we should determine the actual adapter name.
-    let bluez_path = format!("/org/bluez/hci0/dev_{}", bdaddr.replace(':', "_"));
+    let bluez_path = bluez_device_path(bdaddr);
 
     match BluezDeviceExtProxy::builder(conn)
         .path(bluez_path)?
@@ -144,14 +142,8 @@ pub(crate) async fn connect_bluetooth(
     // Check for saved connection
     let saved = get_saved_connection_path(conn, name).await?;
 
-    // For Bluetooth, the "specific_object" is the remote device's D-Bus path
-    // Format: /org/bluez/hci0/dev_XX_XX_XX_XX_XX_XX
-    // TODO: Instead of hardcoding the hci0, we should use the actual hardware adapter name.
-    let specific_object = OwnedObjectPath::try_from(format!(
-        "/org/bluez/hci0/dev_{}",
-        settings.bdaddr.replace(':', "_")
-    ))
-    .map_err(|e| ConnectionError::InvalidAddress(format!("Invalid BlueZ path: {}", e)))?;
+    let specific_object = OwnedObjectPath::try_from(bluez_device_path(&settings.bdaddr))
+        .map_err(|e| ConnectionError::InvalidAddress(format!("Invalid BlueZ path: {e}")))?;
 
     match saved {
         Some(saved_path) => {
@@ -247,24 +239,26 @@ mod tests {
 
     #[test]
     fn test_bluez_path_format() {
-        // Test that bdaddr format is converted correctly for D-Bus path
-        let bdaddr = "00:1A:7D:DA:71:13";
-        let expected_path = "/org/bluez/hci0/dev_00_1A_7D_DA_71_13";
-        let actual_path = format!("/org/bluez/hci0/dev_{}", bdaddr.replace(':', "_"));
-        assert_eq!(actual_path, expected_path);
+        assert_eq!(
+            bluez_device_path("00:1A:7D:DA:71:13"),
+            "/org/bluez/hci0/dev_00_1A_7D_DA_71_13"
+        );
     }
 
     #[test]
     fn test_bluez_path_format_various_addresses() {
-        let test_cases = vec![
+        let test_cases = [
             ("AA:BB:CC:DD:EE:FF", "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF"),
             ("00:00:00:00:00:00", "/org/bluez/hci0/dev_00_00_00_00_00_00"),
             ("C8:1F:E8:F0:51:57", "/org/bluez/hci0/dev_C8_1F_E8_F0_51_57"),
         ];
 
-        for (bdaddr, expected_path) in test_cases {
-            let actual_path = format!("/org/bluez/hci0/dev_{}", bdaddr.replace(':', "_"));
-            assert_eq!(actual_path, expected_path, "Failed for bdaddr: {}", bdaddr);
+        for (bdaddr, expected) in test_cases {
+            assert_eq!(
+                bluez_device_path(bdaddr),
+                expected,
+                "Failed for bdaddr: {bdaddr}"
+            );
         }
     }
 
