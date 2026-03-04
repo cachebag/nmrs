@@ -417,6 +417,12 @@ mod tests {
             Some(&Value::from("password123".to_string()))
         );
 
+        // proto/pairwise/group must not be set so NetworkManager can
+        // negotiate with mixed-mode (WPA1+WPA2) access points.
+        assert!(security.get("proto").is_none());
+        assert!(security.get("pairwise").is_none());
+        assert!(security.get("group").is_none());
+
         let wireless = settings.get("802-11-wireless").unwrap();
         assert_eq!(
             wireless.get("security"),
