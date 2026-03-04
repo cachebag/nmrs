@@ -152,7 +152,9 @@ impl WifiConnectionBuilder {
 
     /// Configures WPA-PSK (Personal) security with the given passphrase.
     ///
-    /// Uses WPA2 (RSN) with CCMP encryption.
+    /// Lets NetworkManager negotiate the best protocol (WPA/WPA2/WPA3)
+    /// and cipher (TKIP/CCMP) with the access point, supporting mixed-mode
+    /// routers that advertise both WPA and WPA2.
     #[must_use]
     pub fn wpa_psk(mut self, psk: impl Into<String>) -> Self {
         let mut security = HashMap::new();
@@ -160,11 +162,6 @@ impl WifiConnectionBuilder {
         security.insert("psk", Value::from(psk.into()));
         security.insert("psk-flags", Value::from(0u32));
         security.insert("auth-alg", Value::from("open"));
-
-        // Enforce WPA2 with AES
-        security.insert("proto", Self::string_array(&["rsn"]));
-        security.insert("pairwise", Self::string_array(&["ccmp"]));
-        security.insert("group", Self::string_array(&["ccmp"]));
 
         self.inner = self
             .inner
