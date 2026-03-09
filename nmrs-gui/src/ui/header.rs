@@ -97,6 +97,9 @@ pub fn build_header(
             );
 
             crate::theme_config::save_theme(theme.key);
+
+            // Re-register user CSS after the new theme so it keeps priority.
+            crate::style::load_user_css();
         }
     });
 
