@@ -48,6 +48,10 @@ pub fn build_ui(app: &Application) {
         }
     }
 
+    // User's custom style.css must be registered after the theme so that it
+    // takes precedence when both run at STYLE_PROVIDER_PRIORITY_USER.
+    crate::style::load_user_css();
+
     let vbox = GtkBox::new(Orientation::Vertical, 0);
     let status = Label::new(None);
     let list_container = GtkBox::new(Orientation::Vertical, 0);

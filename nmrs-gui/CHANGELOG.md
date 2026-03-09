@@ -4,6 +4,9 @@ All notable changes to the `nmrs-gui` crate will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Custom `~/.config/nmrs/style.css` is now applied after the saved theme, ensuring it always takes precedence over any predefined theme ([#274](https://github.com/cachebag/nmrs/pull/274))
+
 ## [1.1.0] - 2025-12-19
 
 ### Fixed
