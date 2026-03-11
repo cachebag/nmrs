@@ -65,7 +65,8 @@
           };
 
         packages.default = naersk-package.buildPackage {
-          pname = "nmrs";
+          name = "nmrs";
+          version = self.shortRev or self.dirtyShortRev;
           src = ./.;
 
           buildInputs = with pkgs; [
