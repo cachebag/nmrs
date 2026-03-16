@@ -26,8 +26,8 @@ use std::collections::HashMap;
 use zvariant::Value;
 
 use crate::{
-    models::{BluetoothIdentity, BluetoothNetworkRole},
     ConnectionOptions,
+    models::{BluetoothIdentity, BluetoothNetworkRole},
 };
 
 /// Builds the `connection` section with type, id, uuid, and autoconnect settings.

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
+use crate::Result;
 use crate::api::builders::wifi::{build_ethernet_connection, build_wifi_connection};
 use crate::api::models::{ConnectionError, ConnectionOptions, TimeoutConfig, WifiSecurity};
 use crate::core::connection_settings::{delete_connection, get_saved_connection_path};
@@ -15,7 +16,6 @@ use crate::monitoring::wifi::Wifi;
 use crate::types::constants::{device_state, device_type, timeouts};
 use crate::util::utils::{decode_ssid_or_empty, nm_proxy};
 use crate::util::validation::{validate_ssid, validate_wifi_security};
-use crate::Result;
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
 enum SavedDecision {
@@ -183,10 +183,9 @@ pub(crate) async fn connect_wired(
         .path(wired_device.clone())?
         .build()
         .await
+        && let Ok(speed) = wired.speed().await
     {
-        if let Ok(speed) = wired.speed().await {
-            info!("Connected to wired device at {speed} Mb/s");
-        }
+        info!("Connected to wired device at {speed} Mb/s");
     }
 
     info!("Successfully connected to wired device");
@@ -238,10 +237,10 @@ pub(crate) async fn forget_by_name_and_type(
         let dev_type = dev.device_type().await?;
 
         // Skip if device type doesn't match our filter
-        if let Some(filter) = device_filter {
-            if dev_type != filter {
-                continue;
-            }
+        if let Some(filter) = device_filter
+            && dev_type != filter
+        {
+            continue;
         }
 
         // Handle WiFi-specific disconnect logic
@@ -250,35 +249,33 @@ pub(crate) async fn forget_by_name_and_type(
                 .path(dev_path.clone())?
                 .build()
                 .await?;
-            if let Ok(ap_path) = wifi.active_access_point().await {
-                if ap_path.as_str() != "/" {
-                    let ap = NMAccessPointProxy::builder(conn)
-                        .path(ap_path.clone())?
-                        .build()
-                        .await?;
-                    if let Ok(bytes) = ap.ssid().await {
-                        if decode_ssid_or_empty(&bytes) == name {
-                            debug!("Disconnecting from active WiFi network: {name}");
-                            if let Err(e) =
-                                disconnect_wifi_and_wait(conn, dev_path, timeout_config).await
-                            {
-                                warn!("Disconnect wait failed: {e}");
-                                let final_state = dev.state().await?;
-                                if final_state != device_state::DISCONNECTED
-                                    && final_state != device_state::UNAVAILABLE
-                                {
-                                    error!(
-                                        "Device still connected (state: {final_state}), cannot safely delete"
-                                    );
-                                    return Err(ConnectionError::Stuck(format!(
-                                        "disconnect failed, device in state {final_state}"
-                                    )));
-                                }
-                                debug!("Device confirmed disconnected, proceeding with deletion");
-                            }
-                            debug!("WiFi disconnect phase completed");
+            if let Ok(ap_path) = wifi.active_access_point().await
+                && ap_path.as_str() != "/"
+            {
+                let ap = NMAccessPointProxy::builder(conn)
+                    .path(ap_path.clone())?
+                    .build()
+                    .await?;
+                if let Ok(bytes) = ap.ssid().await
+                    && decode_ssid_or_empty(&bytes) == name
+                {
+                    debug!("Disconnecting from active WiFi network: {name}");
+                    if let Err(e) = disconnect_wifi_and_wait(conn, dev_path, timeout_config).await {
+                        warn!("Disconnect wait failed: {e}");
+                        let final_state = dev.state().await?;
+                        if final_state != device_state::DISCONNECTED
+                            && final_state != device_state::UNAVAILABLE
+                        {
+                            error!(
+                                "Device still connected (state: {final_state}), cannot safely delete"
+                            );
+                            return Err(ConnectionError::Stuck(format!(
+                                "disconnect failed, device in state {final_state}"
+                            )));
                         }
+                        debug!("Device confirmed disconnected, proceeding with deletion");
                     }
+                    debug!("WiFi disconnect phase completed");
                 }
             }
         }
@@ -343,39 +340,37 @@ pub(crate) async fn forget_by_name_and_type(
             let mut should_delete = false;
 
             // Match by connection ID (works for all connection types)
-            if let Some(conn_sec) = settings_map.get("connection") {
-                if let Some(Value::Str(id)) = conn_sec.get("id") {
-                    if id.as_str() == name {
-                        should_delete = true;
-                        debug!("Found connection by ID: {id}");
-                    }
-                }
+            if let Some(conn_sec) = settings_map.get("connection")
+                && let Some(Value::Str(id)) = conn_sec.get("id")
+                && id.as_str() == name
+            {
+                should_delete = true;
+                debug!("Found connection by ID: {id}");
             }
 
             // Additional WiFi-specific matching by SSID
-            if let Some(wifi_sec) = settings_map.get("802-11-wireless") {
-                if let Some(Value::Array(arr)) = wifi_sec.get("ssid") {
-                    let mut raw = Vec::new();
-                    for v in arr.iter() {
-                        if let Ok(b) = u8::try_from(v.clone()) {
-                            raw.push(b);
-                        }
+            if let Some(wifi_sec) = settings_map.get("802-11-wireless")
+                && let Some(Value::Array(arr)) = wifi_sec.get("ssid")
+            {
+                let mut raw = Vec::new();
+                for v in arr.iter() {
+                    if let Ok(b) = u8::try_from(v.clone()) {
+                        raw.push(b);
                     }
-                    if decode_ssid_or_empty(&raw) == name {
-                        should_delete = true;
-                        debug!("Found WiFi connection by SSID match");
-                    }
+                }
+                if decode_ssid_or_empty(&raw) == name {
+                    should_delete = true;
+                    debug!("Found WiFi connection by SSID match");
                 }
             }
 
             // Matching by bdaddr for Bluetooth connections
-            if let Some(bt_sec) = settings_map.get("bluetooth") {
-                if let Some(Value::Str(bdaddr)) = bt_sec.get("bdaddr") {
-                    if bdaddr.as_str() == name {
-                        should_delete = true;
-                        debug!("Found Bluetooth connection by bdaddr match");
-                    }
-                }
+            if let Some(bt_sec) = settings_map.get("bluetooth")
+                && let Some(Value::Str(bdaddr)) = bt_sec.get("bdaddr")
+                && bdaddr.as_str() == name
+            {
+                should_delete = true;
+                debug!("Found Bluetooth connection by bdaddr match");
             }
 
             if let Some(wsec) = settings_map.get("802-11-wireless-security") {
@@ -409,7 +404,9 @@ pub(crate) async fn forget_by_name_and_type(
 
         // For Bluetooth, it's normal to have no NetworkManager connection profile if the device is only paired in BlueZ.
         if device_filter == Some(device_type::BLUETOOTH) {
-            debug!("Bluetooth device '{name}' has no NetworkManager connection profile (device may only be paired in BlueZ)");
+            debug!(
+                "Bluetooth device '{name}' has no NetworkManager connection profile (device may only be paired in BlueZ)"
+            );
             Ok(())
         } else {
             Ok(())
@@ -857,11 +854,11 @@ pub(crate) async fn get_device_by_interface(
             .build()
             .await?;
 
-        if let Ok(iface) = dev.interface().await {
-            if iface == interface_name {
-                debug!("Found device with interface: {}", interface_name);
-                return Ok(dev_path);
-            }
+        if let Ok(iface) = dev.interface().await
+            && iface == interface_name
+        {
+            debug!("Found device with interface: {}", interface_name);
+            return Ok(dev_path);
         }
     }
 

@@ -11,9 +11,9 @@ use tokio::select;
 use tokio::sync::watch;
 use zbus::Connection;
 
+use crate::Result;
 use crate::api::models::ConnectionError;
 use crate::dbus::{NMDeviceProxy, NMProxy};
-use crate::Result;
 
 /// Monitors device state changes on all network devices.
 ///
@@ -64,11 +64,10 @@ where
             .path(dev_path.clone())?
             .build()
             .await
+            && let Ok(state_stream) = dev.receive_device_state_changed().await
         {
-            if let Ok(state_stream) = dev.receive_device_state_changed().await {
-                streams.push(Box::pin(state_stream.map(|_| ())));
-                debug!("Subscribed to state change signals on device: {dev_path}");
-            }
+            streams.push(Box::pin(state_stream.map(|_| ())));
+            debug!("Subscribed to state change signals on device: {dev_path}");
         }
     }
 

@@ -11,6 +11,7 @@ use zbus::Connection;
 use zvariant::OwnedObjectPath;
 // use futures_timer::Delay;
 
+use crate::ConnectionError;
 use crate::builders::bluetooth;
 use crate::core::connection_settings::get_saved_connection_path;
 use crate::core::state_wait::{wait_for_connection_activation, wait_for_device_disconnect};
@@ -21,11 +22,10 @@ use crate::types::constants::device_state;
 use crate::types::constants::device_type;
 use crate::util::utils::bluez_device_path;
 use crate::util::validation::validate_bluetooth_address;
-use crate::ConnectionError;
 use crate::{
+    Result,
     dbus::NMProxy,
     models::{BluetoothIdentity, TimeoutConfig},
-    Result,
 };
 
 /// Populated Bluetooth device information via BlueZ.

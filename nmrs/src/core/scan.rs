@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use zbus::Connection;
 
+use crate::Result;
 use crate::api::models::{ConnectionError, Network};
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
@@ -14,7 +15,6 @@ use crate::util::utils::{
     decode_ssid_or_empty, decode_ssid_or_hidden, for_each_access_point,
     get_ip_addresses_from_active_connection,
 };
-use crate::Result;
 
 /// Triggers a Wi-Fi scan on all wireless devices.
 ///

@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
+use crate::Result;
 use crate::api::models::{
     ConnectionError, ConnectionOptions, DeviceState, TimeoutConfig, VpnConnection,
     VpnConnectionInfo, VpnCredentials, VpnType,
@@ -24,7 +25,6 @@ use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::{NMActiveConnectionProxy, NMProxy};
 use crate::util::utils::{extract_connection_state_reason, nm_proxy, settings_proxy};
 use crate::util::validation::{validate_connection_name, validate_vpn_credentials};
-use crate::Result;
 
 /// Connects to a WireGuard connection.
 ///

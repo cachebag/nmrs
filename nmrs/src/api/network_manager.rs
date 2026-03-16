@@ -1,6 +1,7 @@
 use tokio::sync::watch;
 use zbus::Connection;
 
+use crate::Result;
 use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
 use crate::core::bluetooth::connect_bluetooth;
 use crate::core::connection::{
@@ -24,7 +25,6 @@ use crate::monitoring::info::show_details;
 use crate::monitoring::network as network_monitor;
 use crate::monitoring::wifi::{current_connection_info, current_ssid};
 use crate::types::constants::device_type;
-use crate::Result;
 
 /// High-level interface to NetworkManager over D-Bus.
 ///

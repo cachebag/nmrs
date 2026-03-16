@@ -3,8 +3,8 @@
 //! This module provides D-Bus proxy interfaces for interacting with Bluetooth
 //! devices through NetworkManager and BlueZ.
 
-use zbus::proxy;
 use zbus::Result;
+use zbus::proxy;
 
 /// Proxy for Bluetooth devices
 ///

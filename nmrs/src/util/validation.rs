@@ -148,21 +148,21 @@ pub fn validate_wifi_security(security: &WifiSecurity) -> Result<(), ConnectionE
             }
 
             // Validate anonymous identity if provided
-            if let Some(ref anon_id) = opts.anonymous_identity {
-                if anon_id.trim().is_empty() {
-                    return Err(ConnectionError::InvalidAddress(
-                        "EAP anonymous identity cannot be empty if provided".to_string(),
-                    ));
-                }
+            if let Some(ref anon_id) = opts.anonymous_identity
+                && anon_id.trim().is_empty()
+            {
+                return Err(ConnectionError::InvalidAddress(
+                    "EAP anonymous identity cannot be empty if provided".to_string(),
+                ));
             }
 
             // Validate domain suffix match if provided
-            if let Some(ref domain) = opts.domain_suffix_match {
-                if domain.trim().is_empty() {
-                    return Err(ConnectionError::InvalidAddress(
-                        "EAP domain suffix match cannot be empty if provided".to_string(),
-                    ));
-                }
+            if let Some(ref domain) = opts.domain_suffix_match
+                && domain.trim().is_empty()
+            {
+                return Err(ConnectionError::InvalidAddress(
+                    "EAP domain suffix match cannot be empty if provided".to_string(),
+                ));
             }
 
             // Validate CA cert path if provided
@@ -261,13 +261,13 @@ fn validate_wireguard_peer(peer: &WireGuardPeer) -> Result<(), ConnectionError> 
     }
 
     // Validate port number
-    if let Some(port_str) = peer.gateway.split(':').next_back() {
-        if port_str.parse::<u16>().is_err() {
-            return Err(ConnectionError::InvalidGateway(format!(
-                "Invalid port number in gateway '{}'",
-                peer.gateway
-            )));
-        }
+    if let Some(port_str) = peer.gateway.split(':').next_back()
+        && port_str.parse::<u16>().is_err()
+    {
+        return Err(ConnectionError::InvalidGateway(format!(
+            "Invalid port number in gateway '{}'",
+            peer.gateway
+        )));
     }
 
     // Validate allowed IPs
@@ -415,13 +415,13 @@ pub fn validate_vpn_credentials(creds: &VpnCredentials) -> Result<(), Connection
     }
 
     // Validate port number
-    if let Some(port_str) = creds.gateway.split(':').next_back() {
-        if port_str.parse::<u16>().is_err() {
-            return Err(ConnectionError::InvalidGateway(format!(
-                "Invalid port number in gateway '{}'",
-                creds.gateway
-            )));
-        }
+    if let Some(port_str) = creds.gateway.split(':').next_back()
+        && port_str.parse::<u16>().is_err()
+    {
+        return Err(ConnectionError::InvalidGateway(format!(
+            "Invalid port number in gateway '{}'",
+            creds.gateway
+        )));
     }
 
     // Validate private key

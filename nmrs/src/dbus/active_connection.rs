@@ -1,6 +1,6 @@
 //! NetworkManager Active Connection proxy.
 
-use zbus::{proxy, Result};
+use zbus::{Result, proxy};
 use zvariant::OwnedObjectPath;
 
 /// Proxy for active connection interface.

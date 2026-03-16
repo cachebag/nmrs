@@ -52,20 +52,20 @@ pub(crate) async fn current_ssid(conn: &Connection) -> Option<String> {
         );
         let wifi = try_log!(wifi_builder.build().await, "Failed to build wireless proxy");
 
-        if let Ok(active_ap) = wifi.active_access_point().await {
-            if active_ap.as_str() != "/" {
-                let ap_builder = try_log!(
-                    NMAccessPointProxy::builder(conn).path(active_ap),
-                    "Failed to create access point proxy builder"
-                );
-                let ap = try_log!(
-                    ap_builder.build().await,
-                    "Failed to build access point proxy"
-                );
-                let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
-                let ssid = decode_ssid_or_empty(&ssid_bytes);
-                return Some(ssid.to_string());
-            }
+        if let Ok(active_ap) = wifi.active_access_point().await
+            && active_ap.as_str() != "/"
+        {
+            let ap_builder = try_log!(
+                NMAccessPointProxy::builder(conn).path(active_ap),
+                "Failed to create access point proxy builder"
+            );
+            let ap = try_log!(
+                ap_builder.build().await,
+                "Failed to build access point proxy"
+            );
+            let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
+            let ssid = decode_ssid_or_empty(&ssid_bytes);
+            return Some(ssid.to_string());
         }
     }
     None
@@ -97,21 +97,21 @@ pub(crate) async fn current_connection_info(conn: &Connection) -> Option<(String
         );
         let wifi = try_log!(wifi_builder.build().await, "Failed to build wireless proxy");
 
-        if let Ok(active_ap) = wifi.active_access_point().await {
-            if active_ap.as_str() != "/" {
-                let ap_builder = try_log!(
-                    NMAccessPointProxy::builder(conn).path(active_ap),
-                    "Failed to create access point proxy builder"
-                );
-                let ap = try_log!(
-                    ap_builder.build().await,
-                    "Failed to build access point proxy"
-                );
-                let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
-                let ssid = decode_ssid_or_empty(&ssid_bytes);
-                let frequency = ap.frequency().await.ok();
-                return Some((ssid.to_string(), frequency));
-            }
+        if let Ok(active_ap) = wifi.active_access_point().await
+            && active_ap.as_str() != "/"
+        {
+            let ap_builder = try_log!(
+                NMAccessPointProxy::builder(conn).path(active_ap),
+                "Failed to create access point proxy builder"
+            );
+            let ap = try_log!(
+                ap_builder.build().await,
+                "Failed to build access point proxy"
+            );
+            let ssid_bytes = try_log!(ap.ssid().await, "Failed to get SSID bytes");
+            let ssid = decode_ssid_or_empty(&ssid_bytes);
+            let frequency = ap.frequency().await.ok();
+            return Some((ssid.to_string(), frequency));
         }
     }
     None

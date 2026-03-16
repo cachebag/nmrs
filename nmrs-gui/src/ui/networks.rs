@@ -1,10 +1,10 @@
 use anyhow::Result;
-use gtk::prelude::*;
 use gtk::Align;
 use gtk::GestureClick;
+use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
 use nmrs::models::WifiSecurity;
-use nmrs::{models, NetworkManager};
+use nmrs::{NetworkManager, models};
 use std::rc::Rc;
 
 use crate::ui::connect;

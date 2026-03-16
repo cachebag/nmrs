@@ -9,10 +9,10 @@ use std::collections::HashMap;
 use zbus::Connection;
 use zvariant::{OwnedObjectPath, Value};
 
+use crate::Result;
 use crate::api::models::ConnectionError;
 use crate::util::utils::{connection_settings_proxy, settings_proxy};
 use crate::util::validation::validate_ssid;
-use crate::Result;
 
 /// Finds the D-Bus path of a saved connection by SSID or connection name.
 ///
@@ -63,12 +63,11 @@ pub(crate) async fn get_saved_connection_path(
         let body = msg.body();
         let all: HashMap<String, HashMap<String, Value>> = body.deserialize()?;
 
-        if let Some(conn_section) = all.get("connection") {
-            if let Some(Value::Str(id)) = conn_section.get("id") {
-                if id == ssid {
-                    return Ok(Some(cpath));
-                }
-            }
+        if let Some(conn_section) = all.get("connection")
+            && let Some(Value::Str(id)) = conn_section.get("id")
+            && id == ssid
+        {
+            return Ok(Some(cpath));
         }
     }
 
@@ -125,12 +124,11 @@ pub(crate) async fn list_saved_connections(conn: &Connection) -> Result<Vec<Stri
 
         if let Ok(msg) = cproxy.call_method("GetSettings", &()).await {
             let body = msg.body();
-            if let Ok(all) = body.deserialize::<HashMap<String, HashMap<String, Value>>>() {
-                if let Some(conn_section) = all.get("connection") {
-                    if let Some(Value::Str(id)) = conn_section.get("id") {
-                        connection_names.push(id.to_string());
-                    }
-                }
+            if let Ok(all) = body.deserialize::<HashMap<String, HashMap<String, Value>>>()
+                && let Some(conn_section) = all.get("connection")
+                && let Some(Value::Str(id)) = conn_section.get("id")
+            {
+                connection_names.push(id.to_string());
             }
         }
     }

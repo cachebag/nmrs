@@ -10,12 +10,12 @@ use std::str;
 use zbus::Connection;
 use zvariant::OwnedObjectPath;
 
+use crate::Result;
 use crate::api::models::ConnectionStateReason;
 use crate::dbus::{
     NMAccessPointProxy, NMActiveConnectionProxy, NMDeviceProxy, NMProxy, NMWirelessProxy,
 };
 use crate::types::constants::{device_type, frequency, signal_strength, wifi_mode};
-use crate::Result;
 
 /// Converts a Wi-Fi frequency in MHz to a channel number.
 ///
