@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+
+## [2.2.0] - 2026-03-17
 ### Added
 - Concurrency protection ([#268](https://github.com/cachebag/nmrs/pull/268))
 - Expose `WirelessHardwareEnabled` in API to reflect rkfill state ([#284](https://github.com/cachebag/nmrs/pull/284))
@@ -177,7 +179,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
 [2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
 [2.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.1
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.0.1...HEAD
+[2.2.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.2.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.2.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
