@@ -13,7 +13,7 @@ use crate::core::connection_settings::{
 };
 use crate::core::device::{
     is_connecting, list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready,
-    wifi_enabled,
+    wifi_enabled, wifi_hardware_enabled,
 };
 use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
@@ -422,6 +422,12 @@ impl NetworkManager {
     /// Enables or disables Wi-Fi.
     pub async fn set_wifi_enabled(&self, value: bool) -> Result<()> {
         set_wifi_enabled(&self.conn, value).await
+    }
+
+    /// Returns whether wireless hardware is currently enabled.
+    /// Reflects rfkill state which helps check if the radio is enabled or blocked.
+    pub async fn wifi_hardware_enabled(&self) -> Result<bool> {
+        wifi_hardware_enabled(&self.conn).await
     }
 
     /// Waits for a Wi-Fi device to become ready (disconnected or activated).

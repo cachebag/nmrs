@@ -278,6 +278,12 @@ pub(crate) async fn wifi_enabled(conn: &Connection) -> Result<bool> {
     Ok(nm.wireless_enabled().await?)
 }
 
+/// Returns whether wireless hardware is enabled.
+pub(crate) async fn wifi_hardware_enabled(conn: &Connection) -> Result<bool> {
+    let nm = NMProxy::new(conn).await?;
+    Ok(nm.wireless_hardware_enabled().await?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
