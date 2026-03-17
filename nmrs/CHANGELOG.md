@@ -5,6 +5,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ## [Unreleased]
 ### Added
 - Concurrency protection ([#268](https://github.com/cachebag/nmrs/pull/268))
+- Expose `WirelessHardwareEnabled` in API to reflect rkfill state ([#284](https://github.com/cachebag/nmrs/pull/284))
 
 ### Changed
 - Convert BDADDR to BlueZ device path via `bluez_device_path` helper ([#266](https://github.com/cachebag/nmrs/pull/266))
