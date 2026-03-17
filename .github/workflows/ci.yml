@@ -3,8 +3,20 @@ name: CI
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/nix.yml'
   pull_request:
     branches: [master, 2.x-dev]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/nix.yml'
 
 env:
   CARGO_TERM_COLOR: always

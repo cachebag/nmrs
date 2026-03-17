@@ -1,28 +1,30 @@
 name: Nix Derivation
+
 on:
-  pull_request:
-    branches: [ master ]  
-  push:
-    branches: [ master, 2.x-dev ]
+  pull_request_target:
+    branches: [master]
+    paths:
+      - 'Cargo.lock'
+      - 'package.nix'
+      - '.github/workflows/nix.yml'
 
 jobs:
-  build:
+  fix-hashes:
+    name: Fix Nix Hashes
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Install fixsha
         run: cargo install fixsha
@@ -30,19 +32,49 @@ jobs:
       - name: Run fixsha
         run: fixsha
 
-      - name: Commit hash fixes
-        if: github.event_name == 'pull_request'
+      - name: Push hash fix if needed
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ -n $(git status -s package.nix) ]]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add package.nix
-            
-            git commit --amend --no-edit
-
-            # Rebase onto latest base branch before pushing - prevents "Base branch was modified"
-            # when multiple PRs merge in quick succession
-            git fetch origin ${{ github.base_ref }}
-            git rebase origin/${{ github.base_ref }}
-            git push --force origin HEAD:${{ github.head_ref }}
+          if [[ -z $(git status -s package.nix) ]]; then
+            echo "No hash changes needed"
+            exit 0
           fi
+
+          CONTENT=$(base64 -w 0 package.nix)
+          SHA=$(gh api repos/${{ github.repository }}/contents/package.nix \
+            --jq '.sha' \
+            -H "Accept: application/vnd.github+json" \
+            --method GET \
+            -f ref=${{ github.event.pull_request.head.ref }})
+
+          gh api repos/${{ github.repository }}/contents/package.nix \
+            --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            -f message="fix(nix): update cargoHash" \
+            -f content="$CONTENT" \
+            -f sha="$SHA" \
+            -f branch=${{ github.event.pull_request.head.ref }}
+
+          echo "Nix hashes updated via API commit"
+
+      - name: Comment on fork PRs
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ -z $(git status -s package.nix) ]]; then
+            echo "No hash changes needed"
+            exit 0
+          fi
+
+          NEW_HASH=$(grep 'cargoHash' package.nix | sed 's/.*"\(.*\)".*/\1/')
+
+          gh pr comment ${{ github.event.pull_request.number }} \
+            -R ${{ github.repository }} \
+            --body "The \`cargoHash\` in \`package.nix\` needs updating. Please update it to:
+
+          \`\`\`nix
+          cargoHash = \"$NEW_HASH\";
+          \`\`\`"
