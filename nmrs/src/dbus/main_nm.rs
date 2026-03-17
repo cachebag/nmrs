@@ -25,6 +25,10 @@ pub trait NM {
     #[zbus(property)]
     fn set_wireless_enabled(&self, value: bool) -> zbus::Result<()>;
 
+    /// Whether wireless hardware is enabled.
+    #[zbus(property)]
+    fn wireless_hardware_enabled(&self) -> zbus::Result<bool>;
+
     /// Paths to all active connections.
     #[zbus(property)]
     fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;

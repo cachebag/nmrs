@@ -141,6 +141,23 @@ async fn test_wifi_enabled_get_set() {
     );
 }
 
+#[tokio::test]
+async fn test_wifi_hardware_enabled() {
+    require_networkmanager!();
+
+    let nm = NetworkManager::new()
+        .await
+        .expect("Failed to connect to NetworkManager");
+
+    require_wifi!(&nm);
+
+    // Read-only property — just verify the call succeeds
+    let _ = nm
+        .wifi_hardware_enabled()
+        .await
+        .expect("Failed to get WiFi hardware enabled state");
+}
+
 /// Test waiting for WiFi to be ready
 #[tokio::test]
 async fn test_wait_for_wifi_ready() {
