@@ -230,8 +230,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for 
 
 ## Requirements
 
-- **Rust**: 1.78.0 or later (for `nmrs` library)
-- **Rust**: 1.85.1 or later (for `nmrs-gui` with GTK4)
+- **Rust**: 1.94.0+ or later (for both `nmrs` and `nmrs-gui`)
 - **NetworkManager**: Running and accessible via D-Bus
 - **Linux**: This library is Linux-specific
 
