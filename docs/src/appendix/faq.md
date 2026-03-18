@@ -1,3 +1,93 @@
-# Faq
+# FAQ
 
-Documentation coming soon.
+## General
+
+### What is nmrs?
+
+nmrs is a Rust library for managing network connections on Linux via NetworkManager's D-Bus interface. It provides a safe, async API for Wi-Fi, Ethernet, Bluetooth, and VPN management.
+
+### What does nmrs stand for?
+
+**N**etwork**M**anager **R**u**s**t — nmrs.
+
+### Is nmrs production-ready?
+
+Yes. nmrs is at version 2.2.0 with a stable API. All public types are also `#[non_exhaustive]` to allow backward-compatible additions.
+
+### What Linux distributions are supported?
+
+Any distribution that runs NetworkManager. This includes Ubuntu, Fedora, Arch Linux, Debian, openSUSE, NixOS, and many others.
+
+### Does nmrs work on macOS or Windows?
+
+No. nmrs is Linux-specific since it communicates with NetworkManager over D-Bus, which is a Linux service.
+
+## Library
+
+### Which async runtime should I use?
+
+nmrs works with any async runtime (Tokio, async-std, smol, GLib). Tokio is recommended and used in all examples. See [Async Runtime Support](../advanced/async-runtimes.md).
+
+### Can I use nmrs without an async runtime?
+
+No. D-Bus communication is inherently async. You can use `block_on()` from smol or `tokio::runtime::Runtime::block_on()` if you need a synchronous wrapper.
+
+### Is NetworkManager the only way to manage Wi-Fi on Linux?
+
+No, but it's the most widely used network management daemon. Other options include `iwd`, `connman`, and `wpa_supplicant` (direct). nmrs specifically targets NetworkManager.
+
+### Do I need root permissions?
+
+Usually no. NetworkManager uses PolicyKit for authorization, and most desktop Linux setups grant network management permissions to the logged-in user. If you're running in a headless environment, you may need to configure PolicyKit rules. See [Requirements](../getting-started/requirements.md).
+
+### Can I connect to multiple networks simultaneously?
+
+A device can only have one active connection at a time. However, you can have different connections on different devices (e.g., Wi-Fi on `wlan0` and Ethernet on `eth0` simultaneously).
+
+### Can I make concurrent connection calls?
+
+No. Concurrent connection operations (calling `connect()` from multiple tasks) are not supported. Use `is_connecting()` to check before starting a new connection.
+
+### How do I handle saved connections?
+
+When nmrs connects to a network, NetworkManager saves the profile. On subsequent connections, the saved profile is reused automatically. You don't need to provide credentials again. Use `forget()` to delete a saved profile.
+
+## VPN
+
+### Which VPN protocols are supported?
+
+Currently only WireGuard. OpenVPN support is planned and actively being developed.
+
+### Do I need the WireGuard kernel module?
+
+Yes. WireGuard is built into the Linux kernel since version 5.6. On older kernels, install the `wireguard` module. NetworkManager's WireGuard support requires NM 1.16+.
+
+### Can I import a `.conf` WireGuard file?
+
+Not directly. You need to extract the values from the config file and pass them to `VpnCredentials`. Direct `.conf` file import is not yet implemented.
+
+## GUI
+
+### Is nmrs-gui required to use nmrs?
+
+No. `nmrs` is a library crate. `nmrs-gui` is a separate application built on top of it. You can use the library without the GUI.
+
+### Does nmrs-gui work on X11?
+
+Yes. While it's designed for Wayland, it works on X11 through GTK4's X11 backend.
+
+### Can I use nmrs-gui with a tiling window manager?
+
+Yes! nmrs-gui is designed to work well with tiling WMs like Hyprland, Sway, and i3. Add a floating window rule for `org.nmrs.ui`. See [Configuration](../gui/configuration.md).
+
+### How do I change the theme?
+
+Use the theme dropdown in the header bar, or edit `~/.config/nmrs/theme`. See [Themes](../gui/themes.md).
+
+## Troubleshooting
+
+### Where can I get help?
+
+- **Discord:** [discord.gg/Sk3VfrHrN4](https://discord.gg/Sk3VfrHrN4)
+- **GitHub Issues:** [github.com/cachebag/nmrs/issues](https://github.com/cachebag/nmrs/issues)
+- **Troubleshooting Guide:** [Troubleshooting](./troubleshooting.md)
