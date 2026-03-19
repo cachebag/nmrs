@@ -9,7 +9,7 @@ license.workspace = true
 repository.workspace = true
 keywords = ["networkmanager", "gui", "gtk", "linux"]
 categories = ["gui"]
-publish = false
+publish = true
 
 [dependencies]
 nmrs.workspace = true  
