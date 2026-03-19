@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use tokio::sync::watch;
 use zbus::Connection;
 
@@ -18,7 +20,7 @@ use crate::core::device::{
 use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
 use crate::models::{
-    BluetoothDevice, BluetoothIdentity, VpnConnection, VpnConnectionInfo, VpnCredentials,
+    BluetoothDevice, BluetoothIdentity, VpnConfig, VpnConnection, VpnConnectionInfo, VpnCredentials,
 };
 use crate::monitoring::device as device_monitor;
 use crate::monitoring::info::show_details;
@@ -265,17 +267,17 @@ impl NetworkManager {
         connect_bluetooth(&self.conn, name, identity, Some(self.timeout_config)).await
     }
 
-    /// Connects to a VPN using the provided credentials.
+    /// Connects to a VPN using the provided configuration.
     ///
     /// Currently supports WireGuard VPN connections. The function checks for an
     /// existing saved VPN connection by name. If found, it activates the saved
     /// connection. If not found, it creates a new VPN connection with the provided
-    /// credentials.
+    /// configuration.
     ///
     /// # Example
     ///
     /// ```rust
-    /// use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+    /// use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
     ///
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
@@ -286,8 +288,7 @@ impl NetworkManager {
     ///     vec!["0.0.0.0/0".into()],
     /// ).with_persistent_keepalive(25);
     ///
-    /// let creds = VpnCredentials::new(
-    ///     VpnType::WireGuard,
+    /// let config = WireGuardConfig::new(
     ///     "MyVPN",
     ///     "vpn.example.com:51820",
     ///     "your_private_key",
@@ -295,7 +296,7 @@ impl NetworkManager {
     ///     vec![peer],
     /// ).with_dns(vec!["1.1.1.1".into()]);
     ///
-    /// nm.connect_vpn(creds).await?;
+    /// nm.connect_vpn(config).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -304,10 +305,13 @@ impl NetworkManager {
     ///
     /// Returns an error if:
     /// - NetworkManager is not running or accessible
-    /// - The credentials are invalid or incomplete
+    /// - The configuration is invalid or incomplete
     /// - The VPN connection fails to activate
-    pub async fn connect_vpn(&self, creds: VpnCredentials) -> Result<()> {
-        connect_vpn(&self.conn, creds, Some(self.timeout_config)).await
+    pub async fn connect_vpn<C>(&self, config: C) -> Result<()>
+    where
+        C: VpnConfig + Into<VpnCredentials>,
+    {
+        connect_vpn(&self.conn, config.into(), Some(self.timeout_config)).await
     }
 
     /// Disconnects from an active VPN connection by name.

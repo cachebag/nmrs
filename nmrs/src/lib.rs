@@ -35,7 +35,7 @@
 //! ## VPN Connection (WireGuard)
 //!
 //! ```rust
-//! use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+//! use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
 //!
 //! # async fn example() -> nmrs::Result<()> {
 //! let nm = NetworkManager::new().await?;
@@ -47,8 +47,7 @@
 //!     vec!["0.0.0.0/0".into()],
 //! ).with_persistent_keepalive(25);
 //!
-//! let creds = VpnCredentials::new(
-//!     VpnType::WireGuard,
+//! let config = WireGuardConfig::new(
 //!     "MyVPN",
 //!     "vpn.example.com:51820",
 //!     "your_private_key",
@@ -57,7 +56,7 @@
 //! ).with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
 //!
 //! // Connect to VPN
-//! nm.connect_vpn(creds).await?;
+//! nm.connect_vpn(config).await?;
 //!
 //! // List VPN connections
 //! let vpns = nm.list_vpn_connections().await?;
@@ -88,9 +87,10 @@
 //! - [`Device`] - Represents a network device (WiFi, Ethernet, etc.)
 //! - [`Network`] - Represents a discovered WiFi network
 //! - [`WifiSecurity`] - Security types (Open, WPA-PSK, WPA-EAP)
-//! - [`VpnCredentials`] - VPN connection credentials
+//! - [`VpnCredentials`] - Legacy VPN connection credentials
 //! - [`VpnType`] - Supported VPN types (WireGuard, etc.)
 //! - [`VpnConnection`] - Active VPN connection information
+//! - [`WireGuardConfig`] - Preferred WireGuard connection configuration
 //! - [`WireGuardPeer`] - WireGuard peer configuration
 //! - [`ConnectionError`] - Comprehensive error types
 //!
@@ -321,12 +321,13 @@ pub mod models {
 }
 
 // Re-export commonly used types at crate root for convenience
+#[allow(deprecated)]
 pub use api::models::{
     ActiveConnectionState, BluetoothDevice, BluetoothIdentity, BluetoothNetworkRole,
     ConnectionError, ConnectionOptions, ConnectionStateReason, Device, DeviceState, DeviceType,
-    EapMethod, EapOptions, Network, NetworkInfo, Phase2, StateReason, TimeoutConfig, VpnConnection,
-    VpnConnectionInfo, VpnCredentials, VpnType, WifiSecurity, WireGuardPeer,
-    connection_state_reason_to_error, reason_to_error,
+    EapMethod, EapOptions, Network, NetworkInfo, Phase2, StateReason, TimeoutConfig, VpnConfig,
+    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnType, WifiSecurity, WireGuardConfig,
+    WireGuardPeer, connection_state_reason_to_error, reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
 
