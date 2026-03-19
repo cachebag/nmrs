@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -614,6 +616,93 @@ fn test_vpn_credentials_builder_basic() {
     assert_eq!(creds.peers.len(), 1);
     assert!(creds.dns.is_none());
     assert!(creds.mtu.is_none());
+}
+
+#[test]
+fn test_wireguard_config_basic() {
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".into()],
+    );
+
+    let config = WireGuardConfig::new(
+        "TestVPN",
+        "vpn.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2/24",
+        vec![peer],
+    );
+
+    assert_eq!(config.name, "TestVPN");
+    assert_eq!(config.gateway, "vpn.example.com:51820");
+    assert_eq!(
+        config.private_key,
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM="
+    );
+    assert_eq!(config.address, "10.0.0.2/24");
+    assert_eq!(config.peers.len(), 1);
+    assert!(config.dns.is_none());
+    assert!(config.mtu.is_none());
+}
+
+#[test]
+fn test_wireguard_config_implements_vpn_config() {
+    let uuid = Uuid::new_v4();
+    let config = WireGuardConfig::new(
+        "TestVPN",
+        "vpn.example.com:51820",
+        "private_key",
+        "10.0.0.2/24",
+        vec![WireGuardPeer::new(
+            "public_key",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        )],
+    )
+    .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+    .with_mtu(1420)
+    .with_uuid(uuid);
+
+    let vpn_config: &dyn VpnConfig = &config;
+
+    assert_eq!(vpn_config.vpn_type(), VpnType::WireGuard);
+    assert_eq!(vpn_config.name(), "TestVPN");
+    assert_eq!(vpn_config.gateway(), "vpn.example.com:51820");
+    assert_eq!(
+        vpn_config.dns(),
+        Some(["1.1.1.1".to_string(), "8.8.8.8".to_string()].as_slice())
+    );
+    assert_eq!(vpn_config.mtu(), Some(1420));
+    assert_eq!(vpn_config.uuid(), Some(uuid));
+}
+
+#[test]
+fn test_wireguard_config_roundtrips_through_vpn_credentials() {
+    let config = WireGuardConfig::new(
+        "TestVPN",
+        "vpn.example.com:51820",
+        "private_key",
+        "10.0.0.2/24",
+        vec![WireGuardPeer::new(
+            "public_key",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        )],
+    )
+    .with_dns(vec!["1.1.1.1".into()])
+    .with_mtu(1420);
+
+    let legacy: VpnCredentials = config.clone().into();
+    let roundtrip = WireGuardConfig::from(legacy);
+
+    assert_eq!(roundtrip.name, config.name);
+    assert_eq!(roundtrip.gateway, config.gateway);
+    assert_eq!(roundtrip.private_key, config.private_key);
+    assert_eq!(roundtrip.address, config.address);
+    assert_eq!(roundtrip.peers.len(), config.peers.len());
+    assert_eq!(roundtrip.dns, config.dns);
+    assert_eq!(roundtrip.mtu, config.mtu);
 }
 
 #[test]

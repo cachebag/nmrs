@@ -62,6 +62,7 @@
 //! let settings = build_wireguard_connection(&creds, &opts).unwrap();
 //! // Pass settings to NetworkManager's AddAndActivateConnection
 //! ```
+#![allow(deprecated)]
 
 use std::collections::HashMap;
 use zvariant::Value;

@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use uuid::Uuid;
 
 use super::device::DeviceState;
@@ -7,20 +9,39 @@ use super::device::DeviceState;
 /// Identifies the VPN protocol/technology used for the connection.
 /// Currently only WireGuard is supported.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VpnType {
     /// WireGuard - modern, high-performance VPN protocol.
     WireGuard,
 }
 
-/// VPN Credentials for establishing a VPN connection.
+/// Common metadata shared by VPN connection configurations.
+pub trait VpnConfig: Send + Sync + std::fmt::Debug {
+    /// Returns the VPN protocol used by this configuration.
+    fn vpn_type(&self) -> VpnType;
+
+    /// Returns the connection name.
+    fn name(&self) -> &str;
+
+    /// Returns the gateway endpoint.
+    fn gateway(&self) -> &str;
+
+    /// Returns the configured DNS servers, if any.
+    fn dns(&self) -> Option<&[String]>;
+
+    /// Returns the configured MTU, if any.
+    fn mtu(&self) -> Option<u32>;
+
+    /// Returns the configured UUID, if any.
+    fn uuid(&self) -> Option<Uuid>;
+}
+
+/// WireGuard configuration for establishing a VPN connection.
 ///
 /// Stores the necessary information to configure and connect to a VPN.
-/// Currently supports WireGuard VPN connections.
 ///
 /// # Fields
 ///
-/// - `vpn_type`: The type of VPN (currently only WireGuard)
 /// - `name`: Unique identifier for the connection
 /// - `gateway`: VPN gateway endpoint (e.g., "vpn.example.com:51820")
 /// - `private_key`: Client's WireGuard private key
@@ -33,7 +54,7 @@ pub enum VpnType {
 /// # Example
 ///
 /// ```rust
-/// use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
+/// use nmrs::{WireGuardConfig, WireGuardPeer};
 ///
 /// let peer = WireGuardPeer::new(
 ///     "server_public_key",
@@ -41,8 +62,7 @@ pub enum VpnType {
 ///     vec!["0.0.0.0/0".into()],
 /// ).with_persistent_keepalive(25);
 ///
-/// let creds = VpnCredentials::new(
-///     VpnType::WireGuard,
+/// let config = WireGuardConfig::new(
 ///     "HomeVPN",
 ///     "vpn.home.com:51820",
 ///     "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789=",
@@ -50,6 +70,151 @@ pub enum VpnType {
 ///     vec![peer],
 /// ).with_dns(vec!["1.1.1.1".into()]);
 /// ```
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct WireGuardConfig {
+    /// Unique name for the connection profile.
+    pub name: String,
+    /// VPN gateway endpoint (e.g., "vpn.example.com:51820").
+    pub gateway: String,
+    /// Client's WireGuard private key (base64 encoded).
+    pub private_key: String,
+    /// Client's IP address with CIDR notation (e.g., "10.0.0.2/24").
+    pub address: String,
+    /// List of WireGuard peers to connect to.
+    pub peers: Vec<WireGuardPeer>,
+    /// Optional DNS servers to use when connected.
+    pub dns: Option<Vec<String>>,
+    /// Optional Maximum Transmission Unit size.
+    pub mtu: Option<u32>,
+    /// Optional UUID for the connection (auto-generated if not provided).
+    pub uuid: Option<Uuid>,
+}
+
+impl WireGuardConfig {
+    /// Creates new `WireGuardConfig` with the required fields.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{WireGuardConfig, WireGuardPeer};
+    ///
+    /// let peer = WireGuardPeer::new(
+    ///     "server_public_key",
+    ///     "vpn.example.com:51820",
+    ///     vec!["0.0.0.0/0".into()],
+    /// );
+    ///
+    /// let config = WireGuardConfig::new(
+    ///     "MyVPN",
+    ///     "vpn.example.com:51820",
+    ///     "client_private_key",
+    ///     "10.0.0.2/24",
+    ///     vec![peer],
+    /// );
+    /// ```
+    pub fn new(
+        name: impl Into<String>,
+        gateway: impl Into<String>,
+        private_key: impl Into<String>,
+        address: impl Into<String>,
+        peers: Vec<WireGuardPeer>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            gateway: gateway.into(),
+            private_key: private_key.into(),
+            address: address.into(),
+            peers,
+            dns: None,
+            mtu: None,
+            uuid: None,
+        }
+    }
+
+    /// Sets the DNS servers to use when connected.
+    #[must_use]
+    pub fn with_dns(mut self, dns: Vec<String>) -> Self {
+        self.dns = Some(dns);
+        self
+    }
+
+    /// Sets the MTU (Maximum Transmission Unit) size.
+    #[must_use]
+    pub fn with_mtu(mut self, mtu: u32) -> Self {
+        self.mtu = Some(mtu);
+        self
+    }
+
+    /// Sets the UUID for the connection.
+    #[must_use]
+    pub fn with_uuid(mut self, uuid: Uuid) -> Self {
+        self.uuid = Some(uuid);
+        self
+    }
+}
+
+impl VpnConfig for WireGuardConfig {
+    fn vpn_type(&self) -> VpnType {
+        VpnType::WireGuard
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn gateway(&self) -> &str {
+        &self.gateway
+    }
+
+    fn dns(&self) -> Option<&[String]> {
+        self.dns.as_deref()
+    }
+
+    fn mtu(&self) -> Option<u32> {
+        self.mtu
+    }
+
+    fn uuid(&self) -> Option<Uuid> {
+        self.uuid
+    }
+}
+
+impl From<WireGuardConfig> for VpnCredentials {
+    fn from(config: WireGuardConfig) -> Self {
+        Self {
+            vpn_type: VpnType::WireGuard,
+            name: config.name,
+            gateway: config.gateway,
+            private_key: config.private_key,
+            address: config.address,
+            peers: config.peers,
+            dns: config.dns,
+            mtu: config.mtu,
+            uuid: config.uuid,
+        }
+    }
+}
+
+impl From<VpnCredentials> for WireGuardConfig {
+    fn from(config: VpnCredentials) -> Self {
+        Self {
+            name: config.name,
+            gateway: config.gateway,
+            private_key: config.private_key,
+            address: config.address,
+            peers: config.peers,
+            dns: config.dns,
+            mtu: config.mtu,
+            uuid: config.uuid,
+        }
+    }
+}
+
+/// Legacy VPN credentials for establishing a VPN connection.
+///
+/// Prefer [`WireGuardConfig`] for new WireGuard connections.
+#[deprecated(note = "Use WireGuardConfig instead.")]
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct VpnCredentials {
@@ -75,6 +240,8 @@ pub struct VpnCredentials {
 
 impl VpnCredentials {
     /// Creates new `VpnCredentials` with the required fields.
+    ///
+    /// Prefer [`WireGuardConfig::new`] for new code.
     ///
     /// # Examples
     ///
@@ -118,31 +285,6 @@ impl VpnCredentials {
     }
 
     /// Creates a new `VpnCredentials` builder.
-    ///
-    /// This provides a more ergonomic way to construct VPN credentials with a fluent API,
-    /// making it harder to mix up parameter order and easier to see what each value represents.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
-    ///
-    /// let peer = WireGuardPeer::new(
-    ///     "server_public_key",
-    ///     "vpn.example.com:51820",
-    ///     vec!["0.0.0.0/0".into()],
-    /// );
-    ///
-    /// let creds = VpnCredentials::builder()
-    ///     .name("MyVPN")
-    ///     .wireguard()
-    ///     .gateway("vpn.example.com:51820")
-    ///     .private_key("client_private_key")
-    ///     .address("10.0.0.2/24")
-    ///     .add_peer(peer)
-    ///     .with_dns(vec!["1.1.1.1".into()])
-    ///     .build();
-    /// ```
     #[must_use]
     pub fn builder() -> VpnCredentialsBuilder {
         VpnCredentialsBuilder::default()
@@ -167,6 +309,32 @@ impl VpnCredentials {
     pub fn with_uuid(mut self, uuid: Uuid) -> Self {
         self.uuid = Some(uuid);
         self
+    }
+}
+
+impl VpnConfig for VpnCredentials {
+    fn vpn_type(&self) -> VpnType {
+        self.vpn_type
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn gateway(&self) -> &str {
+        &self.gateway
+    }
+
+    fn dns(&self) -> Option<&[String]> {
+        self.dns.as_deref()
+    }
+
+    fn mtu(&self) -> Option<u32> {
+        self.mtu
+    }
+
+    fn uuid(&self) -> Option<Uuid> {
+        self.uuid
     }
 }
 
