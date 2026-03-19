@@ -3,6 +3,8 @@
 //! This module provides validation functions for various inputs to ensure
 //! they meet NetworkManager's requirements before attempting D-Bus operations.
 
+#![allow(deprecated)]
+
 use crate::api::models::{ConnectionError, VpnCredentials, WifiSecurity, WireGuardPeer};
 
 /// Maximum SSID length in bytes (802.11 standard).
