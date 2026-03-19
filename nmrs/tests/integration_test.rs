@@ -1,6 +1,6 @@
 use nmrs::{
-    ConnectionError, DeviceState, DeviceType, NetworkManager, StateReason, VpnCredentials, VpnType,
-    WifiSecurity, WireGuardPeer, reason_to_error,
+    ConnectionError, DeviceState, DeviceType, NetworkManager, StateReason, VpnType, WifiSecurity,
+    WireGuardConfig, WireGuardPeer, reason_to_error,
 };
 use std::time::Duration;
 use tokio::time::sleep;
@@ -869,8 +869,8 @@ async fn test_connect_wired() {
     }
 }
 
-/// Helper to create test VPN credentials
-fn create_test_vpn_creds(name: &str) -> VpnCredentials {
+/// Helper to create test VPN configuration
+fn create_test_vpn_creds(name: &str) -> WireGuardConfig {
     let peer = WireGuardPeer::new(
         "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
         "test.example.com:51820",
@@ -878,8 +878,7 @@ fn create_test_vpn_creds(name: &str) -> VpnCredentials {
     )
     .with_persistent_keepalive(25);
 
-    VpnCredentials::new(
-        VpnType::WireGuard,
+    WireGuardConfig::new(
         name,
         "test.example.com:51820",
         "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -1047,13 +1046,12 @@ async fn test_wireguard_peer_structure() {
     assert_eq!(peer.persistent_keepalive, Some(25));
 }
 
-/// Test VPN credentials structure
+/// Test VPN configuration structure
 #[tokio::test]
 async fn test_vpn_credentials_structure() {
     let creds = create_test_vpn_creds("test_credentials");
 
     assert_eq!(creds.name, "test_credentials");
-    assert_eq!(creds.vpn_type, VpnType::WireGuard);
     assert_eq!(creds.peers.len(), 1);
     assert_eq!(creds.address, "10.100.0.2/24");
     assert!(creds.dns.is_some());
