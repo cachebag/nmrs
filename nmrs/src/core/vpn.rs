@@ -9,6 +9,7 @@
 //!
 //! These functions are not part of the public API and should be accessed
 //! through the [`NetworkManager`][crate::NetworkManager] interface.
+#![allow(deprecated)]
 
 use log::{debug, info, warn};
 use std::collections::HashMap;

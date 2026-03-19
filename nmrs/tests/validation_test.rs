@@ -3,7 +3,7 @@
 //! These tests verify that invalid inputs are rejected before attempting
 //! D-Bus operations, providing clear error messages to users.
 
-use nmrs::{ConnectionError, EapOptions, VpnCredentials, VpnType, WifiSecurity, WireGuardPeer};
+use nmrs::{ConnectionError, EapOptions, WifiSecurity, WireGuardConfig, WireGuardPeer};
 use zvariant::OwnedObjectPath;
 
 #[test]
@@ -121,8 +121,7 @@ fn test_invalid_vpn_empty_name() {
     )
     .with_persistent_keepalive(25);
 
-    let creds = VpnCredentials::new(
-        VpnType::WireGuard,
+    let creds = WireGuardConfig::new(
         "", // Empty name should be rejected
         "vpn.example.com:51820",
         "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -144,8 +143,7 @@ fn test_invalid_vpn_gateway_no_port() {
     )
     .with_persistent_keepalive(25);
 
-    let creds = VpnCredentials::new(
-        VpnType::WireGuard,
+    let creds = WireGuardConfig::new(
         "TestVPN",
         "vpn.example.com", // Missing port
         "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -160,8 +158,7 @@ fn test_invalid_vpn_gateway_no_port() {
 
 #[test]
 fn test_invalid_vpn_no_peers() {
-    let creds = VpnCredentials::new(
-        VpnType::WireGuard,
+    let creds = WireGuardConfig::new(
         "TestVPN",
         "vpn.example.com:51820",
         "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -183,8 +180,7 @@ fn test_invalid_vpn_bad_cidr() {
     )
     .with_persistent_keepalive(25);
 
-    let creds = VpnCredentials::new(
-        VpnType::WireGuard,
+    let creds = WireGuardConfig::new(
         "TestVPN",
         "vpn.example.com:51820",
         "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -206,8 +202,7 @@ fn test_invalid_vpn_mtu_too_small() {
     )
     .with_persistent_keepalive(25);
 
-    let creds = VpnCredentials::new(
-        VpnType::WireGuard,
+    let creds = WireGuardConfig::new(
         "TestVPN",
         "vpn.example.com:51820",
         "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -230,8 +225,7 @@ fn test_valid_vpn_credentials() {
     )
     .with_persistent_keepalive(25);
 
-    let creds = VpnCredentials::new(
-        VpnType::WireGuard,
+    let creds = WireGuardConfig::new(
         "TestVPN",
         "vpn.example.com:51820",
         "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
