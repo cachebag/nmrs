@@ -112,7 +112,7 @@ To follow and/or discuss the development of nmrs, you can join the [public Disco
  
 # <p align="center"> nmrs-gui </p>
 
-![Version](https://img.shields.io/badge/nmrs--gui-1.1.0-orange?style=flat-square)
+[![Crates.io](https://img.shields.io/crates/v/nmrs-gui)](https://crates.io/crates/nmrs-gui)
 [![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml)
 
 This repository also includes `nmrs-gui`, a Wayland-compatible NetworkManager frontend built with GTK4.
