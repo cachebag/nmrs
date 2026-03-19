@@ -52,7 +52,7 @@ jobs:
         run: |
           mkdir -p release
           cp target/release/nmrs-gui release/
-          cp LICENSE release/
+          cp LICENSE-MIT LICENSE-APACHE release/
           cp README.md release/
           cd release
           tar -czf nmrs-gui-${{ env.VERSION }}-x86_64-linux.tar.gz *

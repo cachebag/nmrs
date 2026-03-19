@@ -4,6 +4,7 @@ All notable changes to the `nmrs-gui` crate will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-03-19
 ### Fixed
 - Custom `~/.config/nmrs/style.css` is now applied after the saved theme, ensuring it always takes precedence over any predefined theme ([#274](https://github.com/cachebag/nmrs/pull/274))
 - Fixed header status label inflating natural width with long status strings ([#279](https://github.com/cachebag/nmrs/pull/279))
@@ -85,7 +86,8 @@ All notable changes to the `nmrs-gui` crate will be documented in this file.
 ### Documentation
 - Initial README with installation and usage instructions
 
-[Unreleased]: https://github.com/cachebag/nmrs/compare/gui-v1.1.0...HEAD
+[1.5.0]: https://github.com/cachebag/nmrs/compare/gui-v1.1.0...gui-v1.5.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/gui-v1.5.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/gui-v0.5.0-beta...gui-v1.1.0
 [0.5.0-beta]: https://github.com/cachebag/nmrs/compare/v0.4.0-beta...gui-v0.5.0-beta
 [0.4.0-beta]: https://github.com/cachebag/nmrs/compare/v0.3.0-beta...v0.4.0-beta
