@@ -6,22 +6,6 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ### Changed
 - Introduce `VpnConfig` trait and refactor `connect_vpn` signature ([#303](https://github.com/cachebag/nmrs/pull/303))
 
-### Added
-- `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
-- OpenVPN connection settings model expansion ([#309](https://github.com/cachebag/nmrs/pull/309))
-- Multi-VPN plumbing: `detect_vpn_type()`, `VpnType::OpenVpn`, and shared detection across connect, disconnect, and list VPN flows ([#311](https://github.com/cachebag/nmrs/pull/311))
-- `.ovpn` profile lexer and parser for translating OpenVPN configs toward NetworkManager ([#314](https://github.com/cachebag/nmrs/pull/314))
-- Unit tests and parser refactors for `.ovpn` parsing ([#316](https://github.com/cachebag/nmrs/pull/316))
-- OpenVPN builder: compression, proxy, and `build_openvpn_connection()` ([#315](https://github.com/cachebag/nmrs/pull/315))
-- `VpnConfiguration` to dispatch WireGuard vs OpenVPN; `connect_vpn` wired to the OpenVPN builder ([#322](https://github.com/cachebag/nmrs/pull/322))
-- `is_hotspot` method for networks in AP mode 3 ([#324](https://github.com/cachebag/nmrs/pull/324)) 
-- `app.lock` now created in `$XDG_DATA_DIR` (nmrs) ([#310](https://github.com/cachebag/nmrs/pull/310))
-- Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
-
-### Fixed
-- Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
-- `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
-
 ## [2.2.0] - 2026-03-17
 ### Added
 - Concurrency protection ([#268](https://github.com/cachebag/nmrs/pull/268))
@@ -208,3 +192,4 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [0.2.0-beta]: https://github.com/cachebag/nmrs/compare/v0.1.1-beta...v0.2.0-beta
 [0.1.1-beta]: https://github.com/cachebag/nmrs/compare/v0.1.0-beta...v0.1.1-beta
 [0.1.0-beta]: https://github.com/cachebag/nmrs/releases/tag/v0.1.0-beta
+
