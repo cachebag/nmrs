@@ -668,6 +668,7 @@ fn test_wireguard_config_implements_vpn_config() {
 
     assert_eq!(vpn_config.vpn_type(), VpnType::WireGuard);
     assert_eq!(vpn_config.name(), "TestVPN");
+    assert_eq!(vpn_config.gateway(), "vpn.example.com:51820");
     assert_eq!(
         vpn_config.dns(),
         Some(["1.1.1.1".to_string(), "8.8.8.8".to_string()].as_slice())
