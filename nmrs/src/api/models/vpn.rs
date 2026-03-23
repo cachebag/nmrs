@@ -17,34 +17,47 @@ pub enum VpnType {
 }
 
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub enum OpenVpnAuthType {
     Password,
     Tls, 
     PasswordTls,
     StaticKey,
 }
-
+#[non_exhaustive]
+#[derive(Debug, Clone)]
 pub struct OpenVpnConfig {
     pub name: String,
     pub remote: String,
     pub port: u16,
     pub tcp: bool,
-    pub credentials: Credentials,
-    pub ca_cert: String,
-    pub client_cert: String,
-    pub client_key: String,
-    pub key_password: String,
+    pub credentials: OpenVpnCredentials,
+    pub certs: OpenVpnCerts,
     pub auth_type: OpenVpnAuthType, 
+    pub common: OpenVpnCommon
+}
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct OpenVpnCredentials{
+    pub username: String, 
+    pub password: String
+}
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct OpenVpnCerts{
+    pub ca_cert: String,
+    pub client_cert: String, 
+    pub client_key: String, 
+    pub key_password: String,
+}
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct OpenVpnCommon{
+    pub auth: String,
     pub cipher: String,
     pub dns: Option<Vec<String>>,
     pub mtu: Option<u32>, 
     pub uuid: Option<Uuid>
-
-}
-
-pub struct Credentials{
-    pub username: String, 
-    pub password: String
 }
 
 /// Common metadata shared by VPN connection configurations.
