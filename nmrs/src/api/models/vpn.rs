@@ -13,6 +13,38 @@ use super::device::DeviceState;
 pub enum VpnType {
     /// WireGuard - modern, high-performance VPN protocol.
     WireGuard,
+    OpenVpn
+}
+
+#[non_exhaustive]
+pub enum OpenVpnAuthType {
+    Password,
+    Tls, 
+    PasswordTls,
+    StaticKey,
+}
+
+pub struct OpenVpnConfig {
+    pub name: String,
+    pub remote: String,
+    pub port: u16,
+    pub tcp: bool,
+    pub credentials: Credentials,
+    pub ca_cert: String,
+    pub client_cert: String,
+    pub client_key: String,
+    pub key_password: String,
+    pub auth_type: OpenVpnAuthType, 
+    pub cipher: String,
+    pub dns: Option<Vec<String>>,
+    pub mtu: Option<u32>, 
+    pub uuid: Option<Uuid>
+
+}
+
+pub struct Credentials{
+    pub username: String, 
+    pub password: String
 }
 
 /// Common metadata shared by VPN connection configurations.
@@ -203,6 +235,9 @@ impl From<VpnCredentials> for WireGuardConfig {
         }
     }
 }
+
+
+
 
 /// Legacy VPN credentials for establishing a VPN connection.
 ///
