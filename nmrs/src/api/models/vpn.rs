@@ -1,5 +1,7 @@
 #![allow(deprecated)]
 
+use std::sync::Arc;
+
 use uuid::Uuid;
 
 use super::device::DeviceState;
@@ -13,16 +15,40 @@ use super::device::DeviceState;
 pub enum VpnType {
     /// WireGuard - modern, high-performance VPN protocol.
     WireGuard,
-    OpenVpn
+    OpenVpn,
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum OpenVpnAuthType {
     Password,
-    Tls, 
+    Tls,
     PasswordTls,
     StaticKey,
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct OpenVpnCredentials {
+    pub username: String,
+    pub password: String,
+}
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct OpenVpnCerts {
+    pub ca_cert: String,
+    pub client_cert: String,
+    pub client_key: String,
+    pub key_password: String,
+}
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct OpenVpnCommon {
+    pub auth: String,
+    pub cipher: String,
+    pub dns: Option<Vec<String>>,
+    pub mtu: Option<u32>,
+    pub uuid: Option<Uuid>,
 }
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -33,31 +59,56 @@ pub struct OpenVpnConfig {
     pub tcp: bool,
     pub credentials: OpenVpnCredentials,
     pub certs: OpenVpnCerts,
-    pub auth_type: OpenVpnAuthType, 
-    pub common: OpenVpnCommon
+    pub auth_type: OpenVpnAuthType,
+    pub common: OpenVpnCommon,
 }
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub struct OpenVpnCredentials{
-    pub username: String, 
-    pub password: String
-}
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub struct OpenVpnCerts{
-    pub ca_cert: String,
-    pub client_cert: String, 
-    pub client_key: String, 
-    pub key_password: String,
-}
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub struct OpenVpnCommon{
-    pub auth: String,
-    pub cipher: String,
-    pub dns: Option<Vec<String>>,
-    pub mtu: Option<u32>, 
-    pub uuid: Option<Uuid>
+
+impl OpenVpnConfig {
+    /// Creates new `OpenVpnConfig` with required fields
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nmrs::{OpenVpnConfig, OpenVpnCredentials, OpenVpnCerts, OpenVpnCommon};
+    ///
+    /// let config = OpenVpnConfig::new(
+    ///     "MyVpn",
+    ///     "vpn.example.com",
+    ///     51820,
+    ///     True,
+    ///     new_credentials,
+    ///     new_certs,
+    ///     new_auth_type,
+    ///     common_fields
+    ///     );
+    ///
+    ///
+    ///
+    ///
+    ///
+    /// ```
+
+    pub fn new(
+        name: impl Into<String>,
+        remote: impl Into<String>,
+        port: impl Into<u16>,
+        tcp: impl Into<bool>,
+        credentials: impl Into<OpenVpnCredentials>,
+        certs: impl Into<OpenVpnCerts>,
+        auth_type: impl Into<OpenVpnAuthType>,
+        common: impl Into<OpenVpnCommon>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            remote: remote.into(),
+            port: port.into(),
+            tcp: tcp.into(),
+            credentials: credentials.into(),
+            certs: certs.into(),
+            auth_type: auth_type.into(),
+            common: common.into(),
+        }
+    }
 }
 
 /// Common metadata shared by VPN connection configurations.
@@ -248,9 +299,6 @@ impl From<VpnCredentials> for WireGuardConfig {
         }
     }
 }
-
-
-
 
 /// Legacy VPN credentials for establishing a VPN connection.
 ///
