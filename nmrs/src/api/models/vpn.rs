@@ -13,6 +13,7 @@ use super::device::DeviceState;
 pub enum VpnType {
     /// WireGuard - modern, high-performance VPN protocol.
     WireGuard,
+    OpenVpn,
 }
 
 /// Common metadata shared by VPN connection configurations.
