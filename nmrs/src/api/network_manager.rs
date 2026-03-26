@@ -3,7 +3,7 @@
 use tokio::sync::watch;
 use zbus::Connection;
 
-use crate::Result;
+use crate::{Result};
 use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
 use crate::core::bluetooth::connect_bluetooth;
 use crate::core::connection::{
