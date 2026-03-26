@@ -109,7 +109,56 @@ impl OpenVpnConfig {
             common: common.into(),
         }
     }
+        /// Sets the DNS servers to use when connected.
+    #[must_use]
+    pub fn with_dns(mut self, dns: Vec<String>) -> Self {
+        self.common.dns = Some(dns);
+        self
+    }
+
+    /// Sets the MTU (Maximum Transmission Unit) size.
+    #[must_use]
+    pub fn with_mtu(mut self, mtu: u32) -> Self {
+        self.common.mtu = Some(mtu);
+        self
+    }
+
+    /// Sets the UUID for the connection.
+    #[must_use]
+    pub fn with_uuid(mut self, uuid: Uuid) -> Self {
+        self.common.uuid = Some(uuid);
+        self
+    }
 }
+
+impl VpnConfig for OpenVpnConfig{
+    fn vpn_type(&self) -> VpnType {
+        VpnType::OpenVpn
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn gateway(&self) -> &str {
+        &self.remote
+    }
+
+    fn dns(&self) -> Option<&[String]> {
+        self.common.dns.as_deref()
+    }
+
+    fn mtu(&self) -> Option<u32> {
+        self.common.mtu
+    }
+
+    fn uuid(&self) -> Option<Uuid> {
+        self.common.uuid
+    }
+}
+
+//how to satisfy the common vpn config with the one above
+
 
 /// Common metadata shared by VPN connection configurations.
 pub trait VpnConfig: Send + Sync + std::fmt::Debug {
