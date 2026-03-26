@@ -396,12 +396,7 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
             _ => continue,
         };
 
-        let conn_type = match conn_sec.get("type") {
-            Some(zvariant::Value::Str(s)) => s.as_str(),
-            _ => continue,
-        };
-
-        if conn_type != "wireguard" {
+        if detect_vpn_type(&settings_map).is_none() {
             continue;
         }
 
@@ -502,14 +497,9 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
             _ => continue,
         };
 
-        let conn_type = match conn_sec.get("type") {
-            Some(zvariant::Value::Str(s)) => s.as_str(),
-            _ => continue,
-        };
-
-        if conn_type != "wireguard" {
+        let Some(vpn_type) = detect_vpn_type(&settings_map) else {
             continue;
-        }
+        };
 
         let (state, interface) = active_wg_map
             .get(&id)
@@ -518,7 +508,7 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
 
         wg_conns.push(VpnConnection {
             name: id,
-            vpn_type: VpnType::WireGuard,
+            vpn_type,
             interface,
             state,
         });
@@ -704,17 +694,13 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             _ => continue,
         };
 
-        let conn_type = match conn_sec.get("type") {
-            Some(zvariant::Value::Str(s)) => s.as_str(),
-            _ => continue,
+        let Some(vpn_type) = detect_vpn_type(&settings_map) else {
+            continue;
         };
 
-        if conn_type != "wireguard" || id != name {
+        if id != name {
             continue;
         }
-
-        // WireGuard type is known by connection.type
-        let vpn_type = VpnType::WireGuard;
 
         // ActiveConnection state
         let state_val: u32 = ac_proxy.get_property("State").await?;
@@ -736,23 +722,31 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
 
         // Best-effort endpoint extraction from wireguard.peers (nmcli-style string)
         // This is not guaranteed to exist or be populated.
-        let gateway = settings_map
-            .get("wireguard")
-            .and_then(|wg_sec| wg_sec.get("peers"))
-            .and_then(|v| match v {
-                zvariant::Value::Str(s) => Some(s.as_str().to_string()),
-                _ => None,
-            })
-            .and_then(|peers| {
-                // peers: "pubkey endpoint=host:port allowed-ips=... , pubkey2 ..."
-                let first = peers.split(',').next()?.trim().to_string();
-                for tok in first.split_whitespace() {
-                    if let Some(rest) = tok.strip_prefix("endpoint=") {
-                        return Some(rest.to_string());
+        let gateway = match vpn_type {
+            VpnType::WireGuard => settings_map
+                .get("wireguard")
+                .and_then(|wg_sec| wg_sec.get("peers"))
+                .and_then(|v| match v {
+                    zvariant::Value::Str(s) => Some(s.as_str().to_string()),
+                    _ => None,
+                })
+                .and_then(|peers| {
+                    let first = peers.split(',').next()?.trim().to_string();
+                    for tok in first.split_whitespace() {
+                        if let Some(rest) = tok.strip_prefix("endpoint=") {
+                            return Some(rest.to_string());
+                        }
                     }
-                }
-                None
-            });
+                    None
+                }),
+            VpnType::OpenVpn => settings_map
+                .get("vpn")
+                .and_then(|vpn_sec| vpn_sec.get("data"))
+                .and_then(|v| match v {
+                    zvariant::Value::Str(s) => Some(s.as_str().to_string()),
+                    _ => None,
+                }),
+        };
 
         // IPv4 config
         let ip4_path: OwnedObjectPath = ac_proxy.get_property("Ip4Config").await?;
