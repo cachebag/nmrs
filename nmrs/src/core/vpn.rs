@@ -27,6 +27,37 @@ use crate::dbus::{NMActiveConnectionProxy, NMProxy};
 use crate::util::utils::{extract_connection_state_reason, nm_proxy, settings_proxy};
 use crate::util::validation::{validate_connection_name, validate_vpn_credentials};
 
+/// Detects the VPN type from a raw NM connection settings map.
+/// WireGuard: connection.type == "wireguard"
+/// OpenVPN:   connection.type == "vpn" + vpn.service-type == "org.freedesktop.NetworkManager.openvpn"
+fn detect_vpn_type(
+    settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> Option<VpnType> {
+    let conn = settings.get("connection")?;
+    let conn_type = match conn.get("type")? {
+        zvariant::Value::Str(s) => s.as_str(),
+        _ => return None,
+    };
+
+    match conn_type {
+        "wireguard" => Some(VpnType::WireGuard),
+        "vpn" => {
+            let vpn = settings.get("vpn")?;
+            let service = match vpn.get("service-type")? {
+                zvariant::Value::Str(s) => s.as_str(),
+                _ => return None,
+            };
+            if service == "org.freedesktop.NetworkManager.openvpn" {
+                Some(VpnType::OpenVpn)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+
 /// Connects to a WireGuard connection.
 ///
 /// This function checks for an existing saved connection by name.
@@ -69,7 +100,10 @@ pub(crate) async fn connect_vpn(
             autoconnect_retries: None,
         };
 
-        let settings = build_wireguard_connection(&creds, &opts)?;
+        let settings = match creds.vpn_type {
+            VpnType::WireGuard => build_wireguard_connection(&creds, &opts)?,
+            _ => return Err(ConnectionError::VpnFailed("unsupported VPN type".into())),
+        };
 
         let settings_api = settings_proxy(conn).await?;
 
@@ -237,16 +271,10 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
                 })
                 .unwrap_or(false);
 
-            let is_wireguard = conn_sec
-                .get("type")
-                .and_then(|v| match v {
-                    zvariant::Value::Str(s) => Some(s.as_str() == "wireguard"),
-                    _ => None,
-                })
-                .unwrap_or(false);
+            let is_vpn = detect_vpn_type(&settings_map).is_some();
 
-            if id_match && is_wireguard {
-                debug!("Found active WireGuard connection, deactivating: {name}");
+            if id_match && is_vpn {
+                debug!("Found active VPN connection, deactivating: {name}");
                 match nm.deactivate_connection(ac_path.clone()).await {
                     Ok(_) => info!("Successfully disconnected VPN: {name}"),
                     Err(e) => warn!("Failed to deactivate connection {}: {}", ac_path, e),
@@ -503,7 +531,6 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
 ///
 /// If currently connected, the connection will be disconnected first before deletion.
 pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
-    // Validate connection name
     validate_connection_name(name)?;
 
     debug!("Starting forget operation for VPN: {name}");
@@ -521,7 +548,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
         "/org/freedesktop/NetworkManager/Settings",
         "org.freedesktop.NetworkManager.Settings",
     )
-    .await?;
+        .await?;
 
     let list_reply = settings.call_method("ListConnections", &()).await?;
     let conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
@@ -532,7 +559,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
             cpath.clone(),
             "org.freedesktop.NetworkManager.Settings.Connection",
         )
-        .await
+            .await
         {
             Ok(p) => p,
             Err(e) => {
@@ -550,36 +577,36 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
         };
 
         let body = msg.body();
-        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> = body.deserialize()?;
+        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
+            match body.deserialize() {
+                Ok(map) => map,
+                Err(e) => {
+                    warn!("Failed to deserialize settings for {}: {}", cpath, e);
+                    continue;
+                }
+            };
 
-        if let Some(conn_sec) = settings_map.get("connection") {
-            let id_ok = conn_sec
-                .get("id")
-                .and_then(|v| match v {
-                    zvariant::Value::Str(s) => Some(s.as_str() == name),
-                    _ => None,
-                })
-                .unwrap_or(false);
+        let id_ok = settings_map
+            .get("connection")
+            .and_then(|c| c.get("id"))
+            .and_then(|v| match v {
+                zvariant::Value::Str(s) => Some(s.as_str() == name),
+                _ => None,
+            })
+            .unwrap_or(false);
 
-            let type_ok = conn_sec
-                .get("type")
-                .and_then(|v| match v {
-                    zvariant::Value::Str(s) => Some(s.as_str() == "wireguard"),
-                    _ => None,
-                })
-                .unwrap_or(false);
+        let is_vpn = detect_vpn_type(&settings_map).is_some();
 
-            if id_ok && type_ok {
-                debug!("Found WireGuard connection, deleting: {name}");
-                cproxy.call_method("Delete", &()).await.map_err(|e| {
-                    ConnectionError::DbusOperation {
-                        context: format!("failed to delete VPN connection '{}'", name),
-                        source: e,
-                    }
-                })?;
-                info!("Successfully deleted VPN connection: {name}");
-                return Ok(());
-            }
+        if id_ok && is_vpn {
+            debug!("Found VPN connection, deleting: {name}");
+            cproxy.call_method("Delete", &()).await.map_err(|e| {
+                ConnectionError::DbusOperation {
+                    context: format!("failed to delete VPN connection '{}'", name),
+                    source: e,
+                }
+            })?;
+            info!("Successfully deleted VPN connection: {name}");
+            return Ok(());
         }
     }
 
