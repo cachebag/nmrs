@@ -57,7 +57,6 @@ fn detect_vpn_type(
     }
 }
 
-
 /// Connects to a WireGuard connection.
 ///
 /// This function checks for an existing saved connection by name.
@@ -538,7 +537,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
         "/org/freedesktop/NetworkManager/Settings",
         "org.freedesktop.NetworkManager.Settings",
     )
-        .await?;
+    .await?;
 
     let list_reply = settings.call_method("ListConnections", &()).await?;
     let conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
@@ -549,7 +548,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
             cpath.clone(),
             "org.freedesktop.NetworkManager.Settings.Connection",
         )
-            .await
+        .await
         {
             Ok(p) => p,
             Err(e) => {
