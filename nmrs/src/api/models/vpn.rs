@@ -15,6 +15,7 @@ use super::device::DeviceState;
 pub enum VpnType {
     /// WireGuard - modern, high-performance VPN protocol.
     WireGuard,
+    /// OpenVpn - an open-source VPN protocol.
     OpenVpn,
 }
 
@@ -29,38 +30,23 @@ pub enum OpenVpnAuthType {
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]
-pub struct OpenVpnCredentials {
-    pub username: String,
-    pub password: String,
-}
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub struct OpenVpnCerts {
-    pub ca_cert: String,
-    pub client_cert: String,
-    pub client_key: String,
-    pub key_password: String,
-}
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub struct OpenVpnCommon {
-    pub auth: String,
-    pub cipher: String,
-    pub dns: Option<Vec<String>>,
-    pub mtu: Option<u32>,
-    pub uuid: Option<Uuid>,
-}
-#[non_exhaustive]
-#[derive(Debug, Clone)]
 pub struct OpenVpnConfig {
     pub name: String,
     pub remote: String,
     pub port: u16,
     pub tcp: bool,
-    pub credentials: OpenVpnCredentials,
-    pub certs: OpenVpnCerts,
-    pub auth_type: OpenVpnAuthType,
-    pub common: OpenVpnCommon,
+    pub auth_type: Option<String>,
+    pub auth: String,
+    pub cipher: String,
+    pub dns: Option<Vec<String>>,
+    pub mtu: Option<u32>,
+    pub uuid: Option<Uuid>,
+    pub ca_cert: Option<String>,
+    pub client_cert: Option<String>,
+    pub client_key: Option<String>,
+    pub key_password: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
 }
 
 impl OpenVpnConfig {
@@ -75,7 +61,7 @@ impl OpenVpnConfig {
     ///     "MyVpn",
     ///     "vpn.example.com",
     ///     51820,
-    ///     True,
+    ///     true,
     ///     new_credentials,
     ///     new_certs,
     ///     new_auth_type,
@@ -93,40 +79,45 @@ impl OpenVpnConfig {
         remote: impl Into<String>,
         port: impl Into<u16>,
         tcp: impl Into<bool>,
-        credentials: impl Into<OpenVpnCredentials>,
-        certs: impl Into<OpenVpnCerts>,
-        auth_type: impl Into<OpenVpnAuthType>,
-        common: impl Into<OpenVpnCommon>,
+        auth: impl Into<String>,
+        cipher: impl Into<String>,
     ) -> Self {
         Self {
             name: name.into(),
             remote: remote.into(),
             port: port.into(),
             tcp: tcp.into(),
-            credentials: credentials.into(),
-            certs: certs.into(),
-            auth_type: auth_type.into(),
-            common: common.into(),
+            dns: None,
+            mtu: None,
+            uuid: None,
+            ca_cert: None,
+            client_cert: None,
+            client_key: None,
+            key_password: None,
+            username: None,
+            password: None,
+
+
         }
     }
         /// Sets the DNS servers to use when connected.
     #[must_use]
     pub fn with_dns(mut self, dns: Vec<String>) -> Self {
-        self.common.dns = Some(dns);
+        self.dns = Some(dns);
         self
     }
 
     /// Sets the MTU (Maximum Transmission Unit) size.
     #[must_use]
     pub fn with_mtu(mut self, mtu: u32) -> Self {
-        self.common.mtu = Some(mtu);
+        self.mtu = Some(mtu);
         self
     }
 
     /// Sets the UUID for the connection.
     #[must_use]
     pub fn with_uuid(mut self, uuid: Uuid) -> Self {
-        self.common.uuid = Some(uuid);
+        self.uuid = Some(uuid);
         self
     }
 }
@@ -141,19 +132,21 @@ impl VpnConfig for OpenVpnConfig{
     }
 
     fn gateway(&self) -> &str {
+        //is this even right 
         &self.remote
     }
 
     fn dns(&self) -> Option<&[String]> {
-        self.common.dns.as_deref()
+        //i dont know why i had to do this 
+        self.dns.as_deref()
     }
 
     fn mtu(&self) -> Option<u32> {
-        self.common.mtu
+        self.mtu
     }
 
     fn uuid(&self) -> Option<Uuid> {
-        self.common.uuid
+        self.uuid
     }
 }
 
