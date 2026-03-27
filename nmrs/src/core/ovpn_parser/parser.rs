@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::string::ParseError;
 
 use crate::api::models::ConnectionError;
 
@@ -103,6 +104,15 @@ pub struct Route {
     pub network: String,
     pub netmask: Option<String>,
     pub gateway: Option<String>,
+}
+
+enum OvpnItem {
+    Directive { key: String, args: Vec<String> },
+    Block { key: String, content: String },
+}
+
+fn lexer(input: &str) -> Result<Vec<OvpnItem>, ParseError> {
+    todo!()
 }
 
 pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
