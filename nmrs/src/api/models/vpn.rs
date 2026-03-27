@@ -23,9 +23,6 @@ pub trait VpnConfig: Send + Sync + std::fmt::Debug {
     /// Returns the connection name.
     fn name(&self) -> &str;
 
-    /// Returns the gateway endpoint.
-    fn gateway(&self) -> &str;
-
     /// Returns the configured DNS servers, if any.
     fn dns(&self) -> Option<&[String]>;
 
@@ -161,10 +158,6 @@ impl VpnConfig for WireGuardConfig {
 
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn gateway(&self) -> &str {
-        &self.gateway
     }
 
     fn dns(&self) -> Option<&[String]> {
@@ -319,10 +312,6 @@ impl VpnConfig for VpnCredentials {
 
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn gateway(&self) -> &str {
-        &self.gateway
     }
 
     fn dns(&self) -> Option<&[String]> {
