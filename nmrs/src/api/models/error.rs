@@ -182,4 +182,8 @@ pub enum ConnectionError {
     /// A secret agent is already registered under this identifier.
     #[error("secret agent already registered under this identifier")]
     AgentAlreadyRegistered,
+    
+    /// An error occured while parsing a configuration
+    #[error("error while parsing a configuration: {0}")]
+    ParseError(String),
 }
