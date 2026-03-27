@@ -3,6 +3,8 @@
 All notable changes to the `nmrs-gui` crate will be documented in this file.
 
 ## [Unreleased]
+### Fixed
+- Set a location for our `.lock` file ([#310](https://github.com/cachebag/nmrs/pull/310))
 
 ## [1.5.0] - 2026-03-19
 ### Fixed
