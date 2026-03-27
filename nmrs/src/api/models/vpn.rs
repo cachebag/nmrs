@@ -131,11 +131,6 @@ impl VpnConfig for OpenVpnConfig{
         &self.name
     }
 
-    fn gateway(&self) -> &str {
-        //is this even right 
-        &self.remote
-    }
-
     fn dns(&self) -> Option<&[String]> {
         //i dont know why i had to do this 
         self.dns.as_deref()
