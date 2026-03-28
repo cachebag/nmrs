@@ -27,9 +27,9 @@ use crate::dbus::{NMActiveConnectionProxy, NMProxy};
 use crate::util::utils::{extract_connection_state_reason, nm_proxy, settings_proxy};
 use crate::util::validation::{validate_connection_name, validate_vpn_credentials};
 
-/// Detects the VPN type from a raw NM connection settings map.
-/// WireGuard: connection.type == "wireguard"
-/// OpenVPN:   connection.type == "vpn" + vpn.service-type == "org.freedesktop.NetworkManager.openvpn"
+// Detects the VPN type from a raw NM connection settings map.
+// WireGuard: connection.type == "wireguard"
+// OpenVPN:   connection.type == "vpn" + vpn.service-type == "org.freedesktop.NetworkManager.openvpn"
 fn detect_vpn_type(
     settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
 ) -> Option<VpnType> {
@@ -101,7 +101,9 @@ pub(crate) async fn connect_vpn(
 
         let settings = match creds.vpn_type {
             VpnType::WireGuard => build_wireguard_connection(&creds, &opts)?,
-            _ => return Err(ConnectionError::VpnFailed("unsupported VPN type".into())),
+            VpnType::OpenVpn => return Err(ConnectionError::VpnFailed(
+                "OpenVPN connect not yet implemented".into()
+            )),
         };
 
         let settings_api = settings_proxy(conn).await?;
@@ -567,13 +569,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
-            match body.deserialize() {
-                Ok(map) => map,
-                Err(e) => {
-                    warn!("Failed to deserialize settings for {}: {}", cpath, e);
-                    continue;
-                }
-            };
+            body.deserialize()?;
 
         let id_ok = settings_map
             .get("connection")
@@ -719,8 +715,10 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             None
         };
 
-        // Best-effort endpoint extraction from wireguard.peers (nmcli-style string)
-        // This is not guaranteed to exist or be populated.
+        // Best-effort endpoint extraction from the connection settings.
+        // WireGuard reads from wireguard.peers (nmcli-style string).
+        // OpenVPN reads from vpn.data["remote"] (not yet implemented, see FIXME below).
+        // Neither is guaranteed to be populated.
         let gateway = match vpn_type {
             VpnType::WireGuard => settings_map
                 .get("wireguard")
@@ -738,13 +736,13 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
                     }
                     None
                 }),
-            VpnType::OpenVpn => settings_map
-                .get("vpn")
-                .and_then(|vpn_sec| vpn_sec.get("data"))
-                .and_then(|v| match v {
-                    zvariant::Value::Str(s) => Some(s.as_str().to_string()),
-                    _ => None,
-                }),
+            VpnType::OpenVpn => {
+                // FIXME : vpn.data is a Dict<String, String> in NM, not a plain string.
+                // Need to deserialize as HashMap<String, String> and look up "remote".
+                // Cannot test without a real NM OpenVPN profile.
+                None
+                
+            }
         };
 
         // IPv4 config
