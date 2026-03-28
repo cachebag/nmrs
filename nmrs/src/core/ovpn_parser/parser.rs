@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::string::ParseError;
 
 use crate::api::models::ConnectionError;
+use crate::core::ovpn_parser::error::OvpnParseError;
 
 // FIXME: Change when #309 lands
 // https://github.com/cachebag/nmrs/pull/309/changes
@@ -111,8 +111,138 @@ enum OvpnItem {
     Block { key: String, content: String },
 }
 
-fn lexer(input: &str) -> Result<Vec<OvpnItem>, ParseError> {
-    todo!()
+fn lexer(input: &str) -> Result<Vec<OvpnItem>, OvpnParseError> {
+    let mut items = Vec::new();
+
+    let mut current_line = String::new();
+    let mut continuing = false;
+
+    let mut in_block: Option<String> = None;
+    let mut block_buffer = String::new();
+    let mut block_line_start = 0;
+
+    for (idx, raw_line) in input.lines().enumerate() {
+        let line_number = idx + 1;
+        let line = raw_line;
+
+        // We're in a block
+        if let Some(block_name) = &in_block {
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("</") && trimmed.ends_with(">") {
+                let end_tag = trimmed[2..trimmed.len() - 1].trim().to_lowercase();
+
+                if end_tag == *block_name {
+                    items.push(OvpnItem::Block {
+                        key: block_name.clone(),
+                        content: block_buffer.clone(),
+                    });
+
+                    in_block = None;
+                    block_buffer.clear();
+                    continue;
+                } else {
+                    return Err(OvpnParseError::UnexpectedBlockEnd {
+                        block: end_tag,
+                        line: line_number,
+                    });
+                }
+            }
+
+            block_buffer.push_str(line);
+            block_buffer.push('\n');
+
+            continue;
+        }
+
+        // Continuation
+        if continuing {
+            current_line.push(' ');
+            current_line.push_str(line.trim_start());
+        } else {
+            current_line.clear();
+            current_line.push_str(line);
+        }
+
+        if current_line.ends_with('\\') {
+            continuing = true;
+            current_line.pop();
+            continue;
+        } else {
+            continuing = false;
+        }
+
+        let line = current_line.trim();
+
+        // Remove comments
+        let mut cleaned = String::new();
+        let mut prev_whitespace = true;
+
+        for c in line.chars() {
+            if (c == '#' || c == ';') && prev_whitespace {
+                break;
+            }
+
+            prev_whitespace = c.is_whitespace();
+            cleaned.push(c);
+        }
+
+        current_line.clear();
+        let line = cleaned.trim();
+
+        if line.is_empty() {
+            continue;
+        }
+
+        if line.starts_with('<') && line.ends_with('>') && !line.starts_with("</") {
+            let key = line[1..line.len() - 1].trim().to_lowercase();
+
+            if key.is_empty() {
+                return Err(OvpnParseError::InvalidDirectiveSyntax { line: line_number });
+            }
+
+            in_block = Some(key);
+            block_line_start = line_number;
+            block_buffer.clear();
+            continue;
+        }
+
+        if line.starts_with("</") && line.ends_with('>') {
+            let key = line[2..line.len() - 1].trim().to_lowercase();
+
+            return Err(OvpnParseError::UnexpectedBlockEnd {
+                block: key,
+                line: line_number,
+            });
+        }
+
+        let mut parts = line.split_whitespace();
+        let key = match parts.next() {
+            Some(k) => k.to_lowercase(),
+            None => {
+                return Err(OvpnParseError::InvalidDirectiveSyntax { line: line_number });
+            }
+        };
+
+        let args: Vec<String> = parts.map(|s| s.to_string()).collect();
+
+        items.push(OvpnItem::Directive { key, args });
+    }
+
+    if continuing {
+        return Err(OvpnParseError::InvalidContinuation {
+            line: input.lines().count(),
+        });
+    }
+
+    if let Some(block) = in_block {
+        return Err(OvpnParseError::UnterminatedBlock {
+            block,
+            line: block_line_start,
+        });
+    }
+
+    Ok(items)
 }
 
 pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
