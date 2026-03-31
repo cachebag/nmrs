@@ -55,7 +55,7 @@ pub struct OvpnFile {
     pub auth: Option<String>,
 
     // compress directive. Either enabled or specifies algorithm (e.g. "lz4").
-    pub compress: Option<String>,
+    pub compress: Option<Compress>,
 
     // OpenVPN 2.5+ specifies a allow-compress directive for safety
     // https://community.openvpn.net/Security%20Announcements/VORACLE
@@ -99,6 +99,13 @@ pub struct TlsAuth {
 }
 
 #[derive(Debug, Clone)]
+pub enum Compress {
+    Stub,
+    StubV2,
+    Algorithm(String),
+}
+
+#[derive(Debug, Clone)]
 pub enum AllowCompress {
     Yes,
     No,
@@ -125,6 +132,51 @@ pub struct RedirectGateway {
 enum OvpnItem {
     Directive { key: String, args: Vec<String> },
     Block { key: String, content: String },
+}
+
+#[derive(Default)]
+struct OvpnFileBuilder {
+    remotes: Vec<Remote>,
+    dev: Option<String>,
+    proto: Option<String>,
+    ca: Option<CertSource>,
+    cert: Option<CertSource>,
+    key: Option<CertSource>,
+    tls_auth: Option<TlsAuth>,
+    tls_crypt: Option<CertSource>,
+    cipher: Option<String>,
+    data_ciphers: Vec<String>,
+    auth: Option<String>,
+    compress: Option<Compress>,
+    allow_compress: Option<AllowCompress>,
+    routes: Vec<Route>,
+    redirect_gateway: Option<RedirectGateway>,
+    flags: Vec<String>,
+    options: HashMap<String, Vec<String>>,
+}
+
+impl OvpnFileBuilder {
+    fn build(self) -> OvpnFile {
+        OvpnFile {
+            remotes: self.remotes,
+            dev: self.dev,
+            proto: self.proto,
+            ca: self.ca,
+            cert: self.cert,
+            key: self.key,
+            tls_auth: self.tls_auth,
+            tls_crypt: self.tls_crypt,
+            cipher: self.cipher,
+            data_ciphers: self.data_ciphers,
+            auth: self.auth,
+            compress: self.compress,
+            allow_compress: self.allow_compress,
+            routes: self.routes,
+            redirect_gateway: self.redirect_gateway,
+            flags: self.flags,
+            options: self.options,
+        }
+    }
 }
 
 fn lexer(input: &str) -> Result<Vec<OvpnItem>, OvpnParseError> {
@@ -262,24 +314,7 @@ fn lexer(input: &str) -> Result<Vec<OvpnItem>, OvpnParseError> {
 }
 
 pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
-    let mut remotes: Vec<Remote> = Vec::new();
-    let mut dev: Option<String> = None;
-    let mut proto: Option<String> = None;
-    let mut ca: Option<CertSource> = None;
-    let mut cert: Option<CertSource> = None;
-    let mut key: Option<CertSource> = None;
-    let mut tls_auth: Option<TlsAuth> = None;
-    let mut tls_crypt: Option<CertSource> = None;
-    let mut cipher: Option<String> = None;
-    let mut data_ciphers: Vec<String> = Vec::new();
-    let mut auth: Option<String> = None;
-    let mut compress: Option<String> = None;
-    let mut allow_compress: Option<AllowCompress> = None;
-    let mut routes: Vec<Route> = Vec::new();
-    let mut redirect_gateway: Option<RedirectGateway> = None;
-    let mut flags: Vec<String> = Vec::new();
-    let mut options: HashMap<String, Vec<String>> = HashMap::new();
-
+    let mut b = OvpnFileBuilder::default();
     let items = lexer(content)?;
 
     for item in items {
@@ -304,7 +339,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
 
                         let proto = args.get(2).cloned();
 
-                        remotes.push(Remote { host, port, proto });
+                        b.remotes.push(Remote { host, port, proto });
                     }
                     "dev" => {
                         // dev <DEVICE>
@@ -323,7 +358,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             line: 0,
                         })?;
 
-                        dev = Some(value.clone());
+                        b.dev = Some(value.clone());
                     }
                     "proto" => {
                         // proto <PROTOCOL>
@@ -334,7 +369,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             line: 0,
                         })?;
 
-                        proto = Some(value.clone());
+                        b.proto = Some(value.clone());
                     }
                     "cipher" => {
                         // cipher <CIPHER>
@@ -346,7 +381,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             line: 0,
                         })?;
 
-                        cipher = Some(value.clone());
+                        b.cipher = Some(value.clone());
                     }
                     "data-ciphers" => {
                         // data-ciphers <[cipher1]:[cipher2]...>
@@ -357,7 +392,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             line: 0,
                         })?;
 
-                        data_ciphers.extend(ciphers.split(':').map(String::from));
+                        b.data_ciphers.extend(ciphers.split(':').map(String::from));
                     }
                     "auth" => {
                         // auth <ALGORITHM>
@@ -368,18 +403,16 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             line: 0,
                         })?;
 
-                        auth = Some(value.clone());
+                        b.auth = Some(value.clone());
                     }
                     "compress" => {
-                        // compress <ALGORITHM>
+                        // compress [ALGORITHM]
 
-                        let value = args.get(0).ok_or(OvpnParseError::InvalidArgument {
-                            key,
-                            arg: "".into(),
-                            line: 0,
-                        })?;
-
-                        compress = Some(value.clone());
+                        b.compress = Some(match args.first().map(|s| s.as_str()) {
+                            None | Some("stub") => Compress::Stub,
+                            Some("stub-v2") => Compress::StubV2,
+                            Some(alg) => Compress::Algorithm(alg.to_string()),
+                        });
                     }
                     "allow-compress" => {
                         // allow-compress asym (default) <- receive compressed data but don't send
@@ -398,7 +431,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             other => AllowCompress::Other(other.to_string()),
                         };
 
-                        allow_compress = Some(parsed);
+                        b.allow_compress = Some(parsed);
                     }
                     "route" => {
                         // route <NETWORK> [NETMASK] [GATEWAY]
@@ -413,7 +446,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             .map(|v| parse_ipv4_arg(&key, Some(v), 0))
                             .transpose()?;
 
-                        routes.push(Route {
+                        b.routes.push(Route {
                             network,
                             netmask,
                             gateway,
@@ -439,13 +472,13 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             }
                         }
 
-                        redirect_gateway = Some(rg);
+                        b.redirect_gateway = Some(rg);
                     }
                     _ => {
                         if args.is_empty() {
-                            flags.push(key);
+                            b.flags.push(key);
                         } else {
-                            options.entry(key).or_default().extend(args);
+                            b.options.entry(key).or_default().extend(args);
                         }
                     }
                 }
@@ -456,55 +489,37 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
             } => {
                 match block_key.as_str() {
                     "ca" => {
-                        ca = Some(CertSource::Inline(content));
+                        b.ca = Some(CertSource::Inline(content));
                     }
 
                     "cert" => {
-                        cert = Some(CertSource::Inline(content));
+                        b.cert = Some(CertSource::Inline(content));
                     }
 
                     "key" => {
-                        key = Some(CertSource::Inline(content));
+                        b.key = Some(CertSource::Inline(content));
                     }
 
                     "tls-auth" => {
-                        tls_auth = Some(TlsAuth {
+                        b.tls_auth = Some(TlsAuth {
                             source: CertSource::Inline(content),
                             key_direction: None, // FIXME: handle seperately
                         });
                     }
 
                     "tls-crypt" => {
-                        tls_crypt = Some(CertSource::Inline(content));
+                        b.tls_crypt = Some(CertSource::Inline(content));
                     }
 
                     _ => {
-                        options.entry(block_key).or_default().push(content);
+                        b.options.entry(block_key).or_default().push(content);
                     }
                 }
             }
         }
     }
 
-    Ok(OvpnFile {
-        remotes,
-        dev,
-        proto,
-        ca,
-        cert,
-        key,
-        tls_auth,
-        tls_crypt,
-        cipher,
-        data_ciphers,
-        auth,
-        compress,
-        allow_compress,
-        routes,
-        redirect_gateway,
-        flags,
-        options,
-    })
+    Ok(b.build())
 }
 
 fn parse_ipv4_arg(
