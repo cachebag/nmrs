@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::core::ovpn_parser::error::OvpnParseError;
+
 use super::connection_state::ConnectionStateReason;
 use super::state_reason::StateReason;
 
@@ -185,5 +187,5 @@ pub enum ConnectionError {
     
     /// An error occured while parsing a configuration
     #[error("error while parsing a configuration: {0}")]
-    ParseError(String),
+    ParseError(OvpnParseError),
 }
