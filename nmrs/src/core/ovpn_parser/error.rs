@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::ConnectionError;
+
 #[derive(Debug, Clone)]
 pub enum OvpnParseError {
     InvalidDirectiveSyntax {
@@ -59,6 +61,12 @@ impl fmt::Display for OvpnParseError {
                 write!(f, "invalid value '{value}' for '{key}' at line {line}")
             }
         }
+    }
+}
+
+impl From<OvpnParseError> for ConnectionError {
+    fn from(e: OvpnParseError) -> Self {
+        ConnectionError::ParseError(e)
     }
 }
 
