@@ -1,7 +1,5 @@
 #![allow(deprecated)]
 
-use std::sync::Arc;
-
 use uuid::Uuid;
 
 use super::device::DeviceState;
@@ -9,84 +7,110 @@ use super::device::DeviceState;
 /// VPN connection type.
 ///
 /// Identifies the VPN protocol/technology used for the connection.
-/// Currently only WireGuard is supported.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VpnType {
     /// WireGuard - modern, high-performance VPN protocol.
     WireGuard,
-    /// OpenVpn - an open-source VPN protocol.
+    /// OpenVPN - widely-used open-source VPN protocol.
     OpenVpn,
 }
 
+/// OpenVPN authentication type.
+///
+/// Specifies how the client authenticates with the OpenVPN server.
 #[non_exhaustive]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpenVpnAuthType {
+    /// Username/password authentication only.
     Password,
+    /// TLS certificate authentication only.
     Tls,
+    /// Both password and TLS certificate authentication.
     PasswordTls,
+    /// Static key authentication (pre-shared key).
     StaticKey,
 }
 
+/// OpenVPN connection configuration.
+///
+/// Stores the necessary information to configure and connect to an OpenVPN server.
+///
+/// # Example
+///
+/// ```rust
+/// use nmrs::{OpenVpnConfig, OpenVpnAuthType};
+///
+/// let config = OpenVpnConfig::new("MyVPN", "vpn.example.com", 1194, false)
+///     .with_auth_type(OpenVpnAuthType::PasswordTls)
+///     .with_username("user")
+///     .with_password("secret")
+///     .with_ca_cert("/path/to/ca.crt")
+///     .with_dns(vec!["1.1.1.1".into()]);
+/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct OpenVpnConfig {
+    /// Connection name.
     pub name: String,
+    /// Remote server hostname or IP.
     pub remote: String,
+    /// Remote server port (default: 1194).
     pub port: u16,
+    /// Use TCP instead of UDP.
     pub tcp: bool,
-    pub auth_type: Option<String>,
-    pub auth: String,
-    pub cipher: String,
+    /// Authentication type.
+    pub auth_type: Option<OpenVpnAuthType>,
+    /// HMAC digest algorithm (e.g., "SHA256").
+    pub auth: Option<String>,
+    /// Data channel cipher (e.g., "AES-256-GCM").
+    pub cipher: Option<String>,
+    /// DNS servers to use when connected.
     pub dns: Option<Vec<String>>,
+    /// MTU size.
     pub mtu: Option<u32>,
+    /// Connection UUID.
     pub uuid: Option<Uuid>,
+    /// Path to CA certificate.
     pub ca_cert: Option<String>,
+    /// Path to client certificate.
     pub client_cert: Option<String>,
+    /// Path to client private key.
     pub client_key: Option<String>,
+    /// Password for encrypted private key.
     pub key_password: Option<String>,
+    /// Username for password authentication.
     pub username: Option<String>,
+    /// Password for password authentication.
     pub password: Option<String>,
 }
 
 impl OpenVpnConfig {
-    /// Creates new `OpenVpnConfig` with required fields
+    /// Creates a new `OpenVpnConfig` with required fields.
     ///
-    /// # Examples
+    /// # Arguments
+    ///
+    /// * `name` - Connection name
+    /// * `remote` - Server hostname or IP
+    /// * `port` - Server port (typically 1194)
+    /// * `tcp` - Use TCP instead of UDP
+    ///
+    /// # Example
     ///
     /// ```rust
-    /// use nmrs::{OpenVpnConfig, OpenVpnCredentials, OpenVpnCerts, OpenVpnCommon};
+    /// use nmrs::OpenVpnConfig;
     ///
-    /// let config = OpenVpnConfig::new(
-    ///     "MyVpn",
-    ///     "vpn.example.com",
-    ///     51820,
-    ///     true,
-    ///     new_credentials,
-    ///     new_certs,
-    ///     new_auth_type,
-    ///     common_fields
-    ///     );
-    ///
-    ///
-    ///
-    ///
-    ///
+    /// let config = OpenVpnConfig::new("MyVPN", "vpn.example.com", 1194, false);
     /// ```
-
-    pub fn new(
-        name: impl Into<String>,
-        remote: impl Into<String>,
-        port: impl Into<u16>,
-        tcp: impl Into<bool>,
-        auth: impl Into<String>,
-        cipher: impl Into<String>,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, remote: impl Into<String>, port: u16, tcp: bool) -> Self {
         Self {
             name: name.into(),
             remote: remote.into(),
-            port: port.into(),
-            tcp: tcp.into(),
+            port,
+            tcp,
+            auth_type: None,
+            auth: None,
+            cipher: None,
             dns: None,
             mtu: None,
             uuid: None,
@@ -96,11 +120,31 @@ impl OpenVpnConfig {
             key_password: None,
             username: None,
             password: None,
-
-
         }
     }
-        /// Sets the DNS servers to use when connected.
+
+    /// Sets the authentication type.
+    #[must_use]
+    pub fn with_auth_type(mut self, auth_type: OpenVpnAuthType) -> Self {
+        self.auth_type = Some(auth_type);
+        self
+    }
+
+    /// Sets the HMAC digest algorithm.
+    #[must_use]
+    pub fn with_auth(mut self, auth: impl Into<String>) -> Self {
+        self.auth = Some(auth.into());
+        self
+    }
+
+    /// Sets the data channel cipher.
+    #[must_use]
+    pub fn with_cipher(mut self, cipher: impl Into<String>) -> Self {
+        self.cipher = Some(cipher.into());
+        self
+    }
+
+    /// Sets the DNS servers to use when connected.
     #[must_use]
     pub fn with_dns(mut self, dns: Vec<String>) -> Self {
         self.dns = Some(dns);
@@ -120,9 +164,51 @@ impl OpenVpnConfig {
         self.uuid = Some(uuid);
         self
     }
+
+    /// Sets the CA certificate path.
+    #[must_use]
+    pub fn with_ca_cert(mut self, path: impl Into<String>) -> Self {
+        self.ca_cert = Some(path.into());
+        self
+    }
+
+    /// Sets the client certificate path.
+    #[must_use]
+    pub fn with_client_cert(mut self, path: impl Into<String>) -> Self {
+        self.client_cert = Some(path.into());
+        self
+    }
+
+    /// Sets the client private key path.
+    #[must_use]
+    pub fn with_client_key(mut self, path: impl Into<String>) -> Self {
+        self.client_key = Some(path.into());
+        self
+    }
+
+    /// Sets the password for an encrypted private key.
+    #[must_use]
+    pub fn with_key_password(mut self, password: impl Into<String>) -> Self {
+        self.key_password = Some(password.into());
+        self
+    }
+
+    /// Sets the username for password authentication.
+    #[must_use]
+    pub fn with_username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    /// Sets the password for password authentication.
+    #[must_use]
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
+        self
+    }
 }
 
-impl VpnConfig for OpenVpnConfig{
+impl VpnConfig for OpenVpnConfig {
     fn vpn_type(&self) -> VpnType {
         VpnType::OpenVpn
     }
@@ -132,7 +218,6 @@ impl VpnConfig for OpenVpnConfig{
     }
 
     fn dns(&self) -> Option<&[String]> {
-        //i dont know why i had to do this 
         self.dns.as_deref()
     }
 
@@ -144,9 +229,6 @@ impl VpnConfig for OpenVpnConfig{
         self.uuid
     }
 }
-
-//how to satisfy the common vpn config with the one above
-
 
 /// Common metadata shared by VPN connection configurations.
 pub trait VpnConfig: Send + Sync + std::fmt::Debug {
