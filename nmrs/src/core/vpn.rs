@@ -101,9 +101,11 @@ pub(crate) async fn connect_vpn(
 
         let settings = match creds.vpn_type {
             VpnType::WireGuard => build_wireguard_connection(&creds, &opts)?,
-            VpnType::OpenVpn => return Err(ConnectionError::VpnFailed(
-                "OpenVPN connect not yet implemented".into()
-            )),
+            VpnType::OpenVpn => {
+                return Err(ConnectionError::VpnFailed(
+                    "OpenVPN connect not yet implemented".into(),
+                ));
+            }
         };
 
         let settings_api = settings_proxy(conn).await?;
@@ -568,8 +570,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
         };
 
         let body = msg.body();
-        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
-            body.deserialize()?;
+        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> = body.deserialize()?;
 
         let id_ok = settings_map
             .get("connection")
@@ -741,7 +742,6 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
                 // Need to deserialize as HashMap<String, String> and look up "remote".
                 // Cannot test without a real NM OpenVPN profile.
                 None
-                
             }
         };
 
