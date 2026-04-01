@@ -68,7 +68,10 @@ use std::collections::HashMap;
 use zvariant::Value;
 
 use super::wireguard_builder::WireGuardBuilder;
-use crate::api::models::{ConnectionError, ConnectionOptions, VpnCredentials};
+use crate::api::models::{
+    ConnectionError, ConnectionOptions, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy,
+    VpnCredentials,
+};
 
 /// Builds WireGuard VPN connection settings.
 ///
@@ -109,10 +112,132 @@ pub fn build_wireguard_connection(
     builder.build()
 }
 
+/// Builds OpenVPN connection settings for NetworkManager.
+///
+/// Returns a settings dictionary suitable for `AddAndActivateConnection`.
+/// OpenVPN uses the NM VPN plugin model: `connection.type = "vpn"` with
+/// `vpn.service-type = "org.freedesktop.NetworkManager.openvpn"`.
+/// All config lives in the flat `vpn.data` dict.
+///
+/// # Errors
+///
+/// - `ConnectionError::InvalidGateway` if `remote` is empty
+/// - `ConnectionError::InvalidAddress` if a proxy port is zero
+pub fn build_openvpn_connection(
+    config: &OpenVpnConfig,
+    opts: &ConnectionOptions,
+) -> Result<HashMap<&'static str, HashMap<&'static str, Value<'static>>>, ConnectionError> {
+    if config.remote.is_empty() {
+        return Err(ConnectionError::InvalidGateway(
+            "OpenVPN remote must not be empty".into(),
+        ));
+    }
+
+    let uuid = config.uuid.unwrap_or_else(uuid::Uuid::new_v4).to_string();
+
+    let mut connection: HashMap<&'static str, Value<'static>> = HashMap::new();
+    connection.insert("type", Value::from("vpn"));
+    connection.insert("id", Value::from(config.name.clone()));
+    connection.insert("uuid", Value::from(uuid));
+    connection.insert("autoconnect", Value::from(opts.autoconnect));
+    if let Some(p) = opts.autoconnect_priority {
+        connection.insert("autoconnect-priority", Value::from(p));
+    }
+
+    let mut vpn_data: Vec<(String, String)> = Vec::new();
+
+    let remote = match config.port {
+        Some(port) => format!("{}:{}", config.remote, port),
+        None => config.remote.clone(),
+    };
+    vpn_data.push(("remote".into(), remote));
+    vpn_data.push(("ca".into(), config.ca.clone()));
+    vpn_data.push(("cert".into(), config.cert.clone()));
+    vpn_data.push(("key".into(), config.key.clone()));
+    vpn_data.push(("connection-type".into(), "tls".into()));
+
+    if let Some(ref compression) = config.compression {
+        #[allow(deprecated)]
+        match compression {
+            OpenVpnCompression::No => {
+                vpn_data.push(("compress".into(), "no".into()));
+            }
+            OpenVpnCompression::Lzo => {
+                vpn_data.push(("comp-lzo".into(), "yes".into()));
+            }
+            OpenVpnCompression::Lz4 => {
+                vpn_data.push(("compress".into(), "lz4".into()));
+            }
+            OpenVpnCompression::Lz4V2 => {
+                vpn_data.push(("compress".into(), "lz4-v2".into()));
+            }
+            OpenVpnCompression::Yes => {
+                vpn_data.push(("compress".into(), "yes".into()));
+            }
+        }
+    }
+
+    if let Some(ref proxy) = config.proxy {
+        match proxy {
+            OpenVpnProxy::Http { server, port, username, password, retry } => {
+                if *port == 0 {
+                    return Err(ConnectionError::InvalidAddress(
+                        "proxy port must not be zero".into(),
+                    ));
+                }
+                vpn_data.push(("proxy-type".into(), "http".into()));
+                vpn_data.push(("proxy-server".into(), server.clone()));
+                vpn_data.push(("proxy-port".into(), port.to_string()));
+                vpn_data.push(("proxy-retry".into(), if *retry { "yes" } else { "no" }.into()));
+                if let Some(u) = username {
+                    vpn_data.push(("http-proxy-username".into(), u.clone()));
+                }
+                if let Some(p) = password {
+                    vpn_data.push(("http-proxy-password".into(), p.clone()));
+                }
+            }
+            OpenVpnProxy::Socks { server, port, retry } => {
+                if *port == 0 {
+                    return Err(ConnectionError::InvalidAddress(
+                        "proxy port must not be zero".into(),
+                    ));
+                }
+                vpn_data.push(("proxy-type".into(), "socks".into()));
+                vpn_data.push(("proxy-server".into(), server.clone()));
+                vpn_data.push(("proxy-port".into(), port.to_string()));
+                vpn_data.push(("proxy-retry".into(), if *retry { "yes" } else { "no" }.into()));
+            }
+        }
+    }
+
+    let data_value = Value::from(vpn_data);
+
+    let mut vpn: HashMap<&'static str, Value<'static>> = HashMap::new();
+    vpn.insert("service-type", Value::from("org.freedesktop.NetworkManager.openvpn"));
+    vpn.insert("data", data_value);
+
+    let mut ipv4: HashMap<&'static str, Value<'static>> = HashMap::new();
+    ipv4.insert("method", Value::from("auto"));
+    if let Some(dns) = &config.dns {
+        let dns_array: Vec<Value> = dns.iter().map(|s| Value::from(s.clone())).collect();
+        ipv4.insert("dns", Value::from(dns_array));
+    }
+
+    let mut ipv6: HashMap<&'static str, Value<'static>> = HashMap::new();
+    ipv6.insert("method", Value::from("ignore"));
+
+    let mut settings = HashMap::new();
+    settings.insert("connection", connection);
+    settings.insert("vpn", vpn);
+    settings.insert("ipv4", ipv4);
+    settings.insert("ipv6", ipv6);
+
+    Ok(settings)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::models::{VpnType, WireGuardPeer};
+    use crate::api::models::{VpnType, WireGuardPeer, OpenVpnConfig, OpenVpnCompression, OpenVpnProxy};
 
     fn create_test_credentials() -> VpnCredentials {
         let peer = WireGuardPeer::new(
@@ -120,7 +245,7 @@ mod tests {
             "vpn.example.com:51820",
             vec!["0.0.0.0/0".into()],
         )
-        .with_persistent_keepalive(25);
+            .with_persistent_keepalive(25);
 
         VpnCredentials::new(
             VpnType::WireGuard,
@@ -130,8 +255,8 @@ mod tests {
             "10.0.0.2/24",
             vec![peer],
         )
-        .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
-        .with_mtu(1420)
+            .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+            .with_mtu(1420)
     }
 
     fn create_test_options() -> ConnectionOptions {
@@ -267,7 +392,7 @@ mod tests {
             "peer2.example.com:51821",
             vec!["192.168.0.0/16".into()],
         )
-        .with_preshared_key("PSKABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm=");
+            .with_preshared_key("PSKABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm=");
 
         creds.peers.push(extra_peer);
         let opts = create_test_options();
@@ -598,5 +723,187 @@ mod tests {
             let result = build_wireguard_connection(&creds, &opts);
             assert!(result.is_ok(), "Should accept valid gateway: {}", gateway);
         }
+    }
+
+
+    // --- OpenVPN tests ---
+    fn create_openvpn_config() -> OpenVpnConfig {
+        OpenVpnConfig::new(
+            "TestOpenVPN",
+            "vpn.example.com",
+            "/etc/openvpn/ca.crt",
+            "/etc/openvpn/client.crt",
+            "/etc/openvpn/client.key",
+        )
+    }
+
+    #[test]
+    fn builds_openvpn_connection() {
+        let config = create_openvpn_config();
+        let opts = create_test_options();
+        let result = build_openvpn_connection(&config, &opts);
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert!(settings.contains_key("connection"));
+        assert!(settings.contains_key("vpn"));
+        assert!(settings.contains_key("ipv4"));
+        assert!(settings.contains_key("ipv6"));
+    }
+
+    #[test]
+    fn openvpn_connection_type_is_vpn() {
+        let config = create_openvpn_config();
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let conn = settings.get("connection").unwrap();
+        assert_eq!(conn.get("type").unwrap(), &Value::from("vpn"));
+    }
+
+    #[test]
+    fn openvpn_service_type_is_correct() {
+        let config = create_openvpn_config();
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let vpn = settings.get("vpn").unwrap();
+        assert_eq!(
+            vpn.get("service-type").unwrap(),
+            &Value::from("org.freedesktop.NetworkManager.openvpn")
+        );
+    }
+
+    #[test]
+    fn openvpn_rejects_empty_remote() {
+        let mut config = create_openvpn_config();
+        config.remote = "".into();
+        let opts = create_test_options();
+        let result = build_openvpn_connection(&config, &opts);
+        assert!(matches!(result.unwrap_err(), ConnectionError::InvalidGateway(_)));
+    }
+
+    #[test]
+    fn openvpn_compression_no() {
+        let config = create_openvpn_config()
+            .with_compression(OpenVpnCompression::No);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let vpn = settings.get("vpn").unwrap();
+        // vpn.data is packed — just assert the section exists and no error
+        assert!(vpn.contains_key("data"));
+    }
+    #[allow(deprecated)]
+    #[test]
+    fn openvpn_compression_lzo() {
+        let config = create_openvpn_config()
+            .with_compression(OpenVpnCompression::Lzo);
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_compression_lz4() {
+        let config = create_openvpn_config()
+            .with_compression(OpenVpnCompression::Lz4);
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_compression_lz4v2() {
+        let config = create_openvpn_config()
+            .with_compression(OpenVpnCompression::Lz4V2);
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_compression_yes() {
+        let config = create_openvpn_config()
+            .with_compression(OpenVpnCompression::Yes);
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_http_proxy() {
+        let config = create_openvpn_config().with_proxy(OpenVpnProxy::Http {
+            server: "proxy.example.com".into(),
+            port: 8080,
+            username: Some("user".into()),
+            password: Some("pass".into()),
+            retry: true,
+        });
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_http_proxy_no_credentials() {
+        let config = create_openvpn_config().with_proxy(OpenVpnProxy::Http {
+            server: "proxy.example.com".into(),
+            port: 3128,
+            username: None,
+            password: None,
+            retry: false,
+        });
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_socks_proxy() {
+        let config = create_openvpn_config().with_proxy(OpenVpnProxy::Socks {
+            server: "socks.example.com".into(),
+            port: 1080,
+            retry: false,
+        });
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_proxy_rejects_zero_port_http() {
+        let config = create_openvpn_config().with_proxy(OpenVpnProxy::Http {
+            server: "proxy.example.com".into(),
+            port: 0,
+            username: None,
+            password: None,
+            retry: false,
+        });
+        let opts = create_test_options();
+        assert!(matches!(
+                build_openvpn_connection(&config, &opts).unwrap_err(),
+                ConnectionError::InvalidAddress(_)
+            ));
+    }
+
+    #[test]
+    fn openvpn_proxy_rejects_zero_port_socks() {
+        let config = create_openvpn_config().with_proxy(OpenVpnProxy::Socks {
+            server: "socks.example.com".into(),
+            port: 0,
+            retry: false,
+        });
+        let opts = create_test_options();
+        assert!(matches!(
+                build_openvpn_connection(&config, &opts).unwrap_err(),
+                ConnectionError::InvalidAddress(_)
+            ));
+    }
+
+    #[test]
+    fn openvpn_with_port() {
+        let config = create_openvpn_config().with_port(1194);
+        let opts = create_test_options();
+        assert!(build_openvpn_connection(&config, &opts).is_ok());
+    }
+
+    #[test]
+    fn openvpn_with_dns() {
+        let config = create_openvpn_config()
+            .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let ipv4 = settings.get("ipv4").unwrap();
+        assert!(ipv4.contains_key("dns"));
     }
 }
