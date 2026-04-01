@@ -119,6 +119,11 @@ pub fn build_wireguard_connection(
 /// `vpn.service-type = "org.freedesktop.NetworkManager.openvpn"`.
 /// All config lives in the flat `vpn.data` dict.
 ///
+/// # Note
+/// `vpn.data` is serialized as `Value::from(Vec<(String, String)>)`. If NM
+/// rejects the connection with a type error, this may need to be replaced with
+/// `zvariant::Dict` to produce the exact `a{ss}` signature the OpenVPN plugin
+/// expects. Cannot be verified without a live NM + OpenVPN profile.
 /// # Errors
 ///
 /// - `ConnectionError::InvalidGateway` if `remote` is empty
