@@ -12,6 +12,10 @@ pub enum OvpnParseError {
         arg: String,
         line: usize,
     },
+    MissingArgument {
+        key: String,
+        line: usize,
+    },
     InvalidContinuation {
         line: usize,
     },
@@ -44,6 +48,9 @@ impl fmt::Display for OvpnParseError {
                     f,
                     "invalid argument '{arg}' for directive '{key}' at line {line}"
                 )
+            }
+            OvpnParseError::MissingArgument { key, line } => {
+                write!(f, "missing argument for directive '{key}' at line {line}")
             }
             OvpnParseError::InvalidContinuation { line } => {
                 write!(f, "invalid continuation at line {line}")
