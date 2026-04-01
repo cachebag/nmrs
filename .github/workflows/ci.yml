@@ -10,7 +10,7 @@ on:
       - '.github/workflows/docs.yml'
       - '.github/workflows/nix.yml'
   pull_request:
-    branches: [master, 2.x-dev]
+    branches: [master, dev-openvpn]
     paths-ignore:
       - '*.md'
       - 'docs/**'
