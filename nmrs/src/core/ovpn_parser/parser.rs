@@ -325,17 +325,23 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                         // remote <HOST> [PORT] [PROTO]
 
                         let host = args
-                            .get(0)
-                            .ok_or(OvpnParseError::InvalidArgument {
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument {
                                 key: key.clone(),
-                                // FIXME: Add `MissingArgument` variant to allow for
-                                // omitting args
-                                arg: "".into(),
                                 line: 0, // FIXME: track lines
                             })?
                             .clone();
 
-                        let port = args.get(1).and_then(|p| p.parse::<u16>().ok()); // FIXME: ehh...
+                        let port = args
+                            .get(1)
+                            .map(|p| {
+                                p.parse::<u16>().map_err(|_| OvpnParseError::InvalidNumber {
+                                    key: key.clone(),
+                                    value: p.clone(),
+                                    line: 0,
+                                })
+                            })
+                            .transpose()?;
 
                         let proto = args.get(2).cloned();
 
@@ -345,29 +351,33 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                         // dev <DEVICE>
 
                         if args.len() != 1 {
-                            return Err(OvpnParseError::InvalidArgument {
+                            Err(OvpnParseError::InvalidArgument {
                                 key: key.clone(),
                                 arg: format!("{args:?}"),
                                 line: 0,
                             })?;
                         }
 
-                        let value = args.get(0).ok_or(OvpnParseError::InvalidArgument {
-                            key,
-                            arg: "".into(),
-                            line: 0,
-                        })?;
+                        let value = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
 
                         b.dev = Some(value.clone());
                     }
                     "proto" => {
                         // proto <PROTOCOL>
 
-                        let value = args.get(0).ok_or(OvpnParseError::InvalidArgument {
-                            key,
-                            arg: "".into(),
-                            line: 0,
-                        })?;
+                        if args.len() != 1 {
+                            Err(OvpnParseError::InvalidArgument {
+                                key: key.clone(),
+                                arg: format!("{args:?}"),
+                                line: 0,
+                            })?;
+                        }
+
+                        let value = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
 
                         b.proto = Some(value.clone());
                     }
@@ -375,33 +385,27 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                         // cipher <CIPHER>
                         // Note: This is deprecated in new configs
 
-                        let value = args.get(0).ok_or(OvpnParseError::InvalidArgument {
-                            key,
-                            arg: "".into(),
-                            line: 0,
-                        })?;
+                        let value = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
 
                         b.cipher = Some(value.clone());
                     }
                     "data-ciphers" => {
                         // data-ciphers <[cipher1]:[cipher2]...>
 
-                        let ciphers = args.get(0).ok_or(OvpnParseError::InvalidArgument {
-                            key,
-                            arg: "".into(),
-                            line: 0,
-                        })?;
+                        let ciphers = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
 
                         b.data_ciphers.extend(ciphers.split(':').map(String::from));
                     }
                     "auth" => {
                         // auth <ALGORITHM>
 
-                        let value = args.get(0).ok_or(OvpnParseError::InvalidArgument {
-                            key,
-                            arg: "".into(),
-                            line: 0,
-                        })?;
+                        let value = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
 
                         b.auth = Some(value.clone());
                     }
@@ -418,11 +422,9 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                         // allow-compress asym (default) <- receive compressed data but don't send
                         // allow-compress [yes/no]
 
-                        let value = args.get(0).ok_or(OvpnParseError::InvalidArgument {
-                            key,
-                            arg: "".into(),
-                            line: 0,
-                        })?;
+                        let value = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
 
                         let parsed = match value.as_str() {
                             "yes" => AllowCompress::Yes,
@@ -436,7 +438,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                     "route" => {
                         // route <NETWORK> [NETMASK] [GATEWAY]
 
-                        let network = parse_ipv4_arg(&key, args.get(0), 0)?;
+                        let network = parse_ipv4_arg(&key, args.first(), 0)?;
                         let netmask = args
                             .get(1)
                             .map(|v| parse_ipv4_arg(&key, Some(v), 0))
@@ -527,9 +529,8 @@ fn parse_ipv4_arg(
     value: Option<&String>,
     line: usize,
 ) -> Result<Ipv4Addr, OvpnParseError> {
-    let v = value.ok_or(OvpnParseError::InvalidArgument {
+    let v = value.ok_or(OvpnParseError::MissingArgument {
         key: key.to_string(),
-        arg: "".into(),
         line,
     })?;
 
@@ -539,4 +540,359 @@ fn parse_ipv4_arg(
             value: v.clone(),
             line,
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::Ipv4Addr;
+
+    use super::*;
+
+    // Macro to reduce noise on failure assertions
+    macro_rules! assert_parse_err {
+        ($input:expr, $pattern:pat $(if $guard:expr)? ) => {
+            match parse_ovpn($input).unwrap_err() {
+                ConnectionError::ParseError(e) => {
+                    assert!(matches!(e, $pattern $(if $guard)?));
+                }
+                _ => panic!("expected OvpnParseError"),
+            }
+        };
+    }
+
+    fn parse_ok(input: &str) -> OvpnFile {
+        parse_ovpn(input).unwrap()
+    }
+
+    fn assert_one_remote(f: &OvpnFile, host: &str, port: Option<u16>, proto: Option<&str>) {
+        assert_eq!(f.remotes.len(), 1, "expected exactly one remote");
+        let r = &f.remotes[0];
+        assert_eq!(r.host, host);
+        assert_eq!(r.port, port);
+        assert_eq!(r.proto.as_deref(), proto);
+    }
+
+    fn assert_inline_cert(source: &CertSource, expected_substr: &str) {
+        match source {
+            CertSource::Inline(s) => assert!(
+                s.contains(expected_substr),
+                "inline cert should contain {expected_substr:?}, got {s:?}"
+            ),
+            other => panic!("expected CertSource::Inline, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_remote_directive() {
+        let result = parse_ok("remote example.com 1194 udp");
+        assert_one_remote(&result, "example.com", Some(1194), Some("udp"));
+    }
+
+    #[test]
+    fn remote_missing_host_fails() {
+        assert_parse_err!(
+            "remote",
+            OvpnParseError::MissingArgument { key, .. } if key == "remote"
+        );
+    }
+
+    #[test]
+    fn remote_host_only_passes() {
+        let result = parse_ok("remote example.com");
+        assert_one_remote(&result, "example.com", None, None);
+    }
+
+    #[test]
+    fn remote_invalid_port_fails() {
+        assert_parse_err!(
+            "remote example.com bogus",
+            OvpnParseError::InvalidNumber { key, value, .. }
+                if key == "remote" && value == "bogus"
+        );
+    }
+
+    #[test]
+    fn remote_multiple_in_order_passes() {
+        let result = parse_ok("remote a.example 1194 udp\nremote b.example 443 tcp-client");
+        assert_eq!(result.remotes.len(), 2);
+        assert_eq!(result.remotes[0].host, "a.example");
+        assert_eq!(result.remotes[0].port, Some(1194));
+        assert_eq!(result.remotes[0].proto.as_deref(), Some("udp"));
+        assert_eq!(result.remotes[1].host, "b.example");
+        assert_eq!(result.remotes[1].port, Some(443));
+        assert_eq!(result.remotes[1].proto.as_deref(), Some("tcp-client"));
+    }
+
+    #[test]
+    fn parse_dev_directive() {
+        let result = parse_ok("dev tun");
+        assert_eq!(result.dev.as_deref(), Some("tun"));
+    }
+
+    #[test]
+    fn dev_arity_check_fails() {
+        assert_parse_err!(
+            "dev tun panu",
+            OvpnParseError::InvalidArgument { key, .. } if key == "dev"
+        );
+    }
+
+    #[test]
+    fn dev_missing_device_fails() {
+        assert_parse_err!(
+            "dev",
+            OvpnParseError::InvalidArgument { key, .. } if key == "dev"
+        );
+    }
+
+    #[test]
+    fn parse_proto_directive() {
+        let result = parse_ok("proto udp");
+        assert_eq!(result.proto.as_deref(), Some("udp"));
+    }
+
+    #[test]
+    fn proto_arity_check_fails() {
+        assert_parse_err!(
+            "proto udp tcp",
+            OvpnParseError::InvalidArgument { key, .. } if key == "proto"
+        );
+    }
+
+    #[test]
+    fn proto_missing_arg_fails() {
+        assert_parse_err!(
+            "proto",
+            OvpnParseError::InvalidArgument { key, .. } if key == "proto"
+        );
+    }
+
+    #[test]
+    fn dev_strips_comments_passes() {
+        let result = parse_ok("  dev tun  # interface\n; ignored");
+        assert_eq!(result.dev.as_deref(), Some("tun"));
+    }
+
+    #[test]
+    fn remote_line_continuation_passes() {
+        let result = parse_ok("remote example.com \\\n1194 udp");
+        assert_one_remote(&result, "example.com", Some(1194), Some("udp"));
+    }
+
+    #[test]
+    fn invalid_line_continuation_fails() {
+        assert_parse_err!("dev tun\\", OvpnParseError::InvalidContinuation { .. });
+    }
+
+    #[test]
+    fn block_unterminated_fails() {
+        assert_parse_err!(
+            "<ca>\n-----BEGIN CERTIFICATE-----",
+            OvpnParseError::UnterminatedBlock { block, .. } if block == "ca"
+        );
+    }
+
+    #[test]
+    fn block_close_without_open_fails() {
+        assert_parse_err!("</ca>", OvpnParseError::UnexpectedBlockEnd { .. });
+    }
+
+    #[test]
+    fn block_mismatched_end_tag_fails() {
+        assert_parse_err!(
+            "<ca>\n</cert>",
+            OvpnParseError::UnexpectedBlockEnd { block, .. } if block == "cert"
+        );
+    }
+
+    #[test]
+    fn parse_cipher_directive() {
+        let result = parse_ok("cipher AES-256-GCM");
+        assert_eq!(result.cipher.as_deref(), Some("AES-256-GCM"));
+    }
+
+    #[test]
+    fn parse_data_ciphers_directive() {
+        let result = parse_ok("data-ciphers AES-128-GCM:CHACHA20-POLY1305");
+        assert_eq!(
+            result.data_ciphers,
+            vec!["AES-128-GCM", "CHACHA20-POLY1305"]
+        );
+    }
+
+    #[test]
+    fn parse_auth_directive() {
+        let result = parse_ok("auth SHA256");
+        assert_eq!(result.auth.as_deref(), Some("SHA256"));
+    }
+
+    #[test]
+    fn cipher_missing_value_fails() {
+        assert_parse_err!(
+            "cipher",
+            OvpnParseError::MissingArgument { key, .. } if key == "cipher"
+        );
+    }
+
+    #[test]
+    fn data_ciphers_missing_value_fails() {
+        assert_parse_err!(
+            "data-ciphers",
+            OvpnParseError::MissingArgument { key, .. } if key == "data-ciphers"
+        );
+    }
+
+    #[test]
+    fn data_ciphers_repeat_directives_passes() {
+        let result =
+            parse_ok("data-ciphers AES-256-GCM:AES-128-GCM\ndata-ciphers CHACHA20-POLY1305");
+        assert_eq!(
+            result.data_ciphers,
+            vec!["AES-256-GCM", "AES-128-GCM", "CHACHA20-POLY1305"]
+        );
+    }
+
+    #[test]
+    fn compress_directive_variants_passes() {
+        assert!(matches!(
+            parse_ok("compress").compress,
+            Some(Compress::Stub)
+        ));
+        assert!(matches!(
+            parse_ok("compress stub").compress,
+            Some(Compress::Stub)
+        ));
+        assert!(matches!(
+            parse_ok("compress stub-v2").compress,
+            Some(Compress::StubV2)
+        ));
+        assert!(matches!(
+            parse_ok("compress lz4").compress,
+            Some(Compress::Algorithm(s)) if s == "lz4"
+        ));
+    }
+
+    #[test]
+    fn allow_compress_directive_variants_passes() {
+        assert!(matches!(
+            parse_ok("allow-compress yes").allow_compress,
+            Some(AllowCompress::Yes)
+        ));
+        assert!(matches!(
+            parse_ok("allow-compress no").allow_compress,
+            Some(AllowCompress::No)
+        ));
+        assert!(matches!(
+            parse_ok("allow-compress asym").allow_compress,
+            Some(AllowCompress::Asym)
+        ));
+        assert!(matches!(
+            parse_ok("allow-compress legacy").allow_compress,
+            Some(AllowCompress::Other(s)) if s == "legacy"
+        ));
+    }
+
+    #[test]
+    fn allow_compress_missing_arg_fails() {
+        assert_parse_err!(
+            "allow-compress",
+            OvpnParseError::MissingArgument { key, .. } if key == "allow-compress"
+        );
+    }
+
+    #[test]
+    fn parse_route_directive() {
+        let result = parse_ok("route 10.0.0.0 255.255.255.0 192.168.1.1");
+        assert_eq!(result.routes.len(), 1);
+        assert_eq!(result.routes[0].network, Ipv4Addr::new(10, 0, 0, 0));
+        assert_eq!(
+            result.routes[0].netmask,
+            Some(Ipv4Addr::new(255, 255, 255, 0))
+        );
+        assert_eq!(
+            result.routes[0].gateway,
+            Some(Ipv4Addr::new(192, 168, 1, 1))
+        );
+    }
+
+    #[test]
+    fn route_network_only_passes() {
+        let result = parse_ok("route 172.16.0.0");
+        assert_eq!(result.routes.len(), 1);
+        assert_eq!(result.routes[0].network, Ipv4Addr::new(172, 16, 0, 0));
+        assert_eq!(result.routes[0].netmask, None);
+        assert_eq!(result.routes[0].gateway, None);
+    }
+
+    #[test]
+    fn route_missing_network_fails() {
+        assert_parse_err!(
+            "route",
+            OvpnParseError::MissingArgument { key, .. } if key == "route"
+        );
+    }
+
+    #[test]
+    fn route_invalid_ipv4_fails() {
+        assert_parse_err!(
+            "route not-an-ip",
+            OvpnParseError::InvalidNumber { key, value, .. }
+                if key == "route" && value == "not-an-ip"
+        );
+    }
+
+    #[test]
+    fn parse_redirect_gateway_directive() {
+        let result = parse_ok("redirect-gateway def1 bypass-dhcp bypass-dns local ipv6");
+        let rg = result.redirect_gateway.expect("redirect-gateway");
+        assert!(rg.def1 && rg.bypass_dhcp && rg.bypass_dns && rg.local && rg.ipv6);
+    }
+
+    #[test]
+    fn redirect_gateway_unknown_flags_passes() {
+        let result = parse_ok("redirect-gateway def1 nosuch");
+        let rg = result.redirect_gateway.expect("redirect-gateway");
+        assert!(rg.def1);
+        assert!(!rg.bypass_dhcp);
+    }
+
+    #[test]
+    fn flags_and_options_directives_passes() {
+        let result = parse_ok("client\nnobind\n tls-version-min 1.2 \n");
+        assert!(result.flags.contains(&"client".to_string()));
+        assert!(result.flags.contains(&"nobind".to_string()));
+        let expected = vec!["1.2".to_string()];
+        assert_eq!(result.options.get("tls-version-min"), Some(&expected));
+    }
+
+    #[test]
+    fn ca_inline_block_passes() {
+        let result = parse_ok("<ca>\nTESTCABODY\n</ca>");
+        assert_inline_cert(result.ca.as_ref().expect("ca"), "TESTCABODY");
+    }
+
+    #[test]
+    fn cert_and_key_inline_blocks_passes() {
+        let result = parse_ok("<cert>\nCERTPEM\n</cert>\n<key>\nKEYPEM\n</key>");
+        assert_inline_cert(result.cert.as_ref().expect("cert"), "CERTPEM");
+        assert_inline_cert(result.key.as_ref().expect("key"), "KEYPEM");
+    }
+
+    #[test]
+    fn tls_auth_and_tls_crypt_inline_passes() {
+        let result =
+            parse_ok("<tls-auth>\nAUTHKEY\n</tls-auth>\n<tls-crypt>\nCRYPTKEY\n</tls-crypt>");
+        let ta = result.tls_auth.as_ref().expect("tls-auth");
+        assert_inline_cert(&ta.source, "AUTHKEY");
+        assert_eq!(ta.key_direction, None);
+        assert_inline_cert(result.tls_crypt.as_ref().expect("tls-crypt"), "CRYPTKEY");
+    }
+
+    #[test]
+    fn unknown_inline_block_in_options_passes() {
+        let result = parse_ok("<foo>\nbar\n</foo>");
+        let v = result.options.get("foo").expect("foo block");
+        assert_eq!(v.len(), 1);
+        assert!(v[0].contains("bar"));
+    }
 }
