@@ -120,10 +120,12 @@ pub fn build_wireguard_connection(
 /// All config lives in the flat `vpn.data` dict.
 ///
 /// # Note
-/// `vpn.data` is serialized as `Value::from(Vec<(String, String)>)`. If NM
-/// rejects the connection with a type error, this may need to be replaced with
-/// `zvariant::Dict` to produce the exact `a{ss}` signature the OpenVPN plugin
-/// expects. Cannot be verified without a live NM + OpenVPN profile.
+///
+/// Per the [NM VPN settings spec](https://networkmanager.dev/docs/api/latest/settings-vpn.html),
+/// `vpn.data` must be a `dict of string to string` (`a{ss}` in D-Bus type notation).
+/// `Value::from(Vec<(String, String)>)` may not produce this exact signature —
+/// if NM rejects the connection at runtime, replace with `zvariant::Dict`.
+///
 /// # Errors
 ///
 /// - `ConnectionError::InvalidGateway` if `remote` is empty
