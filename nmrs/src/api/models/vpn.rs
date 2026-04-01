@@ -446,6 +446,196 @@ pub struct VpnCredentials {
     pub uuid: Option<Uuid>,
 }
 
+/// Compression algorithm for OpenVPN connections.
+///
+/// Maps to the NM `compress` and `comp-lzo` keys in the `vpn.data` dict.
+///
+/// # Security Warning
+///
+/// Compression is generally discouraged due to the VORACLE vulnerability,
+/// where compression oracles can be exploited to recover plaintext from
+/// encrypted tunnels. OpenVPN 2.5+ defaults to `--allow-compression no`.
+/// Prefer [`No`](OpenVpnCompression::No) unless you have a specific need
+/// and understand the risk. See <https://community.openvpn.net/openvpn/wiki/VORACLE>.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenVpnCompression {
+    /// Disable compression explicitly. Recommended default.
+    ///
+    /// Maps to `compress no` in the NM `vpn.data` dict.
+    No,
+
+    /// LZO compression.
+    ///
+    /// Maps to `comp-lzo yes` in the NM `vpn.data` dict.
+    ///
+    /// # Security Warning
+    ///
+    /// Subject to the VORACLE vulnerability. See [`OpenVpnCompression`] docs.
+    ///
+    /// # Deprecation
+    ///
+    /// `comp-lzo` is deprecated upstream in OpenVPN in favour of the newer
+    /// `compress` directive. Use [`Lz4V2`](OpenVpnCompression::Lz4V2) if
+    /// you need compression, or [`No`](OpenVpnCompression::No) to disable it.
+    #[deprecated(note = "comp-lzo is deprecated upstream. Use Lz4V2 or No instead.")]
+    Lzo,
+
+    /// LZ4 compression.
+    ///
+    /// Maps to `compress lz4` in the NM `vpn.data` dict.
+    ///
+    /// # Security Warning
+    ///
+    /// Subject to the VORACLE vulnerability. See [`OpenVpnCompression`] docs.
+    Lz4,
+
+    /// LZ4 v2 compression.
+    ///
+    /// Maps to `compress lz4-v2` in the NM `vpn.data` dict.
+    ///
+    /// # Security Warning
+    ///
+    /// Subject to the VORACLE vulnerability. See [`OpenVpnCompression`] docs.
+    Lz4V2,
+
+    /// Adaptive compression — algorithm negotiated at runtime.
+    ///
+    /// Maps to `compress yes` in the NM `vpn.data` dict.
+    ///
+    /// # Security Warning
+    ///
+    /// Subject to the VORACLE vulnerability. See [`OpenVpnCompression`] docs.
+    Yes,
+}
+
+/// Proxy configuration for OpenVPN connections.
+///
+/// Maps to the NM `proxy-type`, `proxy-server`, `proxy-port`,
+/// `proxy-retry`, `http-proxy-username`, and `http-proxy-password` keys.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenVpnProxy {
+    /// HTTP proxy.
+    Http {
+        server: String,
+        port: u16,
+        username: Option<String>,
+        password: Option<String>,
+        retry: bool,
+    },
+    /// SOCKS proxy.
+    Socks {
+        server: String,
+        port: u16,
+        retry: bool,
+    },
+}
+
+/// OpenVPN connection configuration.
+///
+/// Stores the necessary information to configure an OpenVPN connection
+/// through NetworkManager's VPN plugin model.
+///
+/// # Example
+///
+/// ```rust
+/// use nmrs::{OpenVpnConfig, OpenVpnCompression};
+///
+/// let config = OpenVpnConfig::new(
+///     "CorpVPN",
+///     "vpn.example.com",
+///     "/etc/openvpn/ca.crt",
+///     "/etc/openvpn/client.crt",
+///     "/etc/openvpn/client.key",
+/// )
+/// .with_compression(OpenVpnCompression::Lz4V2)
+/// .with_dns(vec!["1.1.1.1".into()]);
+/// ```
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct OpenVpnConfig {
+    /// Unique name for the connection profile.
+    pub name: String,
+    /// VPN server hostname or IP address.
+    pub remote: String,
+    /// Path to the CA certificate file.
+    pub ca: String,
+    /// Path to the client certificate file.
+    pub cert: String,
+    /// Path to the client private key file.
+    pub key: String,
+    /// Optional port (defaults to 1194 if not set).
+    pub port: Option<u16>,
+    /// Optional compression setting.
+    pub compression: Option<OpenVpnCompression>,
+    /// Optional proxy configuration.
+    pub proxy: Option<OpenVpnProxy>,
+    /// Optional DNS servers to use when connected.
+    pub dns: Option<Vec<String>>,
+    /// Optional UUID for the connection (auto-generated if not provided).
+    pub uuid: Option<uuid::Uuid>,
+}
+
+impl OpenVpnConfig {
+    /// Creates a new `OpenVpnConfig` with the required fields.
+    pub fn new(
+        name: impl Into<String>,
+        remote: impl Into<String>,
+        ca: impl Into<String>,
+        cert: impl Into<String>,
+        key: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            remote: remote.into(),
+            ca: ca.into(),
+            cert: cert.into(),
+            key: key.into(),
+            port: None,
+            compression: None,
+            proxy: None,
+            dns: None,
+            uuid: None,
+        }
+    }
+
+    /// Sets the server port.
+    #[must_use]
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    /// Sets the compression algorithm.
+    #[must_use]
+    pub fn with_compression(mut self, compression: OpenVpnCompression) -> Self {
+        self.compression = Some(compression);
+        self
+    }
+
+    /// Sets the proxy configuration.
+    #[must_use]
+    pub fn with_proxy(mut self, proxy: OpenVpnProxy) -> Self {
+        self.proxy = Some(proxy);
+        self
+    }
+
+    /// Sets the DNS servers to use when connected.
+    #[must_use]
+    pub fn with_dns(mut self, dns: Vec<String>) -> Self {
+        self.dns = Some(dns);
+        self
+    }
+
+    /// Sets the UUID for the connection.
+    #[must_use]
+    pub fn with_uuid(mut self, uuid: uuid::Uuid) -> Self {
+        self.uuid = Some(uuid);
+        self
+    }
+}
+
 impl VpnCredentials {
     /// Creates new `VpnCredentials` with the required fields.
     ///
