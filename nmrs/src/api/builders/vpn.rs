@@ -184,7 +184,13 @@ pub fn build_openvpn_connection(
 
     if let Some(ref proxy) = config.proxy {
         match proxy {
-            OpenVpnProxy::Http { server, port, username, password, retry } => {
+            OpenVpnProxy::Http {
+                server,
+                port,
+                username,
+                password,
+                retry,
+            } => {
                 if *port == 0 {
                     return Err(ConnectionError::InvalidAddress(
                         "proxy port must not be zero".into(),
@@ -193,7 +199,10 @@ pub fn build_openvpn_connection(
                 vpn_data.push(("proxy-type".into(), "http".into()));
                 vpn_data.push(("proxy-server".into(), server.clone()));
                 vpn_data.push(("proxy-port".into(), port.to_string()));
-                vpn_data.push(("proxy-retry".into(), if *retry { "yes" } else { "no" }.into()));
+                vpn_data.push((
+                    "proxy-retry".into(),
+                    if *retry { "yes" } else { "no" }.into(),
+                ));
                 if let Some(u) = username {
                     vpn_data.push(("http-proxy-username".into(), u.clone()));
                 }
@@ -201,7 +210,11 @@ pub fn build_openvpn_connection(
                     vpn_data.push(("http-proxy-password".into(), p.clone()));
                 }
             }
-            OpenVpnProxy::Socks { server, port, retry } => {
+            OpenVpnProxy::Socks {
+                server,
+                port,
+                retry,
+            } => {
                 if *port == 0 {
                     return Err(ConnectionError::InvalidAddress(
                         "proxy port must not be zero".into(),
@@ -210,7 +223,10 @@ pub fn build_openvpn_connection(
                 vpn_data.push(("proxy-type".into(), "socks".into()));
                 vpn_data.push(("proxy-server".into(), server.clone()));
                 vpn_data.push(("proxy-port".into(), port.to_string()));
-                vpn_data.push(("proxy-retry".into(), if *retry { "yes" } else { "no" }.into()));
+                vpn_data.push((
+                    "proxy-retry".into(),
+                    if *retry { "yes" } else { "no" }.into(),
+                ));
             }
         }
     }
@@ -218,7 +234,10 @@ pub fn build_openvpn_connection(
     let data_value = Value::from(vpn_data);
 
     let mut vpn: HashMap<&'static str, Value<'static>> = HashMap::new();
-    vpn.insert("service-type", Value::from("org.freedesktop.NetworkManager.openvpn"));
+    vpn.insert(
+        "service-type",
+        Value::from("org.freedesktop.NetworkManager.openvpn"),
+    );
     vpn.insert("data", data_value);
 
     let mut ipv4: HashMap<&'static str, Value<'static>> = HashMap::new();
@@ -242,7 +261,9 @@ pub fn build_openvpn_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::models::{VpnType, WireGuardPeer, OpenVpnConfig, OpenVpnCompression, OpenVpnProxy};
+    use crate::api::models::{
+        OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, VpnType, WireGuardPeer,
+    };
 
     fn create_test_credentials() -> VpnCredentials {
         let peer = WireGuardPeer::new(
@@ -250,7 +271,7 @@ mod tests {
             "vpn.example.com:51820",
             vec!["0.0.0.0/0".into()],
         )
-            .with_persistent_keepalive(25);
+        .with_persistent_keepalive(25);
 
         VpnCredentials::new(
             VpnType::WireGuard,
@@ -260,8 +281,8 @@ mod tests {
             "10.0.0.2/24",
             vec![peer],
         )
-            .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
-            .with_mtu(1420)
+        .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+        .with_mtu(1420)
     }
 
     fn create_test_options() -> ConnectionOptions {
@@ -397,7 +418,7 @@ mod tests {
             "peer2.example.com:51821",
             vec!["192.168.0.0/16".into()],
         )
-            .with_preshared_key("PSKABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm=");
+        .with_preshared_key("PSKABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm=");
 
         creds.peers.push(extra_peer);
         let opts = create_test_options();
@@ -730,7 +751,6 @@ mod tests {
         }
     }
 
-
     // --- OpenVPN tests ---
     fn create_openvpn_config() -> OpenVpnConfig {
         OpenVpnConfig::new(
@@ -782,13 +802,15 @@ mod tests {
         config.remote = "".into();
         let opts = create_test_options();
         let result = build_openvpn_connection(&config, &opts);
-        assert!(matches!(result.unwrap_err(), ConnectionError::InvalidGateway(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConnectionError::InvalidGateway(_)
+        ));
     }
 
     #[test]
     fn openvpn_compression_no() {
-        let config = create_openvpn_config()
-            .with_compression(OpenVpnCompression::No);
+        let config = create_openvpn_config().with_compression(OpenVpnCompression::No);
         let opts = create_test_options();
         let settings = build_openvpn_connection(&config, &opts).unwrap();
         let vpn = settings.get("vpn").unwrap();
@@ -798,32 +820,28 @@ mod tests {
     #[allow(deprecated)]
     #[test]
     fn openvpn_compression_lzo() {
-        let config = create_openvpn_config()
-            .with_compression(OpenVpnCompression::Lzo);
+        let config = create_openvpn_config().with_compression(OpenVpnCompression::Lzo);
         let opts = create_test_options();
         assert!(build_openvpn_connection(&config, &opts).is_ok());
     }
 
     #[test]
     fn openvpn_compression_lz4() {
-        let config = create_openvpn_config()
-            .with_compression(OpenVpnCompression::Lz4);
+        let config = create_openvpn_config().with_compression(OpenVpnCompression::Lz4);
         let opts = create_test_options();
         assert!(build_openvpn_connection(&config, &opts).is_ok());
     }
 
     #[test]
     fn openvpn_compression_lz4v2() {
-        let config = create_openvpn_config()
-            .with_compression(OpenVpnCompression::Lz4V2);
+        let config = create_openvpn_config().with_compression(OpenVpnCompression::Lz4V2);
         let opts = create_test_options();
         assert!(build_openvpn_connection(&config, &opts).is_ok());
     }
 
     #[test]
     fn openvpn_compression_yes() {
-        let config = create_openvpn_config()
-            .with_compression(OpenVpnCompression::Yes);
+        let config = create_openvpn_config().with_compression(OpenVpnCompression::Yes);
         let opts = create_test_options();
         assert!(build_openvpn_connection(&config, &opts).is_ok());
     }
@@ -876,9 +894,9 @@ mod tests {
         });
         let opts = create_test_options();
         assert!(matches!(
-                build_openvpn_connection(&config, &opts).unwrap_err(),
-                ConnectionError::InvalidAddress(_)
-            ));
+            build_openvpn_connection(&config, &opts).unwrap_err(),
+            ConnectionError::InvalidAddress(_)
+        ));
     }
 
     #[test]
@@ -890,9 +908,9 @@ mod tests {
         });
         let opts = create_test_options();
         assert!(matches!(
-                build_openvpn_connection(&config, &opts).unwrap_err(),
-                ConnectionError::InvalidAddress(_)
-            ));
+            build_openvpn_connection(&config, &opts).unwrap_err(),
+            ConnectionError::InvalidAddress(_)
+        ));
     }
 
     #[test]
@@ -904,8 +922,7 @@ mod tests {
 
     #[test]
     fn openvpn_with_dns() {
-        let config = create_openvpn_config()
-            .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
+        let config = create_openvpn_config().with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
         let opts = create_test_options();
         let settings = build_openvpn_connection(&config, &opts).unwrap();
         let ipv4 = settings.get("ipv4").unwrap();
