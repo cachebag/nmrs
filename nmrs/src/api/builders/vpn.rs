@@ -69,8 +69,8 @@ use zvariant::Value;
 
 use super::wireguard_builder::WireGuardBuilder;
 use crate::api::models::{
-    ConnectionError, ConnectionOptions, OpenVpnCompression, OpenVpnAuthType, OpenVpnConfig, OpenVpnProxy,
-    VpnCredentials,
+    ConnectionError, ConnectionOptions, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig,
+    OpenVpnProxy, VpnCredentials,
 };
 
 /// Builds WireGuard VPN connection settings.
@@ -154,15 +154,15 @@ pub fn build_openvpn_connection(
     let mut vpn_data: Vec<(String, String)> = Vec::new();
 
     let remote = format!("{}:{}", config.remote, config.port);
-    
+
     vpn_data.push(("remote".into(), remote));
 
     let connection_type = match config.auth_type {
-        Some(OpenVpnAuthType::Password)    => "password",
-        Some(OpenVpnAuthType::Tls)         => "tls",
+        Some(OpenVpnAuthType::Password) => "password",
+        Some(OpenVpnAuthType::Tls) => "tls",
         Some(OpenVpnAuthType::PasswordTls) => "password-tls",
-        Some(OpenVpnAuthType::StaticKey)   => "static-key",
-        None                               => "tls",
+        Some(OpenVpnAuthType::StaticKey) => "static-key",
+        None => "tls",
     };
     vpn_data.push(("connection-type".into(), connection_type.into()));
 
