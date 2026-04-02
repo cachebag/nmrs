@@ -1,9 +1,9 @@
 #![allow(deprecated)]
 
-use uuid::Uuid;
-use std::convert::TryFrom;
 use super::device::DeviceState;
 use crate::api::models::error::ConnectionError;
+use std::convert::TryFrom;
+use uuid::Uuid;
 
 /// VPN connection type.
 ///
@@ -219,7 +219,7 @@ impl OpenVpnConfig {
         self.port = port;
         self
     }
-    
+
     /// Sets the compression algorithm.
     ///
     /// # Security Warning
@@ -246,32 +246,37 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
     fn try_from(f: crate::core::ovpn_parser::parser::OvpnFile) -> Result<Self, Self::Error> {
         use crate::core::ovpn_parser::parser::{AllowCompress, CertSource, Compress};
 
-        let first_remote = f.remotes.into_iter().next().ok_or_else(|| {
-            ConnectionError::InvalidGateway("no remote in .ovpn file".into())
-        })?;
+        let first_remote = f
+            .remotes
+            .into_iter()
+            .next()
+            .ok_or_else(|| ConnectionError::InvalidGateway("no remote in .ovpn file".into()))?;
 
         let tcp = first_remote
             .proto
             .as_deref()
             .map(|p: &str| p.starts_with("tcp"))
             .unwrap_or_else(|| {
-                f.proto.as_deref().map(|p: &str| p.starts_with("tcp")).unwrap_or(false)
+                f.proto
+                    .as_deref()
+                    .map(|p: &str| p.starts_with("tcp"))
+                    .unwrap_or(false)
             });
 
         let compression = match (f.compress, f.allow_compress) {
             (Some(Compress::Algorithm(ref s)), _) => Some(match s.as_str() {
-                "lz4"    => OpenVpnCompression::Lz4,
+                "lz4" => OpenVpnCompression::Lz4,
                 "lz4-v2" => OpenVpnCompression::Lz4V2,
-                _        => OpenVpnCompression::Yes,
+                _ => OpenVpnCompression::Yes,
             }),
             (Some(Compress::Stub | Compress::StubV2), _) => Some(OpenVpnCompression::No),
-            (None, Some(AllowCompress::No))               => Some(OpenVpnCompression::No),
-            _                                             => None,
+            (None, Some(AllowCompress::No)) => Some(OpenVpnCompression::No),
+            _ => None,
         };
 
         let cert_path = |src: CertSource| -> String {
             match src {
-                CertSource::File(p)   => p,
+                CertSource::File(p) => p,
                 CertSource::Inline(_) => String::new(), // inline certs not yet handled
             }
         };
@@ -622,7 +627,6 @@ pub enum OpenVpnProxy {
         retry: bool,
     },
 }
-
 
 impl VpnCredentials {
     /// Creates new `VpnCredentials` with the required fields.
