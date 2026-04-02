@@ -1,8 +1,9 @@
 #![allow(deprecated)]
 
 use uuid::Uuid;
-
+use std::convert::TryFrom;
 use super::device::DeviceState;
+use crate::api::models::error::ConnectionError;
 
 /// VPN connection type.
 ///
@@ -83,6 +84,10 @@ pub struct OpenVpnConfig {
     pub username: Option<String>,
     /// Password for password authentication.
     pub password: Option<String>,
+    /// Compression algorithm. See [`OpenVpnCompression`] for security considerations.
+    pub compression: Option<OpenVpnCompression>,
+    /// Proxy configuration.
+    pub proxy: Option<OpenVpnProxy>,
 }
 
 impl OpenVpnConfig {
@@ -120,6 +125,8 @@ impl OpenVpnConfig {
             key_password: None,
             username: None,
             password: None,
+            compression: None,
+            proxy: None,
         }
     }
 
@@ -205,6 +212,90 @@ impl OpenVpnConfig {
     pub fn with_password(mut self, password: impl Into<String>) -> Self {
         self.password = Some(password.into());
         self
+    }
+    /// Sets the server port.
+    #[must_use]
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.port = port;
+        self
+    }
+    
+    /// Sets the compression algorithm.
+    ///
+    /// # Security Warning
+    ///
+    /// Some compression modes are subject to the VORACLE vulnerability.
+    /// See [`OpenVpnCompression`] for details and recommendations.
+    #[must_use]
+    pub fn with_compression(mut self, compression: OpenVpnCompression) -> Self {
+        self.compression = Some(compression);
+        self
+    }
+
+    /// Sets the proxy configuration.
+    #[must_use]
+    pub fn with_proxy(mut self, proxy: OpenVpnProxy) -> Self {
+        self.proxy = Some(proxy);
+        self
+    }
+}
+
+impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
+    type Error = ConnectionError;
+
+    fn try_from(f: crate::core::ovpn_parser::parser::OvpnFile) -> Result<Self, Self::Error> {
+        use crate::core::ovpn_parser::parser::{AllowCompress, CertSource, Compress};
+
+        let first_remote = f.remotes.into_iter().next().ok_or_else(|| {
+            ConnectionError::InvalidGateway("no remote in .ovpn file".into())
+        })?;
+
+        let tcp = first_remote
+            .proto
+            .as_deref()
+            .map(|p: &str| p.starts_with("tcp"))
+            .unwrap_or_else(|| {
+                f.proto.as_deref().map(|p: &str| p.starts_with("tcp")).unwrap_or(false)
+            });
+
+        let compression = match (f.compress, f.allow_compress) {
+            (Some(Compress::Algorithm(ref s)), _) => Some(match s.as_str() {
+                "lz4"    => OpenVpnCompression::Lz4,
+                "lz4-v2" => OpenVpnCompression::Lz4V2,
+                _        => OpenVpnCompression::Yes,
+            }),
+            (Some(Compress::Stub | Compress::StubV2), _) => Some(OpenVpnCompression::No),
+            (None, Some(AllowCompress::No))               => Some(OpenVpnCompression::No),
+            _                                             => None,
+        };
+
+        let cert_path = |src: CertSource| -> String {
+            match src {
+                CertSource::File(p)   => p,
+                CertSource::Inline(_) => String::new(), // inline certs not yet handled
+            }
+        };
+
+        Ok(OpenVpnConfig {
+            name: String::new(), // caller should set this
+            remote: first_remote.host,
+            port: first_remote.port.unwrap_or(1194),
+            tcp,
+            auth_type: None, // inferred from cert presence by caller if needed
+            auth: f.auth,
+            cipher: f.cipher,
+            dns: None,
+            mtu: None,
+            uuid: None,
+            ca_cert: f.ca.map(cert_path),
+            client_cert: f.cert.map(cert_path),
+            client_key: f.key.map(cert_path),
+            key_password: None,
+            username: None,
+            password: None,
+            compression,
+            proxy: None, // proxy not modeled in parser yet
+        })
     }
 }
 
@@ -532,109 +623,6 @@ pub enum OpenVpnProxy {
     },
 }
 
-/// OpenVPN connection configuration.
-///
-/// Stores the necessary information to configure an OpenVPN connection
-/// through NetworkManager's VPN plugin model.
-///
-/// # Example
-///
-/// ```rust
-/// use nmrs::{OpenVpnConfig, OpenVpnCompression};
-///
-/// let config = OpenVpnConfig::new(
-///     "CorpVPN",
-///     "vpn.example.com",
-///     "/etc/openvpn/ca.crt",
-///     "/etc/openvpn/client.crt",
-///     "/etc/openvpn/client.key",
-/// )
-/// .with_compression(OpenVpnCompression::Lz4V2)
-/// .with_dns(vec!["1.1.1.1".into()]);
-/// ```
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub struct OpenVpnConfig {
-    /// Unique name for the connection profile.
-    pub name: String,
-    /// VPN server hostname or IP address.
-    pub remote: String,
-    /// Path to the CA certificate file.
-    pub ca: String,
-    /// Path to the client certificate file.
-    pub cert: String,
-    /// Path to the client private key file.
-    pub key: String,
-    /// Optional port (defaults to 1194 if not set).
-    pub port: Option<u16>,
-    /// Optional compression setting.
-    pub compression: Option<OpenVpnCompression>,
-    /// Optional proxy configuration.
-    pub proxy: Option<OpenVpnProxy>,
-    /// Optional DNS servers to use when connected.
-    pub dns: Option<Vec<String>>,
-    /// Optional UUID for the connection (auto-generated if not provided).
-    pub uuid: Option<uuid::Uuid>,
-}
-
-impl OpenVpnConfig {
-    /// Creates a new `OpenVpnConfig` with the required fields.
-    pub fn new(
-        name: impl Into<String>,
-        remote: impl Into<String>,
-        ca: impl Into<String>,
-        cert: impl Into<String>,
-        key: impl Into<String>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            remote: remote.into(),
-            ca: ca.into(),
-            cert: cert.into(),
-            key: key.into(),
-            port: None,
-            compression: None,
-            proxy: None,
-            dns: None,
-            uuid: None,
-        }
-    }
-
-    /// Sets the server port.
-    #[must_use]
-    pub fn with_port(mut self, port: u16) -> Self {
-        self.port = Some(port);
-        self
-    }
-
-    /// Sets the compression algorithm.
-    #[must_use]
-    pub fn with_compression(mut self, compression: OpenVpnCompression) -> Self {
-        self.compression = Some(compression);
-        self
-    }
-
-    /// Sets the proxy configuration.
-    #[must_use]
-    pub fn with_proxy(mut self, proxy: OpenVpnProxy) -> Self {
-        self.proxy = Some(proxy);
-        self
-    }
-
-    /// Sets the DNS servers to use when connected.
-    #[must_use]
-    pub fn with_dns(mut self, dns: Vec<String>) -> Self {
-        self.dns = Some(dns);
-        self
-    }
-
-    /// Sets the UUID for the connection.
-    #[must_use]
-    pub fn with_uuid(mut self, uuid: uuid::Uuid) -> Self {
-        self.uuid = Some(uuid);
-        self
-    }
-}
 
 impl VpnCredentials {
     /// Creates new `VpnCredentials` with the required fields.
