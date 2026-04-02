@@ -69,7 +69,7 @@ use zvariant::Value;
 
 use super::wireguard_builder::WireGuardBuilder;
 use crate::api::models::{
-    ConnectionError, ConnectionOptions, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy,
+    ConnectionError, ConnectionOptions, OpenVpnCompression, OpenVpnAuthType, OpenVpnConfig, OpenVpnProxy,
     VpnCredentials,
 };
 
@@ -153,15 +153,42 @@ pub fn build_openvpn_connection(
 
     let mut vpn_data: Vec<(String, String)> = Vec::new();
 
-    let remote = match config.port {
-        Some(port) => format!("{}:{}", config.remote, port),
-        None => config.remote.clone(),
-    };
+    let remote = format!("{}:{}", config.remote, config.port);
+    
     vpn_data.push(("remote".into(), remote));
-    vpn_data.push(("ca".into(), config.ca.clone()));
-    vpn_data.push(("cert".into(), config.cert.clone()));
-    vpn_data.push(("key".into(), config.key.clone()));
-    vpn_data.push(("connection-type".into(), "tls".into()));
+
+    let connection_type = match config.auth_type {
+        Some(OpenVpnAuthType::Password)    => "password",
+        Some(OpenVpnAuthType::Tls)         => "tls",
+        Some(OpenVpnAuthType::PasswordTls) => "password-tls",
+        Some(OpenVpnAuthType::StaticKey)   => "static-key",
+        None                               => "tls",
+    };
+    vpn_data.push(("connection-type".into(), connection_type.into()));
+
+    if let Some(ref username) = config.username {
+        vpn_data.push(("username".into(), username.clone()));
+    }
+    if let Some(ref auth) = config.auth {
+        vpn_data.push(("auth".into(), auth.clone()));
+    }
+    if let Some(ref cipher) = config.cipher {
+        vpn_data.push(("cipher".into(), cipher.clone()));
+    }
+    if let Some(mtu) = config.mtu {
+        vpn_data.push(("tunnel-mtu".into(), mtu.to_string()));
+    }
+
+    // certs
+    if let Some(ref ca) = config.ca_cert {
+        vpn_data.push(("ca".into(), ca.clone()));
+    }
+    if let Some(ref cert) = config.client_cert {
+        vpn_data.push(("cert".into(), cert.clone()));
+    }
+    if let Some(ref key) = config.client_key {
+        vpn_data.push(("key".into(), key.clone()));
+    }
 
     if let Some(ref compression) = config.compression {
         #[allow(deprecated)]
@@ -755,13 +782,10 @@ mod tests {
 
     // --- OpenVPN tests ---
     fn create_openvpn_config() -> OpenVpnConfig {
-        OpenVpnConfig::new(
-            "TestOpenVPN",
-            "vpn.example.com",
-            "/etc/openvpn/ca.crt",
-            "/etc/openvpn/client.crt",
-            "/etc/openvpn/client.key",
-        )
+        OpenVpnConfig::new("TestOpenVPN", "vpn.example.com", 1194, false)
+            .with_ca_cert("/etc/openvpn/ca.crt")
+            .with_client_cert("/etc/openvpn/client.crt")
+            .with_client_key("/etc/openvpn/client.key")
     }
 
     #[test]
