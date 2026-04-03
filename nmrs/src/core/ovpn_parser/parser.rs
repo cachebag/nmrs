@@ -130,8 +130,16 @@ pub struct RedirectGateway {
 }
 
 enum OvpnItem {
-    Directive { key: String, args: Vec<String> },
-    Block { key: String, content: String },
+    Directive {
+        key: String,
+        args: Vec<String>,
+        line: usize,
+    },
+    Block {
+        key: String,
+        content: String,
+        line: usize,
+    },
 }
 
 #[derive(Default)]
@@ -204,6 +212,7 @@ fn lexer(input: &str) -> Result<Vec<OvpnItem>, OvpnParseError> {
                     items.push(OvpnItem::Block {
                         key: block_name.clone(),
                         content: block_buffer.clone(),
+                        line: block_line_start,
                     });
 
                     in_block = None;
@@ -223,7 +232,15 @@ fn lexer(input: &str) -> Result<Vec<OvpnItem>, OvpnParseError> {
             continue;
         }
 
-        // Continuation
+        // Typically, one might track line numbers where the directive
+        // starts, as opposed to when it ends
+        // e.g.
+        //
+        // remote example.com \
+        // 1194 udp
+        //
+        // For the sake of reporting errors in a user friendly fashion,
+        // I find it okay to do the latter here.
         if continuing {
             current_line.push(' ');
             current_line.push_str(line.trim_start());
@@ -294,7 +311,11 @@ fn lexer(input: &str) -> Result<Vec<OvpnItem>, OvpnParseError> {
 
         let args: Vec<String> = parts.map(|s| s.to_string()).collect();
 
-        items.push(OvpnItem::Directive { key, args });
+        items.push(OvpnItem::Directive {
+            key,
+            args,
+            line: line_number,
+        });
     }
 
     if continuing {
@@ -319,7 +340,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
 
     for item in items {
         match item {
-            OvpnItem::Directive { key, args } => {
+            OvpnItem::Directive { key, args, line } => {
                 match key.as_str() {
                     "remote" => {
                         // remote <HOST> [PORT] [PROTO]
@@ -328,7 +349,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             .first()
                             .ok_or(OvpnParseError::MissingArgument {
                                 key: key.clone(),
-                                line: 0, // FIXME: track lines
+                                line,
                             })?
                             .clone();
 
@@ -338,7 +359,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                                 p.parse::<u16>().map_err(|_| OvpnParseError::InvalidNumber {
                                     key: key.clone(),
                                     value: p.clone(),
-                                    line: 0,
+                                    line,
                                 })
                             })
                             .transpose()?;
@@ -354,13 +375,13 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             Err(OvpnParseError::InvalidArgument {
                                 key: key.clone(),
                                 arg: format!("{args:?}"),
-                                line: 0,
+                                line,
                             })?;
                         }
 
                         let value = args
                             .first()
-                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
+                            .ok_or(OvpnParseError::MissingArgument { key, line })?;
 
                         b.dev = Some(value.clone());
                     }
@@ -371,13 +392,13 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             Err(OvpnParseError::InvalidArgument {
                                 key: key.clone(),
                                 arg: format!("{args:?}"),
-                                line: 0,
+                                line,
                             })?;
                         }
 
                         let value = args
                             .first()
-                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
+                            .ok_or(OvpnParseError::MissingArgument { key, line })?;
 
                         b.proto = Some(value.clone());
                     }
@@ -387,7 +408,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
 
                         let value = args
                             .first()
-                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
+                            .ok_or(OvpnParseError::MissingArgument { key, line })?;
 
                         b.cipher = Some(value.clone());
                     }
@@ -396,7 +417,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
 
                         let ciphers = args
                             .first()
-                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
+                            .ok_or(OvpnParseError::MissingArgument { key, line })?;
 
                         b.data_ciphers.extend(ciphers.split(':').map(String::from));
                     }
@@ -405,7 +426,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
 
                         let value = args
                             .first()
-                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
+                            .ok_or(OvpnParseError::MissingArgument { key, line })?;
 
                         b.auth = Some(value.clone());
                     }
@@ -424,7 +445,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
 
                         let value = args
                             .first()
-                            .ok_or(OvpnParseError::MissingArgument { key, line: 0 })?;
+                            .ok_or(OvpnParseError::MissingArgument { key, line })?;
 
                         let parsed = match value.as_str() {
                             "yes" => AllowCompress::Yes,
@@ -438,14 +459,14 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                     "route" => {
                         // route <NETWORK> [NETMASK] [GATEWAY]
 
-                        let network = parse_ipv4_arg(&key, args.first(), 0)?;
+                        let network = parse_ipv4_arg(&key, args.first(), line)?;
                         let netmask = args
                             .get(1)
-                            .map(|v| parse_ipv4_arg(&key, Some(v), 0))
+                            .map(|v| parse_ipv4_arg(&key, Some(v), line))
                             .transpose()?;
                         let gateway = args
                             .get(2)
-                            .map(|v| parse_ipv4_arg(&key, Some(v), 0))
+                            .map(|v| parse_ipv4_arg(&key, Some(v), line))
                             .transpose()?;
 
                         b.routes.push(Route {
@@ -488,6 +509,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
             OvpnItem::Block {
                 key: block_key,
                 content,
+                line: _line,
             } => {
                 match block_key.as_str() {
                     "ca" => {
@@ -894,5 +916,29 @@ mod tests {
         let v = result.options.get("foo").expect("foo block");
         assert_eq!(v.len(), 1);
         assert!(v[0].contains("bar"));
+    }
+
+    #[test]
+    fn error_reports_correct_line_number() {
+        let input = "dev tun\nproto udp\nremote\ncipher AES-256-GCM";
+        match parse_ovpn(input).unwrap_err() {
+            ConnectionError::ParseError(OvpnParseError::MissingArgument { key, line }) => {
+                assert_eq!(key, "remote");
+                assert_eq!(line, 3);
+            }
+            other => panic!("expected MissingArgument, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unterminated_block_reports_start_line() {
+        let input = "dev tun\n<ca>\ncontent";
+        match parse_ovpn(input).unwrap_err() {
+            ConnectionError::ParseError(OvpnParseError::UnterminatedBlock { block, line }) => {
+                assert_eq!(block, "ca");
+                assert_eq!(line, 2);
+            }
+            other => panic!("expected UnterminatedBlock, got {other:?}"),
+        }
     }
 }
