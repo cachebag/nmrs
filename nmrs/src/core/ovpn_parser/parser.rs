@@ -443,6 +443,7 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                                     line,
                                 })?;
 
+                        // 0 = server, 1 = client
                         if dir > 1 {
                             Err(OvpnParseError::InvalidArgument {
                                 key,
@@ -561,36 +562,34 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                 key: block_key,
                 content,
                 line: _line,
-            } => {
-                match block_key.as_str() {
-                    "ca" => {
-                        b.ca = Some(CertSource::Inline(content));
-                    }
-
-                    "cert" => {
-                        b.cert = Some(CertSource::Inline(content));
-                    }
-
-                    "key" => {
-                        b.key = Some(CertSource::Inline(content));
-                    }
-
-                    "tls-auth" => {
-                        b.tls_auth = Some(TlsAuth {
-                            source: CertSource::Inline(content),
-                            key_direction: None, // FIXME: handle seperately
-                        });
-                    }
-
-                    "tls-crypt" => {
-                        b.tls_crypt = Some(CertSource::Inline(content));
-                    }
-
-                    _ => {
-                        b.options.entry(block_key).or_default().push(content);
-                    }
+            } => match block_key.as_str() {
+                "ca" => {
+                    b.ca = Some(CertSource::Inline(content));
                 }
-            }
+
+                "cert" => {
+                    b.cert = Some(CertSource::Inline(content));
+                }
+
+                "key" => {
+                    b.key = Some(CertSource::Inline(content));
+                }
+
+                "tls-auth" => {
+                    b.tls_auth = Some(TlsAuth {
+                        source: CertSource::Inline(content),
+                        key_direction: None,
+                    });
+                }
+
+                "tls-crypt" => {
+                    b.tls_crypt = Some(CertSource::Inline(content));
+                }
+
+                _ => {
+                    b.options.entry(block_key).or_default().push(content);
+                }
+            },
         }
     }
 
