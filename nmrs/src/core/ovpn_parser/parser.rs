@@ -1,19 +1,8 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 
-use crate::api::models::ConnectionError;
+use crate::api::models::{ConnectionError, OpenVpnAuthType};
 use crate::core::ovpn_parser::error::OvpnParseError;
-
-// FIXME: Change when #309 lands
-// https://github.com/cachebag/nmrs/pull/309/changes
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub enum OpenVpnAuthType {
-    Password,
-    Tls,
-    PasswordTls,
-    StaticKey,
-}
 
 #[derive(Debug, Clone)]
 pub struct OvpnFile {
@@ -150,6 +139,7 @@ struct OvpnFileBuilder {
     ca: Option<CertSource>,
     cert: Option<CertSource>,
     key: Option<CertSource>,
+    key_direction: Option<u8>,
     tls_auth: Option<TlsAuth>,
     tls_crypt: Option<CertSource>,
     cipher: Option<String>,
@@ -164,7 +154,13 @@ struct OvpnFileBuilder {
 }
 
 impl OvpnFileBuilder {
-    fn build(self) -> OvpnFile {
+    fn build(mut self) -> OvpnFile {
+        if let Some(ref mut ta) = self.tls_auth
+            && ta.key_direction.is_none()
+        {
+            ta.key_direction = self.key_direction;
+        }
+
         OvpnFile {
             remotes: self.remotes,
             dev: self.dev,
@@ -401,6 +397,61 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             .ok_or(OvpnParseError::MissingArgument { key, line })?;
 
                         b.proto = Some(value.clone());
+                    }
+                    "tls-auth" => {
+                        // tls-auth <KEY-FILE> [DIRECTION]
+
+                        let path = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument {
+                                key: key.clone(),
+                                line,
+                            })?
+                            .clone();
+
+                        let kd = args
+                            .get(1)
+                            .map(|v| {
+                                v.parse::<u8>().map_err(|_| OvpnParseError::InvalidNumber {
+                                    key: key.clone(),
+                                    value: v.clone(),
+                                    line,
+                                })
+                            })
+                            .transpose()?
+                            .filter(|&d| d <= 1);
+
+                        b.tls_auth = Some(TlsAuth {
+                            source: CertSource::File(path),
+                            key_direction: kd,
+                        });
+                    }
+                    "key-direction" => {
+                        // key-direction <0/1>
+
+                        let value = args.first().ok_or(OvpnParseError::MissingArgument {
+                            key: key.clone(),
+                            line,
+                        })?;
+
+                        let dir =
+                            value
+                                .parse::<u8>()
+                                .map_err(|_| OvpnParseError::InvalidNumber {
+                                    key: key.clone(),
+                                    value: value.clone(),
+                                    line,
+                                })?;
+
+                        if dir > 1 {
+                            Err(OvpnParseError::InvalidArgument {
+                                key,
+                                arg: value.clone(),
+                                line,
+                            })?;
+                        }
+
+                        b.key_direction = Some(dir);
                     }
                     "cipher" => {
                         // cipher <CIPHER>
@@ -940,5 +991,84 @@ mod tests {
             }
             other => panic!("expected UnterminatedBlock, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn tls_auth_directive_with_direction_passes() {
+        let result = parse_ok("tls-auth /etc/openvpn/ta.key 1");
+        let ta = result.tls_auth.as_ref().expect("tls-auth");
+        match &ta.source {
+            CertSource::File(p) => assert_eq!(p, "/etc/openvpn/ta.key"),
+            other => panic!("expected CertSource::File, got {other:?}"),
+        }
+        assert_eq!(ta.key_direction, Some(1));
+    }
+
+    #[test]
+    fn tls_auth_directive_without_direction_passes() {
+        let result = parse_ok("tls-auth /etc/openvpn/ta.key");
+        let ta = result.tls_auth.as_ref().expect("tls-auth");
+        match &ta.source {
+            CertSource::File(p) => assert_eq!(p, "/etc/openvpn/ta.key"),
+            other => panic!("expected CertSource::File, got {other:?}"),
+        }
+        assert_eq!(ta.key_direction, None);
+    }
+
+    #[test]
+    fn tls_auth_directive_missing_path_fails() {
+        assert_parse_err!(
+            "tls-auth",
+            OvpnParseError::MissingArgument { key, .. } if key == "tls-auth"
+        );
+    }
+
+    #[test]
+    fn key_direction_standalone_passes() {
+        let result = parse_ok("<tls-auth>\nAUTHKEY\n</tls-auth>\nkey-direction 0");
+        let ta = result.tls_auth.as_ref().expect("tls-auth");
+        assert_inline_cert(&ta.source, "AUTHKEY");
+        assert_eq!(ta.key_direction, Some(0));
+    }
+
+    #[test]
+    fn key_direction_standalone_before_block_passes() {
+        let result = parse_ok("key-direction 1\n<tls-auth>\nAUTHKEY\n</tls-auth>");
+        let ta = result.tls_auth.as_ref().expect("tls-auth");
+        assert_inline_cert(&ta.source, "AUTHKEY");
+        assert_eq!(ta.key_direction, Some(1));
+    }
+
+    #[test]
+    fn key_direction_does_not_override_inline_arg() {
+        let result = parse_ok("tls-auth /path/ta.key 1\nkey-direction 0");
+        let ta = result.tls_auth.as_ref().expect("tls-auth");
+        assert_eq!(ta.key_direction, Some(1));
+    }
+
+    #[test]
+    fn key_direction_invalid_value_fails() {
+        assert_parse_err!(
+            "key-direction 2",
+            OvpnParseError::InvalidArgument { key, arg, .. }
+                if key == "key-direction" && arg == "2"
+        );
+    }
+
+    #[test]
+    fn key_direction_non_numeric_fails() {
+        assert_parse_err!(
+            "key-direction server",
+            OvpnParseError::InvalidNumber { key, value, .. }
+                if key == "key-direction" && value == "server"
+        );
+    }
+
+    #[test]
+    fn key_direction_missing_arg_fails() {
+        assert_parse_err!(
+            "key-direction",
+            OvpnParseError::MissingArgument { key, .. } if key == "key-direction"
+        );
     }
 }
