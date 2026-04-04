@@ -3,6 +3,9 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Added 
+- `is_hotspot` method for networks in AP mode 3 ([#324](https://github.com/cachebag/nmrs/pull/324)) 
+- `app.lock` now created in `$XDG_DATA_DIR` (nmrs) ([#310](https://github.com/cachebag/nmrs/pull/310))
 
 ## [2.2.0] - 2026-03-17
 ### Added
