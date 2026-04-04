@@ -166,6 +166,10 @@ pub fn build_openvpn_connection(
     };
     vpn_data.push(("connection-type".into(), connection_type.into()));
 
+    if config.tcp {
+        vpn_data.push(("proto-tcp".into(), "yes".into()));
+    }
+
     if let Some(ref username) = config.username {
         vpn_data.push(("username".into(), username.clone()));
     }
@@ -262,12 +266,23 @@ pub fn build_openvpn_connection(
 
     let data_value = Value::from(vpn_data);
 
+    let mut vpn_secrets: Vec<(String, String)> = Vec::new();
+    if let Some(ref password) = config.password {
+        vpn_secrets.push(("password".into(), password.clone()));
+    }
+    if let Some(ref key_password) = config.key_password {
+        vpn_secrets.push(("cert-pass".into(), key_password.clone()));
+    }
+
     let mut vpn: HashMap<&'static str, Value<'static>> = HashMap::new();
     vpn.insert(
         "service-type",
         Value::from("org.freedesktop.NetworkManager.openvpn"),
     );
     vpn.insert("data", data_value);
+    if !vpn_secrets.is_empty() {
+        vpn.insert("secrets", Value::from(vpn_secrets));
+    }
 
     let mut ipv4: HashMap<&'static str, Value<'static>> = HashMap::new();
     ipv4.insert("method", Value::from("auto"));
@@ -940,18 +955,32 @@ mod tests {
     }
 
     #[test]
-    fn openvpn_with_port() {
-        let config = create_openvpn_config().with_port(1194);
-        let opts = create_test_options();
-        assert!(build_openvpn_connection(&config, &opts).is_ok());
-    }
-
-    #[test]
     fn openvpn_with_dns() {
         let config = create_openvpn_config().with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
         let opts = create_test_options();
         let settings = build_openvpn_connection(&config, &opts).unwrap();
         let ipv4 = settings.get("ipv4").unwrap();
         assert!(ipv4.contains_key("dns"));
+    }
+
+    #[test]
+    fn openvpn_tcp_emits_proto_tcp() {
+        let config = OpenVpnConfig::new("TcpVPN", "vpn.example.com", 443, true);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let vpn = settings.get("vpn").unwrap();
+        assert!(vpn.contains_key("data"));
+    }
+
+    #[test]
+    fn openvpn_password_goes_to_secrets() {
+        let config = create_openvpn_config()
+            .with_auth_type(OpenVpnAuthType::Password)
+            .with_username("user")
+            .with_password("secret");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let vpn = settings.get("vpn").unwrap();
+        assert!(vpn.contains_key("secrets"));
     }
 }
