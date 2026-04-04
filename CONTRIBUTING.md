@@ -12,8 +12,12 @@ I'm fairly accepting to all PR's, only with a couple caveats:
 - Rust (stable) via `rustup`
 - A running `NetworkManager` instance 
 
-I also provide a `Dockerfile` you can build if you don't use Linux and use MacOS instead. 
+I also provide a `Dockerfile` you can build if you don't use Linux and use macOS instead. 
 
+**To build the image:**
+```bash
+docker build -t nmrs-lib .
+```
 
 **To run tests:**
 ```bash
@@ -23,6 +27,12 @@ docker compose run test
 **To run an interactive shell:**
 ```bash
 docker compose run shell
+```
+
+If you just want quick builds/tests without the full NetworkManager environment:
+```bash
+docker run --rm nmrs-lib cargo test -p nmrs --lib
+docker run --rm -it -v $(pwd):/app nmrs-lib   # mounts local changes
 ```
 
 It goes without saying that this image only works with nmrs. nmrs-gui requires GTK deps which in that case, you are better off just running a VM or learning how to use Linux on a machine instead.
