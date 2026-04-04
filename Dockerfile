@@ -1,30 +1,19 @@
-FROM ubuntu:24.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y \
-    network-manager \
-    dbus \
-    build-essential \
-    curl \
-    pkg-config \
-    libdbus-1-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Rust toolchain
-# Pinned this to avoid cross-device rename failures on runtime updates
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.0
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# DBus runtime dirs
-RUN mkdir -p /run/dbus /run/NetworkManager
+FROM rust:1.94.1
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y \
+    libdbus-1-dev \
+    pkg-config \
+    dbus \
+    network-manager \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY Cargo.toml Cargo.lock ./
+RUN sed -i 's/"nmrs-gui"//' Cargo.toml && sed -i '/^$/d' Cargo.toml
+
 COPY nmrs ./nmrs
 
-ENV CARGO_NET_OFFLINE=false
+RUN cargo build -p nmrs --release && cargo build -p nmrs
 
-CMD ["sh", "-c", "dbus-daemon --system --fork && sleep 1 && NetworkManager --no-daemon & sleep 3 && cargo test -p nmrs"]
-
+CMD ["/bin/bash"]

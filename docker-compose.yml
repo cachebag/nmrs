@@ -12,6 +12,7 @@ services:
       - RUST_BACKTRACE=1
     command: >
       bash -c "
+        mkdir -p /run/dbus &&
         dbus-daemon --system --fork &&
         sleep 1 &&
         NetworkManager --no-daemon &
@@ -32,6 +33,7 @@ services:
       - RUST_BACKTRACE=1
     command: >
       bash -c "
+        mkdir -p /run/dbus &&
         dbus-daemon --system --fork &&
         sleep 1 &&
         NetworkManager --no-daemon &
@@ -52,6 +54,7 @@ services:
       - RUST_BACKTRACE=1
     command: >
       bash -c "
+        mkdir -p /run/dbus &&
         dbus-daemon --system --fork &&
         sleep 1 &&
         NetworkManager --no-daemon &
