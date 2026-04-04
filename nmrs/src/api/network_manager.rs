@@ -20,7 +20,8 @@ use crate::core::device::{
 use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
 use crate::models::{
-    BluetoothDevice, BluetoothIdentity, VpnConfig, VpnConnection, VpnConnectionInfo, VpnCredentials,
+    BluetoothDevice, BluetoothIdentity, VpnConfig, VpnConfiguration, VpnConnection,
+    VpnConnectionInfo, VpnCredentials,
 };
 use crate::monitoring::device as device_monitor;
 use crate::monitoring::info::show_details;
@@ -309,7 +310,7 @@ impl NetworkManager {
     /// - The VPN connection fails to activate
     pub async fn connect_vpn<C>(&self, config: C) -> Result<()>
     where
-        C: VpnConfig + Into<VpnCredentials>,
+        C: VpnConfig + Into<VpnConfiguration>,
     {
         connect_vpn(&self.conn, config.into(), Some(self.timeout_config)).await
     }
