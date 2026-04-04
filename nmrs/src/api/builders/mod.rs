@@ -70,11 +70,11 @@
 
 pub mod bluetooth;
 pub mod connection_builder;
+pub mod openvpn_builder;
 pub mod vpn;
 pub mod wifi;
 pub mod wifi_builder;
 pub mod wireguard_builder;
-pub mod openvpn_builder;
 
 // Re-export core builder types
 pub use connection_builder::{ConnectionBuilder, IpConfig, Route};
