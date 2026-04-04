@@ -292,6 +292,118 @@ impl OpenVpnConfig {
         self.proxy = Some(proxy);
         self
     }
+
+    /// Build from a parsed `.ovpn`, persisting **inline** PEM to the nmrs cert store
+    /// under `connection_name`.
+    ///
+    /// `connection_name` must equal the NetworkManager connection `id` you will use
+    /// when adding the profile (so `forget_vpn` can `cleanup_certs` the same directory).
+    ///
+    /// If any cert write fails partway through, already-written files are cleaned
+    /// up so no orphaned secrets are left on disk.
+    pub fn from_ovpn_file(
+        connection_name: impl Into<String>,
+        f: crate::core::ovpn_parser::parser::OvpnFile,
+    ) -> Result<Self, ConnectionError> {
+        use crate::core::ovpn_parser::parser::{AllowCompress, CertSource, Compress};
+        use crate::util::cert_store::store_inline_cert;
+        use crate::util::validation::validate_connection_name;
+
+        let name = connection_name.into();
+        validate_connection_name(&name)?;
+
+        let crate::core::ovpn_parser::parser::OvpnFile {
+            remotes,
+            proto,
+            ca,
+            cert,
+            key,
+            tls_auth: _tls_auth,
+            tls_crypt: _tls_crypt,
+            cipher,
+            auth,
+            compress,
+            allow_compress,
+            dev: _,
+            data_ciphers: _,
+            routes: _,
+            redirect_gateway: _,
+            flags: _,
+            options: _,
+        } = f;
+
+        let has_any_inline = [&ca, &cert, &key]
+            .iter()
+            .any(|c| matches!(c, Some(CertSource::Inline(_))));
+
+        let build = || -> Result<Self, ConnectionError> {
+            let first_remote = remotes
+                .into_iter()
+                .next()
+                .ok_or_else(|| ConnectionError::InvalidGateway("no remote in .ovpn file".into()))?;
+
+            let tcp = first_remote
+                .proto
+                .as_deref()
+                .map(|p: &str| p.starts_with("tcp"))
+                .unwrap_or_else(|| {
+                    proto
+                        .as_deref()
+                        .map(|p: &str| p.starts_with("tcp"))
+                        .unwrap_or(false)
+                });
+
+            let compression = match (compress, allow_compress) {
+                (Some(Compress::Algorithm(ref s)), _) => Some(match s.as_str() {
+                    "lz4" => OpenVpnCompression::Lz4,
+                    "lz4-v2" => OpenVpnCompression::Lz4V2,
+                    _ => OpenVpnCompression::Yes,
+                }),
+                (Some(Compress::Stub | Compress::StubV2), _) => Some(OpenVpnCompression::No),
+                (None, Some(AllowCompress::No)) => Some(OpenVpnCompression::No),
+                _ => None,
+            };
+
+            let resolve =
+                |src: Option<CertSource>, kind: &str| -> Result<Option<String>, ConnectionError> {
+                    match src {
+                        None => Ok(None),
+                        Some(CertSource::File(p)) => Ok(Some(p)),
+                        Some(CertSource::Inline(pem)) => {
+                            let path = store_inline_cert(&name, kind, &pem)?;
+                            Ok(Some(path.to_string_lossy().into_owned()))
+                        }
+                    }
+                };
+
+            Ok(OpenVpnConfig {
+                name: name.clone(),
+                remote: first_remote.host,
+                port: first_remote.port.unwrap_or(1194),
+                tcp,
+                auth_type: None,
+                auth,
+                cipher,
+                dns: None,
+                mtu: None,
+                uuid: None,
+                ca_cert: resolve(ca, "ca")?,
+                client_cert: resolve(cert, "cert")?,
+                client_key: resolve(key, "key")?,
+                key_password: None,
+                username: None,
+                password: None,
+                compression,
+                proxy: None,
+            })
+        };
+
+        let result = build();
+        if result.is_err() && has_any_inline {
+            let _ = crate::util::cert_store::cleanup_certs(&name);
+        }
+        result
+    }
 }
 
 impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
@@ -299,6 +411,17 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
 
     fn try_from(f: crate::core::ovpn_parser::parser::OvpnFile) -> Result<Self, Self::Error> {
         use crate::core::ovpn_parser::parser::{AllowCompress, CertSource, Compress};
+
+        fn has_inline(c: &Option<CertSource>) -> bool {
+            matches!(c, Some(CertSource::Inline(_)))
+        }
+
+        if has_inline(&f.ca) || has_inline(&f.cert) || has_inline(&f.key) {
+            return Err(ConnectionError::VpnFailed(
+                "inline certificates in .ovpn require OpenVpnConfig::from_ovpn_file(connection_name, file)"
+                    .into(),
+            ));
+        }
 
         let first_remote = f
             .remotes
@@ -328,10 +451,6 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             _ => None,
         };
 
-        // FIXME: inline certs (<ca>, <cert>, <key> blocks) are parsed by
-        // the .ovpn parser but NM needs them written to temp files or passed
-        // via vpn.secrets. For now we return None so the caller knows the cert
-        // field wasn't usable.
         let cert_path = |src: CertSource| -> Option<String> {
             match src {
                 CertSource::File(p) => Some(p),
