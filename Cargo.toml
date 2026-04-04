@@ -12,7 +12,6 @@ license = "MIT"
 repository = "https://github.com/cachebag/nmrs"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
 # This shouldn't apply to nmrs-gui
 # missing_docs = "warn"
 unused = { level = "warn", priority = -1 }
