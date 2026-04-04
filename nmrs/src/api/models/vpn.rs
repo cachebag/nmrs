@@ -213,13 +213,6 @@ impl OpenVpnConfig {
         self.password = Some(password.into());
         self
     }
-    /// Sets the server port.
-    #[must_use]
-    pub fn with_port(mut self, port: u16) -> Self {
-        self.port = port;
-        self
-    }
-
     /// Sets the compression algorithm.
     ///
     /// # Security Warning
@@ -274,32 +267,36 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             _ => None,
         };
 
-        let cert_path = |src: CertSource| -> String {
+        // FIXME: inline certs (<ca>, <cert>, <key> blocks) are parsed by
+        // the .ovpn parser but NM needs them written to temp files or passed
+        // via vpn.secrets. For now we return None so the caller knows the cert
+        // field wasn't usable.
+        let cert_path = |src: CertSource| -> Option<String> {
             match src {
-                CertSource::File(p) => p,
-                CertSource::Inline(_) => String::new(), // inline certs not yet handled
+                CertSource::File(p) => Some(p),
+                CertSource::Inline(_) => None,
             }
         };
 
         Ok(OpenVpnConfig {
-            name: String::new(), // caller should set this
+            name: String::new(),
             remote: first_remote.host,
             port: first_remote.port.unwrap_or(1194),
             tcp,
-            auth_type: None, // inferred from cert presence by caller if needed
+            auth_type: None,
             auth: f.auth,
             cipher: f.cipher,
             dns: None,
             mtu: None,
             uuid: None,
-            ca_cert: f.ca.map(cert_path),
-            client_cert: f.cert.map(cert_path),
-            client_key: f.key.map(cert_path),
+            ca_cert: f.ca.and_then(cert_path),
+            client_cert: f.cert.and_then(cert_path),
+            client_key: f.key.and_then(cert_path),
             key_password: None,
             username: None,
             password: None,
             compression,
-            proxy: None, // proxy not modeled in parser yet
+            proxy: None,
         })
     }
 }

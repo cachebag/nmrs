@@ -325,10 +325,10 @@ pub mod models {
 pub use api::models::{
     ActiveConnectionState, BluetoothDevice, BluetoothIdentity, BluetoothNetworkRole,
     ConnectionError, ConnectionOptions, ConnectionStateReason, Device, DeviceState, DeviceType,
-    EapMethod, EapOptions, Network, NetworkInfo, OpenVpnAuthType, OpenVpnConfig, Phase2,
-    StateReason, TimeoutConfig, VpnConfig, VpnConnection, VpnConnectionInfo, VpnCredentials,
-    VpnType, WifiSecurity, WireGuardConfig, WireGuardPeer, connection_state_reason_to_error,
-    reason_to_error,
+    EapMethod, EapOptions, Network, NetworkInfo, OpenVpnAuthType, OpenVpnCompression,
+    OpenVpnConfig, OpenVpnProxy, Phase2, StateReason, TimeoutConfig, VpnConfig, VpnConnection,
+    VpnConnectionInfo, VpnCredentials, VpnType, WifiSecurity, WireGuardConfig, WireGuardPeer,
+    connection_state_reason_to_error, reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
 
