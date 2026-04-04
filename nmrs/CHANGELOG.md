@@ -6,6 +6,19 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ### Changed
 - Introduce `VpnConfig` trait and refactor `connect_vpn` signature ([#303](https://github.com/cachebag/nmrs/pull/303))
 
+### Added
+- `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
+- OpenVPN connection settings model expansion ([#309](https://github.com/cachebag/nmrs/pull/309))
+- Multi-VPN plumbing: `detect_vpn_type()`, `VpnType::OpenVpn`, and shared detection across connect, disconnect, and list VPN flows ([#311](https://github.com/cachebag/nmrs/pull/311))
+- `.ovpn` profile lexer and parser for translating OpenVPN configs toward NetworkManager ([#314](https://github.com/cachebag/nmrs/pull/314))
+- Unit tests and parser refactors for `.ovpn` parsing ([#316](https://github.com/cachebag/nmrs/pull/316))
+- OpenVPN builder: compression, proxy, and `build_openvpn_connection()` ([#315](https://github.com/cachebag/nmrs/pull/315))
+- `VpnConfiguration` to dispatch WireGuard vs OpenVPN; `connect_vpn` wired to the OpenVPN builder ([#322](https://github.com/cachebag/nmrs/pull/322))
+
+### Fixed
+- Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
+- `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
+
 ## [2.2.0] - 2026-03-17
 ### Added
 - Concurrency protection ([#268](https://github.com/cachebag/nmrs/pull/268))
