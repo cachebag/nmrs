@@ -439,7 +439,10 @@ mod tests {
             .client_cert("/etc/openvpn/client.crt")
             .client_key("/etc/openvpn/client.key")
             .build();
-        assert!(matches!(result.unwrap_err(), ConnectionError::InvalidGateway(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConnectionError::InvalidGateway(_)
+        ));
     }
 
     #[test]
@@ -451,13 +454,19 @@ mod tests {
             .client_cert("/etc/openvpn/client.crt")
             .client_key("/etc/openvpn/client.key")
             .build();
-        assert!(matches!(result.unwrap_err(), ConnectionError::InvalidGateway(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConnectionError::InvalidGateway(_)
+        ));
     }
 
     #[test]
     fn rejects_zero_port() {
         let result = tls_builder().port(0).build();
-        assert!(matches!(result.unwrap_err(), ConnectionError::InvalidGateway(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConnectionError::InvalidGateway(_)
+        ));
     }
 
     #[test]
