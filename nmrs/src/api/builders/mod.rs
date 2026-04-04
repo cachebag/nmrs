@@ -8,6 +8,7 @@
 //!
 //! - [`wifi`] - WiFi connection builders (WPA-PSK, WPA-EAP, Open)
 //! - [`vpn`] - VPN connection builders (WireGuard)
+//! - [`openvpn_builder`] - Fluent OpenVPN builder with validation
 //! - Ethernet builders (via [`build_ethernet_connection`])
 //!
 //! # When to Use These
@@ -74,6 +75,9 @@ pub mod vpn;
 pub mod wifi;
 pub mod wifi_builder;
 pub mod wireguard_builder;
+
+pub mod openvpn_builder;
+pub use openvpn_builder::OpenVpnBuilder;
 
 // Re-export core builder types
 pub use connection_builder::{ConnectionBuilder, IpConfig, Route};
