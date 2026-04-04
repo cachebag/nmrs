@@ -74,9 +74,11 @@ pub mod vpn;
 pub mod wifi;
 pub mod wifi_builder;
 pub mod wireguard_builder;
+pub mod openvpn_builder;
 
 // Re-export core builder types
 pub use connection_builder::{ConnectionBuilder, IpConfig, Route};
+pub use openvpn_builder::OpenVpnBuilder;
 pub use wifi_builder::{WifiBand, WifiConnectionBuilder, WifiMode};
 pub use wireguard_builder::WireGuardBuilder;
 
