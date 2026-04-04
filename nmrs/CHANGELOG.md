@@ -15,7 +15,10 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Unit tests and parser refactors for `.ovpn` parsing ([#316](https://github.com/cachebag/nmrs/pull/316))
 - OpenVPN builder: compression, proxy, and `build_openvpn_connection()` ([#315](https://github.com/cachebag/nmrs/pull/315))
 - `VpnConfiguration` to dispatch WireGuard vs OpenVPN; `connect_vpn` wired to the OpenVPN builder ([#322](https://github.com/cachebag/nmrs/pull/322))
+<<<<<<< HEAD
 - Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
+=======
+>>>>>>> 4493dcd (chore: update CHANGELOG)
 
 ### Fixed
 - Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
@@ -27,6 +30,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - `monitor_network_changes` now fires for Wi-Fi access point signal strength changes, not only access point additions and removals ([#367](https://github.com/cachebag/nmrs/pull/367))
 - Add `Send` bound to monitoring stream trait objects so `monitor_network_changes` and `monitor_device_changes` work with `tokio::spawn` ([#359](https://github.com/cachebag/nmrs/pull/359))
 
+<<<<<<< HEAD
 ## [2.3.0] - 2026-04-10
 ### Added
 - `is_hotspot` method for networks in AP mode 3 ([#324](https://github.com/cachebag/nmrs/pull/324)) 
@@ -35,6 +39,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Add `Send` bound to `for_each_access_point` callback future ([#330](https://github.com/cachebag/nmrs/pull/330))
 - Removed stale `nmrs-aur` submodule gitlink ([#331](https://github.com/cachebag/nmrs/pull/331))
 
+=======
+>>>>>>> 4493dcd (chore: update CHANGELOG)
 ## [2.2.0] - 2026-03-17
 ### Added
 - Concurrency protection ([#268](https://github.com/cachebag/nmrs/pull/268))
