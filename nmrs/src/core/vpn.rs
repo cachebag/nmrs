@@ -18,12 +18,13 @@ use zvariant::OwnedObjectPath;
 
 use crate::Result;
 use crate::api::models::{
-    ConnectionError, ConnectionOptions, DeviceState, TimeoutConfig, VpnConnection,
+    ConnectionError, ConnectionOptions, DeviceState, TimeoutConfig, VpnConfig, VpnConnection,
     VpnConnectionInfo, VpnCredentials, VpnType,
 };
-use crate::builders::build_wireguard_connection;
+use crate::builders::{build_openvpn_connection, build_wireguard_connection};
 use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::{NMActiveConnectionProxy, NMProxy};
+use crate::models::VpnConfiguration;
 use crate::util::utils::{extract_connection_state_reason, nm_proxy, settings_proxy};
 use crate::util::validation::{validate_connection_name, validate_vpn_credentials};
 
@@ -69,19 +70,17 @@ fn detect_vpn_type(
 /// Use "/" so NetworkManager auto-selects.
 pub(crate) async fn connect_vpn(
     conn: &Connection,
-    creds: VpnCredentials,
+    config: VpnConfiguration,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     // Validate VPN credentials before attempting connection
-    validate_vpn_credentials(&creds)?;
-
-    debug!("Connecting to VPN: {}", creds.name);
+    let name = config.name().to_string();
+    debug!("Connecting to VPN: {}", name);
 
     let nm = NMProxy::new(conn).await?;
 
     // Check saved connections
-    let saved =
-        crate::core::connection_settings::get_saved_connection_path(conn, &creds.name).await?;
+    let saved = crate::core::connection_settings::get_saved_connection_path(conn, &name).await?;
 
     // For WireGuard activation, always use "/" as device path - NetworkManager will auto-select
     let vpn_device_path = OwnedObjectPath::default();
@@ -99,13 +98,13 @@ pub(crate) async fn connect_vpn(
             autoconnect_retries: None,
         };
 
-        let settings = match creds.vpn_type {
-            VpnType::WireGuard => build_wireguard_connection(&creds, &opts)?,
-            VpnType::OpenVpn => {
-                return Err(ConnectionError::VpnFailed(
-                    "OpenVPN connect not yet implemented".into(),
-                ));
+        let settings = match config {
+            VpnConfiguration::WireGuard(ref wg) => {
+                let creds: VpnCredentials = wg.clone().into();
+                validate_vpn_credentials(&creds)?;
+                build_wireguard_connection(&creds, &opts)?
             }
+            VpnConfiguration::OpenVpn(ref ovpn) => build_openvpn_connection(ovpn, &opts)?,
         };
 
         let settings_api = settings_proxy(conn).await?;
@@ -134,7 +133,7 @@ pub(crate) async fn connect_vpn(
 
                 match state {
                     crate::api::models::ActiveConnectionState::Activated => {
-                        info!("Successfully connected to VPN: {}", creds.name);
+                        info!("Successfully connected to VPN: {}", name);
                         Ok(())
                     }
                     crate::api::models::ActiveConnectionState::Deactivated => {

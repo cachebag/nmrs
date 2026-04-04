@@ -17,6 +17,67 @@ pub enum VpnType {
     OpenVpn,
 }
 
+/// VPN connection configuration
+///
+/// Type-safe wrapper for VPN configurations that enables protocol dispatch.
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub enum VpnConfiguration {
+    /// WireGuard VPN configuration.
+    WireGuard(WireGuardConfig),
+    /// OpenVPN configuration
+    OpenVpn(OpenVpnConfig),
+}
+
+impl From<WireGuardConfig> for VpnConfiguration {
+    fn from(config: WireGuardConfig) -> Self {
+        Self::WireGuard(config)
+    }
+}
+
+impl From<OpenVpnConfig> for VpnConfiguration {
+    fn from(config: OpenVpnConfig) -> Self {
+        Self::OpenVpn(config)
+    }
+}
+
+impl VpnConfig for VpnConfiguration {
+    fn vpn_type(&self) -> VpnType {
+        match self {
+            Self::WireGuard(_) => VpnType::WireGuard,
+            Self::OpenVpn(_) => VpnType::OpenVpn,
+        }
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            Self::WireGuard(c) => &c.name,
+            Self::OpenVpn(c) => &c.name,
+        }
+    }
+
+    fn dns(&self) -> Option<&[String]> {
+        match self {
+            Self::WireGuard(c) => c.dns.as_deref(),
+            Self::OpenVpn(c) => c.dns.as_deref(),
+        }
+    }
+
+    fn mtu(&self) -> Option<u32> {
+        match self {
+            Self::WireGuard(c) => c.mtu,
+            Self::OpenVpn(c) => c.mtu,
+        }
+    }
+
+    fn uuid(&self) -> Option<Uuid> {
+        match self {
+            Self::WireGuard(c) => c.uuid,
+            Self::OpenVpn(c) => c.uuid,
+        }
+    }
+}
+
 /// OpenVPN authentication type.
 ///
 /// Specifies how the client authenticates with the OpenVPN server.
