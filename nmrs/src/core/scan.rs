@@ -10,7 +10,7 @@ use crate::Result;
 use crate::api::models::{ConnectionError, Network};
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
-use crate::types::constants::{device_type, security_flags};
+use crate::types::constants::{device_type, security_flags, wifi_mode};
 use crate::util::utils::{
     decode_ssid_or_empty, decode_ssid_or_hidden, for_each_access_point,
     get_ip_addresses_from_active_connection,
@@ -87,6 +87,7 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
             let secured = (flags & security_flags::WEP) != 0 || wpa != 0 || rsn != 0;
             let is_psk = (wpa & security_flags::PSK) != 0 || (rsn & security_flags::PSK) != 0;
             let is_eap = (wpa & security_flags::EAP) != 0 || (rsn & security_flags::EAP) != 0;
+            let is_hotspot = ap.mode().await.unwrap_or(0) == wifi_mode::AP;
 
             let network = Network {
                 device: String::new(),
@@ -97,6 +98,7 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
                 secured,
                 is_psk,
                 is_eap,
+                is_hotspot,
                 ip4_address: None,
                 ip6_address: None,
             };
@@ -174,6 +176,7 @@ pub(crate) async fn current_network(conn: &Connection) -> Result<Option<Network>
         let secured = (flags & security_flags::WEP) != 0 || wpa != 0 || rsn != 0;
         let is_psk = (wpa & security_flags::PSK) != 0 || (rsn & security_flags::PSK) != 0;
         let is_eap = (wpa & security_flags::EAP) != 0 || (rsn & security_flags::EAP) != 0;
+        let is_hotspot = ap.mode().await.unwrap_or(0) == wifi_mode::AP;
 
         let interface = dev.interface().await.unwrap_or_default();
 
@@ -198,6 +201,7 @@ pub(crate) async fn current_network(conn: &Connection) -> Result<Option<Network>
             secured,
             is_psk,
             is_eap,
+            is_hotspot,
             ip4_address,
             ip6_address,
         }));

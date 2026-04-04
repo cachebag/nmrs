@@ -49,6 +49,8 @@ pub struct Network {
     pub is_psk: bool,
     /// Whether the network uses WPA-EAP (Enterprise) authentication
     pub is_eap: bool,
+    /// Whether the access point is operating in AP (hotspot) mode
+    pub is_hotspot: bool,
     /// Assigned IPv4 address with CIDR notation (only present when connected)
     pub ip4_address: Option<String>,
     /// Assigned IPv6 address with CIDR notation (only present when connected)
@@ -625,5 +627,6 @@ impl Network {
         self.secured |= other.secured;
         self.is_psk |= other.is_psk;
         self.is_eap |= other.is_eap;
+        self.is_hotspot |= other.is_hotspot;
     }
 }
