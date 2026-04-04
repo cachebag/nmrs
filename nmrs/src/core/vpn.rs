@@ -580,9 +580,9 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
             })
             .unwrap_or(false);
 
-        let is_vpn = detect_vpn_type(&settings_map).is_some();
+        let vpn_type = detect_vpn_type(&settings_map);
 
-        if id_ok && is_vpn {
+        if id_ok && vpn_type.is_some() {
             debug!("Found VPN connection, deleting: {name}");
             cproxy.call_method("Delete", &()).await.map_err(|e| {
                 ConnectionError::DbusOperation {
@@ -591,6 +591,12 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
                 }
             })?;
             info!("Successfully deleted VPN connection: {name}");
+
+            if vpn_type == Some(VpnType::OpenVpn)
+                && let Err(e) = crate::util::cert_store::cleanup_certs(name)
+            {
+                warn!("Failed to remove nmrs cert directory for '{}': {}", name, e);
+            }
             return Ok(());
         }
     }
