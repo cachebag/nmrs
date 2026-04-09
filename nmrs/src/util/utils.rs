@@ -106,12 +106,18 @@ pub(crate) fn strength_or_zero(strength: Option<u8>) -> u8 {
 ///
 /// Loops through devices, filters for WiFi, and invokes `func` with each access point proxy.
 /// The function is awaited immediately in the loop to avoid lifetime issues.
+///
+/// The `+ Send` bound on the returned future lets callers await this helper (and everything
+/// that calls it, like `list_networks` and `current_network_info`) inside `tokio::spawn`
+/// on a multi-threaded runtime. `NMAccessPointProxy` is already `Send + Sync` and nothing
+/// captured in practice holds a non-`Send` value across an `.await`, so the bound is
+/// always satisfiable at the call sites in this crate.
 pub(crate) async fn for_each_access_point<F, T>(conn: &Connection, mut func: F) -> Result<Vec<T>>
 where
     F: for<'a> FnMut(
         &'a NMAccessPointProxy<'a>,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Option<T>>> + 'a>,
+        Box<dyn std::future::Future<Output = Result<Option<T>>> + Send + 'a>,
     >,
 {
     let nm = NMProxy::new(conn).await?;
