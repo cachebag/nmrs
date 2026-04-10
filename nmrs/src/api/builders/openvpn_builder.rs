@@ -1,15 +1,20 @@
 //! OpenVPN connection builder with validation.
 //!
-//! Provides a type-safe builder API for constructing OpenVPN connections
-//! with validation of required fields and auth-type-specific requirements
-//! at build time.
+//! Provides a type-safe builder API for constructing [`OpenVpnConfig`] with
+//! validation of required fields and auth-type-specific requirements at
+//! build time.
+//!
+//! Unlike [`super::vpn::build_wireguard_connection`] which returns NM-ready
+//! D-Bus settings directly, this builder produces an [`OpenVpnConfig`] domain
+//! struct. Use [`super::vpn::build_openvpn_connection`] to convert it into
+//! NetworkManager connection settings.
 
 use uuid::Uuid;
 
 use crate::api::models::{
-    ConnectionError, ConnectionOptions, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig,
-    OpenVpnProxy,
+    ConnectionError, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy,
 };
+use crate::util::validation::validate_connection_name;
 
 /// Builder for OpenVPN connections.
 ///
@@ -55,8 +60,6 @@ pub struct OpenVpnBuilder {
     password: Option<String>,
     compression: Option<OpenVpnCompression>,
     proxy: Option<OpenVpnProxy>,
-    autoconnect: bool,
-    autoconnect_priority: Option<i32>,
 }
 
 impl OpenVpnBuilder {
@@ -82,8 +85,6 @@ impl OpenVpnBuilder {
             password: None,
             compression: None,
             proxy: None,
-            autoconnect: false,
-            autoconnect_priority: None,
         }
     }
 
@@ -211,21 +212,6 @@ impl OpenVpnBuilder {
         self
     }
 
-    /// Enables or disables automatic connection.
-    #[must_use]
-    pub fn autoconnect(mut self, enabled: bool) -> Self {
-        self.autoconnect = enabled;
-        self
-    }
-
-    /// Applies connection options.
-    #[must_use]
-    pub fn options(mut self, opts: &ConnectionOptions) -> Self {
-        self.autoconnect = opts.autoconnect;
-        self.autoconnect_priority = opts.autoconnect_priority;
-        self
-    }
-
     /// Builds and validates the `OpenVpnConfig`.
     ///
     /// # Errors
@@ -236,7 +222,8 @@ impl OpenVpnBuilder {
     /// - `ConnectionError::VpnFailed` if `username` is required but missing
     /// - `ConnectionError::VpnFailed` if TLS certs are required but missing
     pub fn build(self) -> Result<OpenVpnConfig, ConnectionError> {
-        // Validate remote
+        validate_connection_name(&self.name)?;
+
         let remote = self
             .remote
             .ok_or_else(|| ConnectionError::InvalidGateway("remote must be set".into()))?;
@@ -269,6 +256,12 @@ impl OpenVpnBuilder {
                 }
             }
             _ => {}
+        }
+
+        if matches!(auth_type, OpenVpnAuthType::StaticKey) {
+            return Err(ConnectionError::VpnFailed(
+                "StaticKey auth validation is not yet implemented".into(),
+            ));
         }
 
         match &auth_type {
@@ -337,8 +330,6 @@ mod tests {
             .username("user")
     }
 
-    // --- Happy paths ---
-
     #[test]
     fn builds_tls_connection() {
         let config = tls_builder().build();
@@ -370,12 +361,12 @@ mod tests {
     }
 
     #[test]
-    fn builds_static_key_connection() {
-        let config = OpenVpnBuilder::new("TestVPN")
+    fn rejects_static_key_unimplemented() {
+        let result = OpenVpnBuilder::new("TestVPN")
             .remote("vpn.example.com")
             .auth_type(OpenVpnAuthType::StaticKey)
             .build();
-        assert!(config.is_ok());
+        assert!(matches!(result.unwrap_err(), ConnectionError::VpnFailed(_)));
     }
 
     #[test]
@@ -429,7 +420,17 @@ mod tests {
         assert!(config.proxy.is_some());
     }
 
-    // --- Required field checks ---
+    #[test]
+    fn rejects_empty_name() {
+        let result = OpenVpnBuilder::new("")
+            .remote("vpn.example.com")
+            .auth_type(OpenVpnAuthType::Tls)
+            .ca_cert("/etc/openvpn/ca.crt")
+            .client_cert("/etc/openvpn/client.crt")
+            .client_key("/etc/openvpn/client.key")
+            .build();
+        assert!(result.is_err());
+    }
 
     #[test]
     fn requires_remote() {
