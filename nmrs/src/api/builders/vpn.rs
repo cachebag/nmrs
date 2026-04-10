@@ -65,7 +65,7 @@
 #![allow(deprecated)]
 
 use std::collections::HashMap;
-use zvariant::Value;
+use zvariant::{Dict, Value, signature};
 
 use super::wireguard_builder::WireGuardBuilder;
 use crate::api::models::{
@@ -112,19 +112,28 @@ pub fn build_wireguard_connection(
     builder.build()
 }
 
+/// Converts a list of string key-value pairs into a `zvariant::Dict` with
+/// D-Bus signature `a{ss}`, which NetworkManager requires for `vpn.data`
+/// and `vpn.secrets`.
+fn string_pairs_to_dict(
+    pairs: Vec<(String, String)>,
+) -> Result<Dict<'static, 'static>, ConnectionError> {
+    let sig = signature!("s");
+    let mut dict = Dict::new(&sig, &sig);
+    for (k, v) in pairs {
+        dict.append(Value::from(k), Value::from(v)).map_err(|e| {
+            ConnectionError::VpnFailed(format!("failed to append VPN setting: {e}"))
+        })?;
+    }
+    Ok(dict)
+}
+
 /// Builds OpenVPN connection settings for NetworkManager.
 ///
 /// Returns a settings dictionary suitable for `AddAndActivateConnection`.
 /// OpenVPN uses the NM VPN plugin model: `connection.type = "vpn"` with
 /// `vpn.service-type = "org.freedesktop.NetworkManager.openvpn"`.
 /// All config lives in the flat `vpn.data` dict.
-///
-/// # Note
-///
-/// Per the [NM VPN settings spec](https://networkmanager.dev/docs/api/latest/settings-vpn.html),
-/// `vpn.data` must be a `dict of string to string` (`a{ss}` in D-Bus type notation).
-/// `Value::from(Vec<(String, String)>)` may not produce this exact signature —
-/// if NM rejects the connection at runtime, replace with `zvariant::Dict`.
 ///
 /// # Errors
 ///
@@ -264,7 +273,7 @@ pub fn build_openvpn_connection(
         }
     }
 
-    let data_value = Value::from(vpn_data);
+    let data_dict = string_pairs_to_dict(vpn_data);
 
     let mut vpn_secrets: Vec<(String, String)> = Vec::new();
     if let Some(ref password) = config.password {
@@ -279,9 +288,9 @@ pub fn build_openvpn_connection(
         "service-type",
         Value::from("org.freedesktop.NetworkManager.openvpn"),
     );
-    vpn.insert("data", data_value);
+    vpn.insert("data", Value::from(data_dict));
     if !vpn_secrets.is_empty() {
-        vpn.insert("secrets", Value::from(vpn_secrets));
+        vpn.insert("secrets", Value::from(string_pairs_to_dict(vpn_secrets)));
     }
 
     let mut ipv4: HashMap<&'static str, Value<'static>> = HashMap::new();
@@ -973,7 +982,21 @@ mod tests {
     }
 
     #[test]
-    fn openvpn_password_goes_to_secrets() {
+    fn openvpn_vpn_data_has_dict_signature() {
+        let config = create_openvpn_config();
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let vpn = settings.get("vpn").unwrap();
+        let data = vpn.get("data").unwrap();
+        assert_eq!(
+            data.value_signature().to_string(),
+            "a{ss}",
+            "vpn.data must be a{{ss}} for NetworkManager"
+        );
+    }
+
+    #[test]
+    fn openvpn_vpn_secrets_has_dict_signature() {
         let config = create_openvpn_config()
             .with_auth_type(OpenVpnAuthType::Password)
             .with_username("user")
@@ -981,6 +1004,11 @@ mod tests {
         let opts = create_test_options();
         let settings = build_openvpn_connection(&config, &opts).unwrap();
         let vpn = settings.get("vpn").unwrap();
-        assert!(vpn.contains_key("secrets"));
+        let secrets = vpn.get("secrets").unwrap();
+        assert_eq!(
+            secrets.value_signature().to_string(),
+            "a{ss}",
+            "vpn.secrets must be a{{ss}} for NetworkManager"
+        );
     }
 }
