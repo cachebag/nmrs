@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 
-use crate::api::models::{ConnectionError, OpenVpnAuthType};
+use crate::api::models::ConnectionError;
 use crate::core::ovpn_parser::error::OvpnParseError;
 
 #[derive(Debug, Clone)]
