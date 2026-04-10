@@ -216,7 +216,6 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
             bluez_info.1,
             bt_caps,
             state,
-            None,
         ));
     }
     Ok(devices)
@@ -307,7 +306,6 @@ mod tests {
             Some("Test".into()),
             panu,
             DeviceState::Activated,
-            None,
         );
 
         assert_eq!(device.bdaddr, "00:1A:7D:DA:71:13");
