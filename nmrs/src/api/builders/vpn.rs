@@ -273,7 +273,7 @@ pub fn build_openvpn_connection(
         }
     }
 
-    let data_dict = string_pairs_to_dict(vpn_data);
+    let data_dict = string_pairs_to_dict(vpn_data)?;
 
     let mut vpn_secrets: Vec<(String, String)> = Vec::new();
     if let Some(ref password) = config.password {
@@ -290,7 +290,7 @@ pub fn build_openvpn_connection(
     );
     vpn.insert("data", Value::from(data_dict));
     if !vpn_secrets.is_empty() {
-        vpn.insert("secrets", Value::from(string_pairs_to_dict(vpn_secrets)));
+        vpn.insert("secrets", Value::from(string_pairs_to_dict(vpn_secrets)?));
     }
 
     let mut ipv4: HashMap<&'static str, Value<'static>> = HashMap::new();
