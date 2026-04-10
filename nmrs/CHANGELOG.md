@@ -14,13 +14,19 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Unit tests and parser refactors for `.ovpn` parsing ([#316](https://github.com/cachebag/nmrs/pull/316))
 - OpenVPN builder: compression, proxy, and `build_openvpn_connection()` ([#315](https://github.com/cachebag/nmrs/pull/315))
 - `VpnConfiguration` to dispatch WireGuard vs OpenVPN; `connect_vpn` wired to the OpenVPN builder ([#322](https://github.com/cachebag/nmrs/pull/322))
-- `is_hotspot` method for networks in AP mode 3 ([#324](https://github.com/cachebag/nmrs/pull/324)) 
-- `app.lock` now created in `$XDG_DATA_DIR` (nmrs) ([#310](https://github.com/cachebag/nmrs/pull/310))
 - Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
 
 ### Fixed
 - Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
 - `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
+
+## [2.3.0] - 2026-04-10
+### Added
+- `is_hotspot` method for networks in AP mode 3 ([#324](https://github.com/cachebag/nmrs/pull/324)) 
+
+### Fixed
+- Add `Send` bound to `for_each_access_point` callback future ([#330](https://github.com/cachebag/nmrs/pull/330))
+- Removed stale `nmrs-aur` submodule gitlink ([#331](https://github.com/cachebag/nmrs/pull/331))
 
 ## [2.2.0] - 2026-03-17
 ### Added
@@ -195,10 +201,10 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [1.3.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v1.3.0
 [1.3.5]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v1.3.5
 [2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
-[2.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.0
 [2.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.1
 [2.2.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.2.0
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.2.0...HEAD
+[2.3.0]: https://github.com/cachebag/nmrs/compare/nmrs-v2.2.0...nmrs-v2.3.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.3.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
