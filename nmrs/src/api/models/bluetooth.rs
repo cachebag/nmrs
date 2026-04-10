@@ -40,6 +40,8 @@ pub struct BluetoothIdentity {
     pub bdaddr: String,
     /// Bluetooth device type (DUN or PANU)
     pub bt_device_type: BluetoothNetworkRole,
+    /// Optional Bluetooth adapter name (e.g., "hci1"). Defaults to "hci0".
+    pub adapter: Option<String>,
 }
 
 impl BluetoothIdentity {
@@ -73,6 +75,32 @@ impl BluetoothIdentity {
         Ok(Self {
             bdaddr,
             bt_device_type,
+            adapter: None,
+        })
+    }
+
+    /// Creates a new `BluetoothIdentity` with a specific adapter.
+    ///
+    /// # Arguments
+    ///
+    /// * `bdaddr` - Bluetooth MAC address (e.g., "00:1A:7D:DA:71:13")
+    /// * `bt_device_type` - Bluetooth network role (PanU or Dun)
+    /// * `adapter` - Bluetooth adapter name (e.g., "hci1")
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ConnectionError` if the provided `bdaddr` is not a
+    /// valid Bluetooth MAC address format.
+    pub fn with_adapter(
+        bdaddr: String,
+        bt_device_type: BluetoothNetworkRole,
+        adapter: String,
+    ) -> Result<Self, ConnectionError> {
+        validate_bluetooth_address(&bdaddr)?;
+        Ok(Self {
+            bdaddr,
+            bt_device_type,
+            adapter: Some(adapter),
         })
     }
 }
