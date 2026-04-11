@@ -1,0 +1,89 @@
+# AGENTS.md
+
+Context for AI agents working in this repository.
+
+## Project overview
+
+`nmrs` is a Rust library for managing network connections via NetworkManager over D-Bus.
+The workspace has two crates:
+
+- **`nmrs/`** — the core library (async, D-Bus, no GUI dependencies)
+- **`nmrs-gui/`** — a GTK4/libadwaita GUI frontend
+
+## Architecture
+
+```
+nmrs/src/
+  lib.rs                — public API surface, re-exports from api/
+  api/
+    network_manager.rs  — main entry point (NetworkManager struct)
+    models/             — public types, enums, errors, traits
+    builders/           — connection settings constructors (wifi, vpn, bluetooth)
+  core/                 — internal business logic (connection, scanning, VPN, state waiting)
+  dbus/                 — raw D-Bus proxy calls (NM, devices, access points)
+  monitoring/           — real-time D-Bus signal subscriptions
+  types/                — constants, device type registry
+  util/                 — validation, cert handling, helpers
+```
+
+`lib.rs` re-exports commonly used types at the crate root for convenience.
+Internal modules (`core`, `dbus`, `monitoring`, `types`, `util`) are not part of the public API.
+
+## Build and test
+
+Requires a running NetworkManager instance (or use the provided Dockerfile).
+
+```bash
+cargo check                                               # quick compile check
+cargo fmt --all -- --check                                # formatting (default rustfmt, no config file)
+cargo clippy --all-targets --all-features -- -D warnings  # lints (warnings are errors in CI)
+cargo test -p nmrs --lib --all-features                   # unit tests only
+cargo test --doc --all-features --workspace               # doc tests
+cargo test --all-features --workspace                     # unit + integration (needs NM + wifi hardware)
+cargo test --test integration_test --all-features         # integration only
+```
+
+Integration tests require wifi hardware or `mac80211_hwsim`:
+```bash
+sudo modprobe mac80211_hwsim radios=2
+cargo test --test integration_test --all-features
+sudo modprobe -r mac80211_hwsim
+```
+
+## Toolchain
+
+- Edition 2024, resolver 3, stable Rust (MSRV: 1.94.0)
+- Workspace lints in root `Cargo.toml`: `unused = "warn"`, clippy allows `too_many_arguments` and `type_complexity`
+- CI runs: format, clippy, lib tests, doc tests, semver-checks (`cargo-semver-checks` for `nmrs`), cross-compile for aarch64
+
+## Code conventions
+
+- **Error handling**: all public fallible operations return `nmrs::Result<T>` (alias for `Result<T, ConnectionError>`). Use `ConnectionError` variants, not raw strings.
+- **Builder pattern**: config structs use `with_*` builder methods returning `Self` with `#[must_use]`. See `WireGuardConfig`, `OpenVpnConfig`, `EapOptions`.
+- **`#[non_exhaustive]`** on all public structs and enums.
+- **Doc comments** on all public items with examples where practical. Doc examples use `nmrs::` paths (crate root re-exports).
+- **No `unwrap()` in library code** — return errors via `?` or `ConnectionError`.
+  - `unwrap_or_else()` is allowed if the error is expected and there is a fallback value. Document this with a comment.
+- **Tests**: unit tests live in `#[cfg(test)] mod tests` within the module or in `api/models/tests.rs`. Integration tests in `nmrs/tests/`. Assert behavior, not implementation.
+
+## Commit messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+
+```
+type(#issue): description
+```
+
+Examples: `fix(#24): handle missing DNS in VPN config`, `feat: add OpenVPN proxy support`.
+Atomic commits — one logical change per commit.
+
+## Changelog
+
+[Keep a Changelog](https://keepachangelog.com/) format in `nmrs/CHANGELOG.md` and `nmrs-gui/CHANGELOG.md`.
+Sections: `Added`, `Changed`, `Fixed`. Link PRs/issues in parentheses.
+
+## Things to watch out for
+
+- The `VpnCredentials` type is deprecated — prefer `WireGuardConfig` for new WireGuard code.
+- `nmrs-gui` depends on GTK4/libadwaita and only builds on Linux with those dev libs installed.
+
