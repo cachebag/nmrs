@@ -11,6 +11,7 @@ use super::error::*;
 use super::state_reason::*;
 use super::vpn::*;
 use super::wifi::*;
+use super::wireguard::*;
 use crate::api::models::DeviceType;
 
 #[test]
