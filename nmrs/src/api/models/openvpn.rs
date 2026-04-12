@@ -241,6 +241,14 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             _ => None,
         };
 
+        let has_certs = f.cert.is_some() || f.key.is_some();
+        let auth_type = match (f.auth_user_pass, has_certs) {
+            (true, true) => Some(OpenVpnAuthType::PasswordTls),
+            (true, false) => Some(OpenVpnAuthType::Password),
+            (false, true) => Some(OpenVpnAuthType::Tls),
+            (false, false) => None,
+        };
+
         // FIXME: inline certs (<ca>, <cert>, <key> blocks) are parsed by
         // the .ovpn parser but NM needs them written to temp files or passed
         // via vpn.secrets. For now we return None so the caller knows the cert
@@ -257,7 +265,7 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             remote: first_remote.host,
             port: first_remote.port.unwrap_or(1194),
             tcp,
-            auth_type: None,
+            auth_type,
             auth: f.auth,
             cipher: f.cipher,
             dns: None,
@@ -381,4 +389,47 @@ pub enum OpenVpnProxy {
         port: u16,
         retry: bool,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::ovpn_parser::parser::parse_ovpn;
+
+    fn ovpn_with_remote(extra: &str) -> String {
+        format!("remote vpn.example.com 1194 udp\n{extra}")
+    }
+
+    #[test]
+    fn try_from_auth_user_pass_with_certs_infers_password_tls() {
+        let input =
+            ovpn_with_remote("auth-user-pass\n<cert>\nCERTPEM\n</cert>\n<key>\nKEYPEM\n</key>");
+        let ovpn = parse_ovpn(&input).unwrap();
+        let config = OpenVpnConfig::try_from(ovpn).unwrap();
+        assert_eq!(config.auth_type, Some(OpenVpnAuthType::PasswordTls));
+    }
+
+    #[test]
+    fn try_from_auth_user_pass_without_certs_infers_password() {
+        let input = ovpn_with_remote("auth-user-pass");
+        let ovpn = parse_ovpn(&input).unwrap();
+        let config = OpenVpnConfig::try_from(ovpn).unwrap();
+        assert_eq!(config.auth_type, Some(OpenVpnAuthType::Password));
+    }
+
+    #[test]
+    fn try_from_no_auth_user_pass_with_certs_infers_tls() {
+        let input = ovpn_with_remote("<cert>\nCERTPEM\n</cert>\n<key>\nKEYPEM\n</key>");
+        let ovpn = parse_ovpn(&input).unwrap();
+        let config = OpenVpnConfig::try_from(ovpn).unwrap();
+        assert_eq!(config.auth_type, Some(OpenVpnAuthType::Tls));
+    }
+
+    #[test]
+    fn try_from_no_auth_user_pass_no_certs_infers_none() {
+        let input = ovpn_with_remote("");
+        let ovpn = parse_ovpn(&input).unwrap();
+        let config = OpenVpnConfig::try_from(ovpn).unwrap();
+        assert_eq!(config.auth_type, None);
+    }
 }
