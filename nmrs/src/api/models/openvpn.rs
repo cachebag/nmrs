@@ -241,8 +241,9 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             _ => None,
         };
 
-        let has_certs = f.cert.is_some() || f.key.is_some();
-        let auth_type = match (f.auth_user_pass, has_certs) {
+        // Client certificate auth needs both cert and key; one alone is incomplete.
+        let has_client_cert_pair = f.cert.is_some() && f.key.is_some();
+        let auth_type = match (f.auth_user_pass, has_client_cert_pair) {
             (true, true) => Some(OpenVpnAuthType::PasswordTls),
             (true, false) => Some(OpenVpnAuthType::Password),
             (false, true) => Some(OpenVpnAuthType::Tls),
@@ -431,5 +432,21 @@ mod tests {
         let ovpn = parse_ovpn(&input).unwrap();
         let config = OpenVpnConfig::try_from(ovpn).unwrap();
         assert_eq!(config.auth_type, None);
+    }
+
+    #[test]
+    fn try_from_cert_only_without_auth_user_pass_does_not_infer_tls() {
+        let input = ovpn_with_remote("<cert>\nCERTPEM\n</cert>");
+        let ovpn = parse_ovpn(&input).unwrap();
+        let config = OpenVpnConfig::try_from(ovpn).unwrap();
+        assert_eq!(config.auth_type, None);
+    }
+
+    #[test]
+    fn try_from_cert_only_with_auth_user_pass_infers_password_not_password_tls() {
+        let input = ovpn_with_remote("auth-user-pass\n<cert>\nCERTPEM\n</cert>");
+        let ovpn = parse_ovpn(&input).unwrap();
+        let config = OpenVpnConfig::try_from(ovpn).unwrap();
+        assert_eq!(config.auth_type, Some(OpenVpnAuthType::Password));
     }
 }
