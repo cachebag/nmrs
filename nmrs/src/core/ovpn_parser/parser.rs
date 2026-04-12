@@ -62,6 +62,11 @@ pub struct OvpnFile {
     // Examples: client, nobind, persist-key, persist-tun.
     pub flags: Vec<String>,
 
+    // auth-user-pass directive. Indicates the server requires
+    // username/password authentication. The optional file path argument
+    // is ignored (NM handles interactive prompts).
+    pub auth_user_pass: bool,
+
     // Catch-all for unmodeled or less common directives.
     // Key = directive name, Value = list of argument lists.
     // Preserves information for round-tripping / forward compatibility.
@@ -149,6 +154,7 @@ struct OvpnFileBuilder {
     allow_compress: Option<AllowCompress>,
     routes: Vec<Route>,
     redirect_gateway: Option<RedirectGateway>,
+    auth_user_pass: bool,
     flags: Vec<String>,
     options: HashMap<String, Vec<String>>,
 }
@@ -177,6 +183,7 @@ impl OvpnFileBuilder {
             allow_compress: self.allow_compress,
             routes: self.routes,
             redirect_gateway: self.redirect_gateway,
+            auth_user_pass: self.auth_user_pass,
             flags: self.flags,
             options: self.options,
         }
@@ -526,6 +533,11 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
                             netmask,
                             gateway,
                         });
+                    }
+                    "auth-user-pass" => {
+                        // auth-user-pass [FILE]
+                        // Optional file path is ignored — NM handles interactive prompts.
+                        b.auth_user_pass = true;
                     }
                     "redirect-gateway" => {
                         let mut rg = RedirectGateway {
@@ -1069,5 +1081,23 @@ mod tests {
             "key-direction",
             OvpnParseError::MissingArgument { key, .. } if key == "key-direction"
         );
+    }
+
+    #[test]
+    fn auth_user_pass_bare_passes() {
+        let result = parse_ok("auth-user-pass");
+        assert!(result.auth_user_pass);
+    }
+
+    #[test]
+    fn auth_user_pass_with_file_path_passes() {
+        let result = parse_ok("auth-user-pass /etc/openvpn/creds.txt");
+        assert!(result.auth_user_pass);
+    }
+
+    #[test]
+    fn auth_user_pass_absent_defaults_false() {
+        let result = parse_ok("remote example.com 1194 udp");
+        assert!(!result.auth_user_pass);
     }
 }
