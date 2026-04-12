@@ -58,7 +58,7 @@ jobs:
           tar -czf nmrs-gui-${{ env.VERSION }}-x86_64-linux.tar.gz *
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: gui-v${{ env.VERSION }}
           name: nmrs-gui ${{ env.VERSION }}
