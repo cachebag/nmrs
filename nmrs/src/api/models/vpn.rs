@@ -24,7 +24,7 @@ pub enum VpnConfiguration {
     /// WireGuard VPN configuration.
     WireGuard(WireGuardConfig),
     /// OpenVPN configuration
-    OpenVpn(OpenVpnConfig),
+    OpenVpn(Box<OpenVpnConfig>),
 }
 
 impl From<WireGuardConfig> for VpnConfiguration {
@@ -35,7 +35,7 @@ impl From<WireGuardConfig> for VpnConfiguration {
 
 impl From<OpenVpnConfig> for VpnConfiguration {
     fn from(config: OpenVpnConfig) -> Self {
-        Self::OpenVpn(config)
+        Self::OpenVpn(Box::new(config))
     }
 }
 
