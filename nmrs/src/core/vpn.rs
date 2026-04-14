@@ -4,8 +4,9 @@
 //! through NetworkManager, including connecting, disconnecting, listing, and
 //! deleting VPN profiles.
 //!
-//! Currently supports:
-//! - WireGuard connections (NetworkManager connection.type == "wireguard")
+//! Supports:
+//! - WireGuard connections (`connection.type == "wireguard"`)
+//! - OpenVPN connections (`connection.type == "vpn"`, `vpn.service-type == "org.freedesktop.NetworkManager.openvpn"`)
 //!
 //! These functions are not part of the public API and should be accessed
 //! through the [`NetworkManager`][crate::NetworkManager] interface.
@@ -60,16 +61,12 @@ fn detect_vpn_type(
     }
 }
 
-/// Connects to a WireGuard connection.
+/// Connects to a VPN (WireGuard or OpenVPN).
 ///
-/// This function checks for an existing saved connection by name.
-/// If found, it activates the saved connection. If not found, it creates
-/// a new WireGuard connection using the provided credentials.
-/// The function waits for the connection to reach the activated state
-/// before returning.
-///
-/// WireGuard activations do not require binding to an underlying device.
-/// Use "/" so NetworkManager auto-selects.
+/// Checks for an existing saved connection by name. If found, activates
+/// the saved profile. If not found, creates a new connection from the
+/// provided configuration. Waits for the connection to reach the
+/// activated state before returning.
 pub(crate) async fn connect_vpn(
     conn: &Connection,
     config: VpnConfiguration,
@@ -84,7 +81,7 @@ pub(crate) async fn connect_vpn(
     // Check saved connections
     let saved = crate::core::connection_settings::get_saved_connection_path(conn, &name).await?;
 
-    // For WireGuard activation, always use "/" as device path - NetworkManager will auto-select
+    // Use "/" as device path so NetworkManager auto-selects the interface
     let vpn_device_path = OwnedObjectPath::default();
     let specific_object = OwnedObjectPath::default();
 
@@ -178,11 +175,11 @@ pub(crate) async fn connect_vpn(
     }
 }
 
-/// Disconnects from a connection by name.
+/// Disconnects from a VPN connection by name.
 ///
-/// Searches through active connections for a WireGuard connection matching the given name.
-/// If found, deactivates the connection. If not found, assumes already
-/// disconnected and returns success.
+/// Searches through active connections for a VPN (WireGuard or OpenVPN)
+/// matching the given name. If found, deactivates the connection. If not
+/// found, assumes already disconnected and returns success.
 pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> {
     // Validate connection name
     validate_connection_name(name)?;
@@ -295,9 +292,10 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
     Ok(())
 }
 
-/// Lists all saved WireGuard connections with their current state.
+/// Lists all saved VPN connections (WireGuard and OpenVPN) with their current state.
 ///
-/// Returns connections where `connection.type == "wireguard"`.
+/// Returns connections where `connection.type` is `"wireguard"` or
+/// `"vpn"` with OpenVPN service type.
 /// For active connections, populates `state` and `interface` from the active connection.
 pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnConnection>> {
     let nm = NMProxy::new(conn).await?;
@@ -319,9 +317,8 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
 
     let saved_conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
 
-    // Map active WireGuard connection id -> (state, interface)
     let active_conns = nm.active_connections().await?;
-    let mut active_wg_map: HashMap<String, (DeviceState, Option<String>)> = HashMap::new();
+    let mut active_vpn_map: HashMap<String, (DeviceState, Option<String>)> = HashMap::new();
 
     for ac_path in active_conns {
         let ac_proxy = match nm_proxy(
@@ -447,10 +444,10 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
             None
         };
 
-        active_wg_map.insert(id, (state, interface));
+        active_vpn_map.insert(id, (state, interface));
     }
 
-    let mut wg_conns = Vec::new();
+    let mut vpn_conns = Vec::new();
 
     for cpath in saved_conns {
         let cproxy = match nm_proxy(
@@ -508,12 +505,12 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
             continue;
         };
 
-        let (state, interface) = active_wg_map
+        let (state, interface) = active_vpn_map
             .get(&id)
             .cloned()
             .unwrap_or((DeviceState::Other(0), None));
 
-        wg_conns.push(VpnConnection {
+        vpn_conns.push(VpnConnection {
             name: id,
             vpn_type,
             interface,
@@ -521,10 +518,10 @@ pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnCon
         });
     }
 
-    Ok(wg_conns)
+    Ok(vpn_conns)
 }
 
-/// Forgets (deletes) a saved WireGuard connection by name.
+/// Forgets (deletes) a saved VPN connection by name.
 ///
 /// If currently connected, the connection will be disconnected first before deletion.
 pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
@@ -610,7 +607,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Gets detailed information about a WireGuard connection.
+/// Gets detailed information about an active VPN connection (WireGuard or OpenVPN).
 ///
 /// The connection must be in the active connections list to retrieve full details.
 pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnConnectionInfo> {

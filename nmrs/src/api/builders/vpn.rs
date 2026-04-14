@@ -1,9 +1,10 @@
 //! VPN connection settings builders.
 //!
 //! This module provides functions to build NetworkManager settings dictionaries
-//! for VPN connections. Currently supports:
+//! for VPN connections. Supports:
 //!
-//! - **WireGuard** - Modern, high-performance VPN protocol
+//! - **WireGuard** — Modern, high-performance VPN protocol
+//! - **OpenVPN** — Widely-used open-source VPN protocol (via NM plugin)
 //!
 //! # Usage
 //!

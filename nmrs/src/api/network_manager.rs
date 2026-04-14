@@ -270,12 +270,14 @@ impl NetworkManager {
 
     /// Connects to a VPN using the provided configuration.
     ///
-    /// Currently supports WireGuard VPN connections. The function checks for an
+    /// Supports WireGuard and OpenVPN connections. The function checks for an
     /// existing saved VPN connection by name. If found, it activates the saved
     /// connection. If not found, it creates a new VPN connection with the provided
     /// configuration.
     ///
-    /// # Example
+    /// # Examples
+    ///
+    /// ## WireGuard
     ///
     /// ```rust
     /// use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
@@ -296,6 +298,27 @@ impl NetworkManager {
     ///     "10.0.0.2/24",
     ///     vec![peer],
     /// ).with_dns(vec!["1.1.1.1".into()]);
+    ///
+    /// nm.connect_vpn(config).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// ## OpenVPN
+    ///
+    /// ```rust
+    /// use nmrs::{NetworkManager, OpenVpnConfig, OpenVpnAuthType};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    ///
+    /// let config = OpenVpnConfig::new("CorpVPN", "vpn.example.com", 1194, false)
+    ///     .with_auth_type(OpenVpnAuthType::PasswordTls)
+    ///     .with_username("user")
+    ///     .with_password("secret")
+    ///     .with_ca_cert("/etc/openvpn/ca.crt")
+    ///     .with_client_cert("/etc/openvpn/client.crt")
+    ///     .with_client_key("/etc/openvpn/client.key");
     ///
     /// nm.connect_vpn(config).await?;
     /// # Ok(())
@@ -388,8 +411,8 @@ impl NetworkManager {
     /// Lists all saved VPN connections.
     ///
     /// Returns a list of all VPN connection profiles saved in NetworkManager,
-    /// including their name, type, and current state. Only VPN connections with
-    /// recognized types (currently WireGuard) are returned.
+    /// including their name, type, and current state. Returns WireGuard and
+    /// OpenVPN connections.
     ///
     /// # Example
     ///
