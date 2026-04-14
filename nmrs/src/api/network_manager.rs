@@ -315,6 +315,55 @@ impl NetworkManager {
         connect_vpn(&self.conn, config.into(), Some(self.timeout_config)).await
     }
 
+    /// Imports a `.ovpn` file and activates the OpenVPN connection.
+    ///
+    /// Parses the file, persists any inline certificates, builds the
+    /// connection profile, and activates it through NetworkManager.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Path to the `.ovpn` configuration file
+    /// * `username` — Optional username for password-based authentication
+    /// * `password` — Optional password for password-based authentication
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.import_ovpn("corp.ovpn", Some("user"), Some("secret")).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file cannot be read or parsed
+    /// - Inline certificate storage fails
+    /// - The configuration is incomplete (e.g. TLS auth without certs)
+    /// - The VPN connection fails to activate
+    pub async fn import_ovpn(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        username: Option<&str>,
+        password: Option<&str>,
+    ) -> Result<()> {
+        use crate::builders::OpenVpnBuilder;
+
+        let mut builder = OpenVpnBuilder::from_ovpn_file(path)?;
+        if let Some(u) = username {
+            builder = builder.username(u);
+        }
+        if let Some(p) = password {
+            builder = builder.password(p);
+        }
+        let config = builder.build()?;
+        self.connect_vpn(config).await
+    }
+
     /// Disconnects from an active VPN connection by name.
     ///
     /// Searches through active connections for a VPN matching the given name.

@@ -1,6 +1,6 @@
 use nmrs::{
-    ConnectionError, DeviceState, DeviceType, NetworkManager, StateReason, VpnType, WifiSecurity,
-    WireGuardConfig, WireGuardPeer, reason_to_error,
+    ConnectionError, DeviceState, DeviceType, NetworkManager, OpenVpnAuthType, StateReason,
+    VpnType, WifiSecurity, WireGuardConfig, WireGuardPeer, reason_to_error,
 };
 use std::time::Duration;
 use tokio::time::sleep;
@@ -1245,4 +1245,93 @@ fn test_bluetooth_network_role_from_u32() {
         BluetoothNetworkRole::from(999),
         BluetoothNetworkRole::PanU
     ));
+}
+
+// --- OpenVPN import tests ---
+
+/// Test that OpenVpnBuilder::from_ovpn_str produces correct settings for a
+/// full TLS config, and that build_openvpn_connection serializes them.
+#[test]
+fn test_ovpn_import_tls_roundtrip() {
+    use nmrs::ConnectionOptions;
+    use nmrs::builders::{OpenVpnBuilder, build_openvpn_connection};
+
+    let ovpn = "\
+remote vpn.example.com 1194 udp
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+cipher AES-256-GCM
+auth SHA256
+tls-auth /etc/openvpn/ta.key 1
+";
+    let config = OpenVpnBuilder::from_ovpn_str(ovpn, "roundtrip-test")
+        .unwrap()
+        .build()
+        .unwrap();
+
+    assert_eq!(config.remote, "vpn.example.com");
+    assert_eq!(config.port, 1194);
+    assert_eq!(config.auth_type, Some(OpenVpnAuthType::Tls));
+    assert_eq!(config.cipher, Some("AES-256-GCM".into()));
+    assert_eq!(config.auth, Some("SHA256".into()));
+    assert_eq!(config.tls_auth_key, Some("/etc/openvpn/ta.key".into()));
+    assert_eq!(config.tls_auth_direction, Some(1));
+
+    let opts = ConnectionOptions::new(false);
+    let settings = build_openvpn_connection(&config, &opts).unwrap();
+    assert!(settings.contains_key("connection"));
+    assert!(settings.contains_key("vpn"));
+}
+
+/// Test that from_ovpn_str infers password+TLS auth when both
+/// auth-user-pass and cert/key are present.
+#[test]
+fn test_ovpn_import_password_tls() {
+    use nmrs::builders::OpenVpnBuilder;
+
+    let ovpn = "\
+remote vpn.example.com 443 tcp
+auth-user-pass
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+";
+    let config = OpenVpnBuilder::from_ovpn_str(ovpn, "pw-tls-test")
+        .unwrap()
+        .username("user")
+        .build()
+        .unwrap();
+
+    assert_eq!(config.auth_type, Some(OpenVpnAuthType::PasswordTls));
+    assert!(config.tcp);
+    assert_eq!(config.port, 443);
+}
+
+/// Test that the caller can override parsed settings before build.
+#[test]
+fn test_ovpn_import_override() {
+    use nmrs::builders::OpenVpnBuilder;
+
+    let ovpn = "\
+remote vpn.example.com 1194
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+";
+    let config = OpenVpnBuilder::from_ovpn_str(ovpn, "override-test")
+        .unwrap()
+        .port(443)
+        .tcp(true)
+        .dns(vec!["1.1.1.1".into()])
+        .mtu(1400)
+        .remote_cert_tls("server")
+        .build()
+        .unwrap();
+
+    assert_eq!(config.port, 443);
+    assert!(config.tcp);
+    assert_eq!(config.dns, Some(vec!["1.1.1.1".into()]));
+    assert_eq!(config.mtu, Some(1400));
+    assert_eq!(config.remote_cert_tls, Some("server".into()));
 }
