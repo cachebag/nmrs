@@ -76,6 +76,27 @@ pub struct OpenVpnConfig {
     pub compression: Option<OpenVpnCompression>,
     /// Proxy configuration.
     pub proxy: Option<OpenVpnProxy>,
+    /// Path to TLS authentication (HMAC firewall) key file.
+    pub tls_auth_key: Option<String>,
+    /// TLS auth direction (`0` or `1`). Only meaningful when `tls_auth_key` is set.
+    pub tls_auth_direction: Option<u8>,
+    /// Path to TLS-Crypt key file (encrypt+authenticate control channel).
+    pub tls_crypt: Option<String>,
+    /// Path to TLS-Crypt-v2 key file (per-client TLS-Crypt).
+    pub tls_crypt_v2: Option<String>,
+    /// Minimum TLS version (e.g. "1.2").
+    pub tls_version_min: Option<String>,
+    /// Maximum TLS version (e.g. "1.3").
+    pub tls_version_max: Option<String>,
+    /// Control channel TLS cipher suites (e.g. "TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384").
+    pub tls_cipher: Option<String>,
+    /// Require remote certificate to be of a specific type ("server" or "client").
+    pub remote_cert_tls: Option<String>,
+    /// X.509 name verification: `(name, type)` where type is e.g. "name", "subject",
+    /// or "name-prefix".
+    pub verify_x509_name: Option<(String, String)>,
+    /// Path to a Certificate Revocation List file.
+    pub crl_verify: Option<String>,
 }
 
 impl OpenVpnConfig {
@@ -100,6 +121,16 @@ impl OpenVpnConfig {
             password: None,
             compression: None,
             proxy: None,
+            tls_auth_key: None,
+            tls_auth_direction: None,
+            tls_crypt: None,
+            tls_crypt_v2: None,
+            tls_version_min: None,
+            tls_version_max: None,
+            tls_cipher: None,
+            remote_cert_tls: None,
+            verify_x509_name: None,
+            crl_verify: None,
         }
     }
 
@@ -205,6 +236,82 @@ impl OpenVpnConfig {
         self.proxy = Some(proxy);
         self
     }
+
+    /// Sets the TLS authentication key path and optional direction.
+    ///
+    /// The `--tls-auth` option adds an HMAC firewall to the control channel,
+    /// providing an additional layer of DoS protection.
+    #[must_use]
+    pub fn with_tls_auth(mut self, key_path: impl Into<String>, direction: Option<u8>) -> Self {
+        self.tls_auth_key = Some(key_path.into());
+        self.tls_auth_direction = direction;
+        self
+    }
+
+    /// Sets the TLS-Crypt key path.
+    ///
+    /// Encrypts and authenticates the control channel with a pre-shared key,
+    /// providing stronger protection than `--tls-auth`.
+    #[must_use]
+    pub fn with_tls_crypt(mut self, key_path: impl Into<String>) -> Self {
+        self.tls_crypt = Some(key_path.into());
+        self
+    }
+
+    /// Sets the TLS-Crypt-v2 key path (per-client key wrapping).
+    #[must_use]
+    pub fn with_tls_crypt_v2(mut self, key_path: impl Into<String>) -> Self {
+        self.tls_crypt_v2 = Some(key_path.into());
+        self
+    }
+
+    /// Sets the minimum TLS protocol version (e.g. "1.2").
+    #[must_use]
+    pub fn with_tls_version_min(mut self, version: impl Into<String>) -> Self {
+        self.tls_version_min = Some(version.into());
+        self
+    }
+
+    /// Sets the maximum TLS protocol version (e.g. "1.3").
+    #[must_use]
+    pub fn with_tls_version_max(mut self, version: impl Into<String>) -> Self {
+        self.tls_version_max = Some(version.into());
+        self
+    }
+
+    /// Sets the allowed control channel TLS cipher suites.
+    #[must_use]
+    pub fn with_tls_cipher(mut self, cipher: impl Into<String>) -> Self {
+        self.tls_cipher = Some(cipher.into());
+        self
+    }
+
+    /// Requires the remote certificate to be of a specific type ("server" or "client").
+    #[must_use]
+    pub fn with_remote_cert_tls(mut self, cert_type: impl Into<String>) -> Self {
+        self.remote_cert_tls = Some(cert_type.into());
+        self
+    }
+
+    /// Sets X.509 name verification for the remote certificate.
+    ///
+    /// `name_type` is one of "name", "subject", or "name-prefix".
+    #[must_use]
+    pub fn with_verify_x509_name(
+        mut self,
+        name: impl Into<String>,
+        name_type: impl Into<String>,
+    ) -> Self {
+        self.verify_x509_name = Some((name.into(), name_type.into()));
+        self
+    }
+
+    /// Sets the path to a Certificate Revocation List for peer verification.
+    #[must_use]
+    pub fn with_crl_verify(mut self, path: impl Into<String>) -> Self {
+        self.crl_verify = Some(path.into());
+        self
+    }
 }
 
 impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
@@ -280,6 +387,16 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             password: None,
             compression,
             proxy: None,
+            tls_auth_key: None,
+            tls_auth_direction: None,
+            tls_crypt: None,
+            tls_crypt_v2: None,
+            tls_version_min: None,
+            tls_version_max: None,
+            tls_cipher: None,
+            remote_cert_tls: None,
+            verify_x509_name: None,
+            crl_verify: None,
         })
     }
 }

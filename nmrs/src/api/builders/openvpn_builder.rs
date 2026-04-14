@@ -60,6 +60,16 @@ pub struct OpenVpnBuilder {
     password: Option<String>,
     compression: Option<OpenVpnCompression>,
     proxy: Option<OpenVpnProxy>,
+    tls_auth_key: Option<String>,
+    tls_auth_direction: Option<u8>,
+    tls_crypt: Option<String>,
+    tls_crypt_v2: Option<String>,
+    tls_version_min: Option<String>,
+    tls_version_max: Option<String>,
+    tls_cipher: Option<String>,
+    remote_cert_tls: Option<String>,
+    verify_x509_name: Option<(String, String)>,
+    crl_verify: Option<String>,
 }
 
 impl OpenVpnBuilder {
@@ -85,6 +95,16 @@ impl OpenVpnBuilder {
             password: None,
             compression: None,
             proxy: None,
+            tls_auth_key: None,
+            tls_auth_direction: None,
+            tls_crypt: None,
+            tls_crypt_v2: None,
+            tls_version_min: None,
+            tls_version_max: None,
+            tls_cipher: None,
+            remote_cert_tls: None,
+            verify_x509_name: None,
+            crl_verify: None,
         }
     }
 
@@ -212,6 +232,74 @@ impl OpenVpnBuilder {
         self
     }
 
+    /// Sets the TLS authentication key path and optional direction.
+    #[must_use]
+    pub fn tls_auth(mut self, key_path: impl Into<String>, direction: Option<u8>) -> Self {
+        self.tls_auth_key = Some(key_path.into());
+        self.tls_auth_direction = direction;
+        self
+    }
+
+    /// Sets the TLS-Crypt key path.
+    #[must_use]
+    pub fn tls_crypt(mut self, key_path: impl Into<String>) -> Self {
+        self.tls_crypt = Some(key_path.into());
+        self
+    }
+
+    /// Sets the TLS-Crypt-v2 key path.
+    #[must_use]
+    pub fn tls_crypt_v2(mut self, key_path: impl Into<String>) -> Self {
+        self.tls_crypt_v2 = Some(key_path.into());
+        self
+    }
+
+    /// Sets the minimum TLS protocol version.
+    #[must_use]
+    pub fn tls_version_min(mut self, version: impl Into<String>) -> Self {
+        self.tls_version_min = Some(version.into());
+        self
+    }
+
+    /// Sets the maximum TLS protocol version.
+    #[must_use]
+    pub fn tls_version_max(mut self, version: impl Into<String>) -> Self {
+        self.tls_version_max = Some(version.into());
+        self
+    }
+
+    /// Sets the control channel TLS cipher suites.
+    #[must_use]
+    pub fn tls_cipher(mut self, cipher: impl Into<String>) -> Self {
+        self.tls_cipher = Some(cipher.into());
+        self
+    }
+
+    /// Requires the remote certificate to be of a specific type.
+    #[must_use]
+    pub fn remote_cert_tls(mut self, cert_type: impl Into<String>) -> Self {
+        self.remote_cert_tls = Some(cert_type.into());
+        self
+    }
+
+    /// Sets X.509 name verification for the remote certificate.
+    #[must_use]
+    pub fn verify_x509_name(
+        mut self,
+        name: impl Into<String>,
+        name_type: impl Into<String>,
+    ) -> Self {
+        self.verify_x509_name = Some((name.into(), name_type.into()));
+        self
+    }
+
+    /// Sets the path to a Certificate Revocation List.
+    #[must_use]
+    pub fn crl_verify(mut self, path: impl Into<String>) -> Self {
+        self.crl_verify = Some(path.into());
+        self
+    }
+
     /// Builds and validates the `OpenVpnConfig`.
     ///
     /// # Errors
@@ -304,6 +392,16 @@ impl OpenVpnBuilder {
             password: self.password,
             compression: self.compression,
             proxy: self.proxy,
+            tls_auth_key: self.tls_auth_key,
+            tls_auth_direction: self.tls_auth_direction,
+            tls_crypt: self.tls_crypt,
+            tls_crypt_v2: self.tls_crypt_v2,
+            tls_version_min: self.tls_version_min,
+            tls_version_max: self.tls_version_max,
+            tls_cipher: self.tls_cipher,
+            remote_cert_tls: self.remote_cert_tls,
+            verify_x509_name: self.verify_x509_name,
+            crl_verify: self.crl_verify,
         })
     }
 }
