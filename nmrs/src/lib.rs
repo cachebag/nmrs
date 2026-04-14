@@ -321,7 +321,7 @@ pub use api::models::{
     ConnectionError, ConnectionOptions, ConnectionStateReason, Device, DeviceState, DeviceType,
     EapMethod, EapOptions, Network, NetworkInfo, OpenVpnAuthType, OpenVpnCompression,
     OpenVpnConfig, OpenVpnProxy, Phase2, StateReason, TimeoutConfig, VpnConfig, VpnConfiguration,
-    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnType, WifiSecurity,
+    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnRoute, VpnType, WifiSecurity,
     WireGuardConfig, WireGuardPeer, connection_state_reason_to_error, reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
