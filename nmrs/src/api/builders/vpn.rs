@@ -231,6 +231,7 @@ pub fn build_openvpn_connection(
             vpn_data.push(("ta-dir".into(), dir.to_string()));
         }
     }
+    // FIXME: surely, there must be a better way to do this
     if let Some(ref key) = config.tls_crypt {
         vpn_data.push(("tls-crypt".into(), key.clone()));
     }
@@ -256,6 +257,32 @@ pub fn build_openvpn_connection(
     if let Some(ref path) = config.crl_verify {
         vpn_data.push(("crl-verify".into(), path.clone()));
     }
+
+    if let Some(v) = config.ping {
+        vpn_data.push(("ping".into(), v.to_string()));
+    }
+    if let Some(v) = config.ping_exit {
+        vpn_data.push(("ping-exit".into(), v.to_string()));
+    }
+    if let Some(v) = config.ping_restart {
+        vpn_data.push(("ping-restart".into(), v.to_string()));
+    }
+    if let Some(v) = config.reneg_seconds {
+        vpn_data.push(("reneg-sec".into(), v.to_string()));
+    }
+    if let Some(v) = config.connect_timeout {
+        vpn_data.push(("connect-timeout".into(), v.to_string()));
+    }
+    if let Some(ref s) = config.data_ciphers {
+        vpn_data.push(("data-ciphers".into(), s.clone()));
+    }
+    if let Some(ref s) = config.data_ciphers_fallback {
+        vpn_data.push(("data-ciphers-fallback".into(), s.clone()));
+    }
+    if config.ncp_disable {
+        vpn_data.push(("ncp-disable".into(), "yes".into()));
+    }
+    // holy moly
 
     if let Some(ref proxy) = config.proxy {
         match proxy {
@@ -328,6 +355,28 @@ pub fn build_openvpn_connection(
 
     let mut ipv4: HashMap<&'static str, Value<'static>> = HashMap::new();
     ipv4.insert("method", Value::from("auto"));
+    if config.redirect_gateway {
+        ipv4.insert("never-default", Value::from(false));
+    }
+    if !config.routes.is_empty() {
+        let route_data: Vec<HashMap<String, Value<'static>>> = config
+            .routes
+            .iter()
+            .map(|route| {
+                let mut route_dict = HashMap::new();
+                route_dict.insert("dest".to_string(), Value::from(route.dest.clone()));
+                route_dict.insert("prefix".to_string(), Value::from(route.prefix));
+                if let Some(ref nh) = route.next_hop {
+                    route_dict.insert("next-hop".to_string(), Value::from(nh.clone()));
+                }
+                if let Some(m) = route.metric {
+                    route_dict.insert("metric".to_string(), Value::from(m));
+                }
+                route_dict
+            })
+            .collect();
+        ipv4.insert("route-data", Value::from(route_data));
+    }
     if let Some(dns) = &config.dns {
         let dns_array: Vec<Value> = dns.iter().map(|s| Value::from(s.clone())).collect();
         ipv4.insert("dns", Value::from(dns_array));
@@ -1193,5 +1242,80 @@ mod tests {
         assert!(get_vpn_data_value(&settings, "remote-cert-tls").is_none());
         assert!(get_vpn_data_value(&settings, "verify-x509-name").is_none());
         assert!(get_vpn_data_value(&settings, "crl-verify").is_none());
+    }
+
+    #[test]
+    fn openvpn_resilience_keys_in_vpn_data() {
+        let config = create_openvpn_config()
+            .with_ping(10)
+            .with_ping_exit(60)
+            .with_ping_restart(120)
+            .with_reneg_seconds(3600)
+            .with_connect_timeout(30);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(get_vpn_data_value(&settings, "ping").as_deref(), Some("10"));
+        assert_eq!(
+            get_vpn_data_value(&settings, "ping-exit").as_deref(),
+            Some("60")
+        );
+        assert_eq!(
+            get_vpn_data_value(&settings, "ping-restart").as_deref(),
+            Some("120")
+        );
+        assert_eq!(
+            get_vpn_data_value(&settings, "reneg-sec").as_deref(),
+            Some("3600")
+        );
+        assert_eq!(
+            get_vpn_data_value(&settings, "connect-timeout").as_deref(),
+            Some("30")
+        );
+    }
+
+    #[test]
+    fn openvpn_data_ciphers_and_ncp_disable() {
+        let config = create_openvpn_config()
+            .with_data_ciphers("AES-256-GCM:AES-128-GCM")
+            .with_data_ciphers_fallback("AES-256-GCM")
+            .with_ncp_disable(true);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "data-ciphers").as_deref(),
+            Some("AES-256-GCM:AES-128-GCM")
+        );
+        assert_eq!(
+            get_vpn_data_value(&settings, "data-ciphers-fallback").as_deref(),
+            Some("AES-256-GCM")
+        );
+        assert_eq!(
+            get_vpn_data_value(&settings, "ncp-disable").as_deref(),
+            Some("yes")
+        );
+    }
+
+    #[test]
+    fn openvpn_ipv4_route_data() {
+        use crate::api::models::VpnRoute;
+        let config = create_openvpn_config()
+            .with_routes(vec![VpnRoute::new("10.0.0.0", 24).next_hop("192.168.1.1")]);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let ipv4 = settings.get("ipv4").unwrap();
+        let rd = ipv4.get("route-data").unwrap();
+        let Value::Array(arr) = rd else {
+            panic!("route-data must be an array");
+        };
+        assert_eq!(arr.iter().count(), 1, "expected one static route");
+    }
+
+    #[test]
+    fn openvpn_redirect_gateway_sets_never_default() {
+        let config = create_openvpn_config().with_redirect_gateway(true);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        let ipv4 = settings.get("ipv4").unwrap();
+        assert_eq!(ipv4.get("never-default"), Some(&Value::from(false)));
     }
 }
