@@ -5,7 +5,10 @@
 
 #![allow(deprecated)]
 
-use crate::api::models::{ConnectionError, VpnCredentials, WifiSecurity, WireGuardPeer};
+use crate::api::models::{
+    ConnectionError, OpenVpnAuthType, OpenVpnConfig, OpenVpnProxy, VpnCredentials, WifiSecurity,
+    WireGuardPeer,
+};
 
 /// Maximum SSID length in bytes (802.11 standard).
 const MAX_SSID_BYTES: usize = 32;
@@ -328,7 +331,6 @@ fn validate_cidr(cidr: &str) -> Result<(), ConnectionError> {
     let address = parts[0];
     let prefix = parts[1];
 
-    // Validate prefix is a number
     let prefix_num = prefix.parse::<u8>().map_err(|_| {
         ConnectionError::InvalidAddress(format!(
             "Invalid prefix length '{}' in CIDR '{}'",
@@ -336,7 +338,6 @@ fn validate_cidr(cidr: &str) -> Result<(), ConnectionError> {
         ))
     })?;
 
-    // Determine if IPv4 or IPv6 and validate prefix range
     if address.contains(':') {
         // IPv6
         if prefix_num > 128 {
@@ -467,21 +468,7 @@ pub fn validate_vpn_credentials(creds: &VpnCredentials) -> Result<(), Connection
         }
     }
 
-    // Validate MTU if provided
-    if let Some(mtu) = creds.mtu {
-        if mtu < 576 {
-            return Err(ConnectionError::InvalidAddress(format!(
-                "MTU too small: {} (minimum 576)",
-                mtu
-            )));
-        }
-        if mtu > 9000 {
-            return Err(ConnectionError::InvalidAddress(format!(
-                "MTU too large: {} (maximum 9000)",
-                mtu
-            )));
-        }
-    }
+    validate_mtu(creds.mtu)?;
 
     Ok(())
 }
@@ -497,9 +484,7 @@ fn validate_ip_address(ip: &str) -> Result<(), ConnectionError> {
         ));
     }
 
-    // Check if IPv6 (contains colons)
     if ip.contains(':') {
-        // Basic IPv6 validation
         if !ip.chars().all(|c| c.is_ascii_hexdigit() || c == ':') {
             return Err(ConnectionError::InvalidAddress(format!(
                 "Invalid IPv6 address '{}'",
@@ -507,7 +492,6 @@ fn validate_ip_address(ip: &str) -> Result<(), ConnectionError> {
             )));
         }
     } else {
-        // IPv4 validation
         let octets: Vec<&str> = ip.split('.').collect();
         if octets.len() != 4 {
             return Err(ConnectionError::InvalidAddress(format!(
@@ -531,6 +515,138 @@ fn validate_ip_address(ip: &str) -> Result<(), ConnectionError> {
         }
     }
 
+    Ok(())
+}
+
+/// Validates an OpenVPN configuration.
+///
+/// # Rules
+/// - Connection name must be valid (via [`validate_connection_name`])
+/// - Remote server must not be empty
+/// - Port is validated at the type level (`u16`), no extra check needed
+/// - Auth-type-specific required fields:
+///   - `Password`: username must be set
+///   - `Tls`: CA cert, client cert, and client key must be set
+///   - `PasswordTls`: username plus all TLS cert paths must be set
+///   - `StaticKey`: no additional fields required
+/// - Cert paths (if set) must be non-empty strings
+/// - DNS servers (if provided) must be valid IP addresses
+/// - MTU (if provided) must be in 576–9000
+/// - Proxy server (if provided) must not be empty
+///
+/// # Errors
+/// Returns appropriate `ConnectionError` if the configuration is invalid.
+pub fn validate_openvpn_config(config: &OpenVpnConfig) -> Result<(), ConnectionError> {
+    validate_connection_name(&config.name)?;
+
+    if config.remote.trim().is_empty() {
+        return Err(ConnectionError::InvalidGateway(
+            "OpenVPN remote server cannot be empty".to_string(),
+        ));
+    }
+
+    if let Some(ref auth_type) = config.auth_type {
+        match auth_type {
+            OpenVpnAuthType::Password => {
+                if config.username.as_deref().unwrap_or("").is_empty() {
+                    return Err(ConnectionError::InvalidAddress(
+                        "Username is required for password authentication".to_string(),
+                    ));
+                }
+            }
+            OpenVpnAuthType::Tls => {
+                validate_openvpn_cert_paths(config)?;
+            }
+            OpenVpnAuthType::PasswordTls => {
+                if config.username.as_deref().unwrap_or("").is_empty() {
+                    return Err(ConnectionError::InvalidAddress(
+                        "Username is required for password+TLS authentication".to_string(),
+                    ));
+                }
+                validate_openvpn_cert_paths(config)?;
+            }
+            OpenVpnAuthType::StaticKey => {}
+        }
+    }
+
+    validate_optional_cert_path(&config.ca_cert, "CA certificate")?;
+    validate_optional_cert_path(&config.client_cert, "Client certificate")?;
+    validate_optional_cert_path(&config.client_key, "Client key")?;
+
+    if let Some(ref dns_servers) = config.dns {
+        if dns_servers.is_empty() {
+            return Err(ConnectionError::InvalidAddress(
+                "DNS server list cannot be empty if provided".to_string(),
+            ));
+        }
+        for dns in dns_servers {
+            validate_ip_address(dns)?;
+        }
+    }
+
+    validate_mtu(config.mtu)?;
+
+    if let Some(ref proxy) = config.proxy {
+        match proxy {
+            OpenVpnProxy::Http { server, .. } | OpenVpnProxy::Socks { server, .. } => {
+                if server.trim().is_empty() {
+                    return Err(ConnectionError::InvalidAddress(
+                        "Proxy server address cannot be empty".to_string(),
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates that TLS cert paths required for certificate authentication are present.
+fn validate_openvpn_cert_paths(config: &OpenVpnConfig) -> Result<(), ConnectionError> {
+    if config.ca_cert.as_deref().unwrap_or("").is_empty() {
+        return Err(ConnectionError::InvalidAddress(
+            "CA certificate path is required for TLS authentication".to_string(),
+        ));
+    }
+    if config.client_cert.as_deref().unwrap_or("").is_empty() {
+        return Err(ConnectionError::InvalidAddress(
+            "Client certificate path is required for TLS authentication".to_string(),
+        ));
+    }
+    if config.client_key.as_deref().unwrap_or("").is_empty() {
+        return Err(ConnectionError::InvalidAddress(
+            "Client key path is required for TLS authentication".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validates that an optional certificate path, if provided, is non-empty.
+fn validate_optional_cert_path(path: &Option<String>, label: &str) -> Result<(), ConnectionError> {
+    if let Some(p) = path
+        && p.trim().is_empty()
+    {
+        return Err(ConnectionError::InvalidAddress(format!(
+            "{label} path cannot be empty if provided"
+        )));
+    }
+    Ok(())
+}
+
+/// Validates an MTU value (576–9000).
+fn validate_mtu(mtu: Option<u32>) -> Result<(), ConnectionError> {
+    if let Some(mtu) = mtu {
+        if mtu < 576 {
+            return Err(ConnectionError::InvalidAddress(format!(
+                "MTU too small: {mtu} (minimum 576)"
+            )));
+        }
+        if mtu > 9000 {
+            return Err(ConnectionError::InvalidAddress(format!(
+                "MTU too large: {mtu} (maximum 9000)"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -775,5 +891,222 @@ mod tests {
         assert!(validate_bluetooth_address("00:1A:7D").is_err());
         assert!(validate_bluetooth_address("00:1A:7D:DA:71:13:FF").is_err());
         assert!(validate_bluetooth_address("").is_err());
+    }
+
+    fn base_openvpn_config() -> OpenVpnConfig {
+        OpenVpnConfig::new("MyVPN", "vpn.example.com", 1194, false)
+    }
+
+    #[test]
+    fn test_validate_openvpn_valid_minimal() {
+        assert!(validate_openvpn_config(&base_openvpn_config()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_empty_name() {
+        let config = OpenVpnConfig::new("", "vpn.example.com", 1194, false);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_whitespace_name() {
+        let config = OpenVpnConfig::new("   ", "vpn.example.com", 1194, false);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_empty_remote() {
+        let config = OpenVpnConfig::new("MyVPN", "", 1194, false);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_whitespace_remote() {
+        let config = OpenVpnConfig::new("MyVPN", "   ", 1194, false);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_password_auth_missing_username() {
+        let config = base_openvpn_config().with_auth_type(OpenVpnAuthType::Password);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_password_auth_with_username() {
+        let config = base_openvpn_config()
+            .with_auth_type(OpenVpnAuthType::Password)
+            .with_username("user");
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_tls_auth_missing_certs() {
+        let config = base_openvpn_config().with_auth_type(OpenVpnAuthType::Tls);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_tls_auth_partial_certs() {
+        let config = base_openvpn_config()
+            .with_auth_type(OpenVpnAuthType::Tls)
+            .with_ca_cert("/path/to/ca.crt");
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_tls_auth_with_all_certs() {
+        let config = base_openvpn_config()
+            .with_auth_type(OpenVpnAuthType::Tls)
+            .with_ca_cert("/path/to/ca.crt")
+            .with_client_cert("/path/to/client.crt")
+            .with_client_key("/path/to/client.key");
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_password_tls_missing_username() {
+        let config = base_openvpn_config()
+            .with_auth_type(OpenVpnAuthType::PasswordTls)
+            .with_ca_cert("/path/to/ca.crt")
+            .with_client_cert("/path/to/client.crt")
+            .with_client_key("/path/to/client.key");
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_password_tls_missing_certs() {
+        let config = base_openvpn_config()
+            .with_auth_type(OpenVpnAuthType::PasswordTls)
+            .with_username("user");
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_password_tls_complete() {
+        let config = base_openvpn_config()
+            .with_auth_type(OpenVpnAuthType::PasswordTls)
+            .with_username("user")
+            .with_ca_cert("/path/to/ca.crt")
+            .with_client_cert("/path/to/client.crt")
+            .with_client_key("/path/to/client.key");
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_static_key_minimal() {
+        let config = base_openvpn_config().with_auth_type(OpenVpnAuthType::StaticKey);
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_empty_cert_path_provided() {
+        let config = base_openvpn_config().with_ca_cert("");
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_whitespace_cert_path() {
+        let config = base_openvpn_config().with_client_cert("   ");
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_valid_dns() {
+        let config = base_openvpn_config().with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_empty_dns_list() {
+        let config = base_openvpn_config().with_dns(vec![]);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_invalid_dns() {
+        let config = base_openvpn_config().with_dns(vec!["not-an-ip".into()]);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_mtu_too_small() {
+        let config = base_openvpn_config().with_mtu(100);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_mtu_too_large() {
+        let config = base_openvpn_config().with_mtu(10000);
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_mtu_valid() {
+        let config = base_openvpn_config().with_mtu(1500);
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_mtu_boundary_min() {
+        let config = base_openvpn_config().with_mtu(576);
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_mtu_boundary_max() {
+        let config = base_openvpn_config().with_mtu(9000);
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_empty_proxy_server() {
+        let config = base_openvpn_config().with_proxy(OpenVpnProxy::Http {
+            server: "".into(),
+            port: 8080,
+            username: None,
+            password: None,
+            retry: false,
+        });
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_valid_http_proxy() {
+        let config = base_openvpn_config().with_proxy(OpenVpnProxy::Http {
+            server: "proxy.example.com".into(),
+            port: 8080,
+            username: None,
+            password: None,
+            retry: false,
+        });
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_empty_socks_proxy_server() {
+        let config = base_openvpn_config().with_proxy(OpenVpnProxy::Socks {
+            server: "  ".into(),
+            port: 1080,
+            retry: false,
+        });
+        assert!(validate_openvpn_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_openvpn_valid_socks_proxy() {
+        let config = base_openvpn_config().with_proxy(OpenVpnProxy::Socks {
+            server: "socks.example.com".into(),
+            port: 1080,
+            retry: false,
+        });
+        assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_openvpn_no_auth_type_is_valid() {
+        let config = base_openvpn_config();
+        assert!(config.auth_type.is_none());
+        assert!(validate_openvpn_config(&config).is_ok());
     }
 }
