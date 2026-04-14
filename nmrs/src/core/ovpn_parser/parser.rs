@@ -405,6 +405,46 @@ pub fn parse_ovpn(content: &str) -> Result<OvpnFile, ConnectionError> {
 
                         b.proto = Some(value.clone());
                     }
+                    "ca" => {
+                        let path = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument {
+                                key: key.clone(),
+                                line,
+                            })?
+                            .clone();
+                        b.ca = Some(CertSource::File(path));
+                    }
+                    "cert" => {
+                        let path = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument {
+                                key: key.clone(),
+                                line,
+                            })?
+                            .clone();
+                        b.cert = Some(CertSource::File(path));
+                    }
+                    "key" => {
+                        let path = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument {
+                                key: key.clone(),
+                                line,
+                            })?
+                            .clone();
+                        b.key = Some(CertSource::File(path));
+                    }
+                    "tls-crypt" => {
+                        let path = args
+                            .first()
+                            .ok_or(OvpnParseError::MissingArgument {
+                                key: key.clone(),
+                                line,
+                            })?
+                            .clone();
+                        b.tls_crypt = Some(CertSource::File(path));
+                    }
                     "tls-auth" => {
                         // tls-auth <KEY-FILE> [DIRECTION]
 
