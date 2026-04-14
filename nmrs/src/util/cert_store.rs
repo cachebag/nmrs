@@ -151,8 +151,9 @@ fn filename_for(cert_type: &str) -> Result<&'static str, ConnectionError> {
         "cert" => Ok("cert.pem"),
         "key" => Ok("key.pem"),
         "ta" => Ok("ta.key"),
+        "tls-crypt" => Ok("tls-crypt.key"),
         _ => Err(ConnectionError::InvalidAddress(format!(
-            "unknown cert_type {cert_type:?} (expected ca, cert, key, ta)"
+            "unknown cert_type {cert_type:?} (expected ca, cert, key, ta, tls-crypt)"
         ))),
     }
 }
