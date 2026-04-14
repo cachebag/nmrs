@@ -723,7 +723,7 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
 
         // Best-effort endpoint extraction from the connection settings.
         // WireGuard reads from wireguard.peers (nmcli-style string).
-        // OpenVPN reads from vpn.data["remote"] (not yet implemented, see FIXME below).
+        // OpenVPN reads from vpn.data["remote"] (a{ss} on the D-Bus wire).
         // Neither is guaranteed to be populated.
         let gateway = match vpn_type {
             VpnType::WireGuard => settings_map
@@ -742,12 +742,7 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
                     }
                     None
                 }),
-            VpnType::OpenVpn => {
-                // FIXME : vpn.data is a Dict<String, String> in NM, not a plain string.
-                // Need to deserialize as HashMap<String, String> and look up "remote".
-                // Cannot test without a real NM OpenVPN profile.
-                None
-            }
+            VpnType::OpenVpn => extract_openvpn_gateway(&settings_map),
         };
 
         // IPv4 config
@@ -839,4 +834,71 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
     }
 
     Err(crate::api::models::ConnectionError::NoVpnConnection)
+}
+
+// Extracts the remote gateway from an OpenVPN connection's settings map.
+//
+// NM stores OpenVPN options in vpn.data as a{ss} on the D-Bus wire, which
+// zvariant deserialises as Value::Dict(Dict). The "remote" key holds the
+// server address (e.g. "vpn.example.com:1194").
+fn extract_openvpn_gateway(
+    settings_map: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> Option<String> {
+    let zvariant::Value::Dict(dict) = settings_map.get("vpn")?.get("data")? else {
+        return None;
+    };
+    dict.iter().find_map(|(k, v)| match (k, v) {
+        (zvariant::Value::Str(k), zvariant::Value::Str(v)) if k.as_str() == "remote" => {
+            Some(v.to_string())
+        }
+        _ => None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn openvpn_settings_with_data(
+        data: HashMap<String, String>,
+    ) -> HashMap<String, HashMap<String, zvariant::Value<'static>>> {
+        let dict = zvariant::Dict::from(data);
+        let vpn_sec = HashMap::from([("data".to_string(), zvariant::Value::Dict(dict))]);
+        HashMap::from([("vpn".to_string(), vpn_sec)])
+    }
+
+    #[test]
+    fn openvpn_gateway_extracted_from_vpn_data() {
+        let data = HashMap::from([("remote".to_string(), "vpn.example.com:1194".to_string())]);
+        let settings = openvpn_settings_with_data(data);
+        assert_eq!(
+            extract_openvpn_gateway(&settings),
+            Some("vpn.example.com:1194".to_string())
+        );
+    }
+
+    #[test]
+    fn openvpn_gateway_none_when_remote_key_absent() {
+        let data = HashMap::from([("dev".to_string(), "tun".to_string())]);
+        let settings = openvpn_settings_with_data(data);
+        assert_eq!(extract_openvpn_gateway(&settings), None);
+    }
+
+    #[test]
+    fn openvpn_gateway_none_when_vpn_section_absent() {
+        let settings: HashMap<String, HashMap<String, zvariant::Value<'static>>> =
+            HashMap::from([("connection".to_string(), HashMap::new())]);
+        assert_eq!(extract_openvpn_gateway(&settings), None);
+    }
+
+    #[test]
+    fn openvpn_gateway_none_when_data_key_absent() {
+        let vpn_sec = HashMap::from([(
+            "service-type".to_string(),
+            zvariant::Value::Str("org.freedesktop.NetworkManager.openvpn".into()),
+        )]);
+        let settings = HashMap::from([("vpn".to_string(), vpn_sec)]);
+        assert_eq!(extract_openvpn_gateway(&settings), None);
+    }
 }
