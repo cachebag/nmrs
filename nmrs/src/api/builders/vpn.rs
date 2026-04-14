@@ -224,6 +224,39 @@ pub fn build_openvpn_connection(
         }
     }
 
+    // TLS hardening options
+    if let Some(ref key) = config.tls_auth_key {
+        vpn_data.push(("tls-auth".into(), key.clone()));
+        if let Some(dir) = config.tls_auth_direction {
+            vpn_data.push(("ta-dir".into(), dir.to_string()));
+        }
+    }
+    if let Some(ref key) = config.tls_crypt {
+        vpn_data.push(("tls-crypt".into(), key.clone()));
+    }
+    if let Some(ref key) = config.tls_crypt_v2 {
+        vpn_data.push(("tls-crypt-v2".into(), key.clone()));
+    }
+    if let Some(ref ver) = config.tls_version_min {
+        vpn_data.push(("tls-version-min".into(), ver.clone()));
+    }
+    if let Some(ref ver) = config.tls_version_max {
+        vpn_data.push(("tls-version-max".into(), ver.clone()));
+    }
+    if let Some(ref cipher) = config.tls_cipher {
+        vpn_data.push(("tls-cipher".into(), cipher.clone()));
+    }
+    if let Some(ref cert_type) = config.remote_cert_tls {
+        vpn_data.push(("remote-cert-tls".into(), cert_type.clone()));
+    }
+    if let Some((ref name, ref name_type)) = config.verify_x509_name {
+        vpn_data.push(("verify-x509-name".into(), name.clone()));
+        vpn_data.push(("verify-x509-type".into(), name_type.clone()));
+    }
+    if let Some(ref path) = config.crl_verify {
+        vpn_data.push(("crl-verify".into(), path.clone()));
+    }
+
     if let Some(ref proxy) = config.proxy {
         match proxy {
             OpenVpnProxy::Http {
@@ -995,6 +1028,19 @@ mod tests {
         );
     }
 
+    fn get_vpn_data_value(
+        settings: &HashMap<&str, HashMap<&str, Value>>,
+        key: &str,
+    ) -> Option<String> {
+        let vpn = settings.get("vpn")?;
+        let data = vpn.get("data")?;
+        if let Value::Dict(dict) = data {
+            let val: String = dict.get::<Value, String>(&Value::from(key)).ok()??;
+            return Some(val);
+        }
+        None
+    }
+
     #[test]
     fn openvpn_vpn_secrets_has_dict_signature() {
         let config = create_openvpn_config()
@@ -1010,5 +1056,142 @@ mod tests {
             "a{ss}",
             "vpn.secrets must be a{{ss}} for NetworkManager"
         );
+    }
+
+    #[test]
+    fn openvpn_tls_auth_key_and_direction() {
+        let config = create_openvpn_config().with_tls_auth("/etc/openvpn/ta.key", Some(1));
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "tls-auth").as_deref(),
+            Some("/etc/openvpn/ta.key")
+        );
+        assert_eq!(
+            get_vpn_data_value(&settings, "ta-dir").as_deref(),
+            Some("1")
+        );
+    }
+
+    #[test]
+    fn openvpn_tls_auth_key_without_direction() {
+        let config = create_openvpn_config().with_tls_auth("/etc/openvpn/ta.key", None);
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "tls-auth").as_deref(),
+            Some("/etc/openvpn/ta.key")
+        );
+        assert!(get_vpn_data_value(&settings, "ta-dir").is_none());
+    }
+
+    #[test]
+    fn openvpn_tls_crypt() {
+        let config = create_openvpn_config().with_tls_crypt("/etc/openvpn/tls-crypt.key");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "tls-crypt").as_deref(),
+            Some("/etc/openvpn/tls-crypt.key")
+        );
+    }
+
+    #[test]
+    fn openvpn_tls_crypt_v2() {
+        let config = create_openvpn_config().with_tls_crypt_v2("/etc/openvpn/tls-crypt-v2.key");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "tls-crypt-v2").as_deref(),
+            Some("/etc/openvpn/tls-crypt-v2.key")
+        );
+    }
+
+    #[test]
+    fn openvpn_tls_version_min() {
+        let config = create_openvpn_config().with_tls_version_min("1.2");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "tls-version-min").as_deref(),
+            Some("1.2")
+        );
+    }
+
+    #[test]
+    fn openvpn_tls_version_max() {
+        let config = create_openvpn_config().with_tls_version_max("1.3");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "tls-version-max").as_deref(),
+            Some("1.3")
+        );
+    }
+
+    #[test]
+    fn openvpn_tls_cipher() {
+        let config =
+            create_openvpn_config().with_tls_cipher("TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "tls-cipher").as_deref(),
+            Some("TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384")
+        );
+    }
+
+    #[test]
+    fn openvpn_remote_cert_tls() {
+        let config = create_openvpn_config().with_remote_cert_tls("server");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "remote-cert-tls").as_deref(),
+            Some("server")
+        );
+    }
+
+    #[test]
+    fn openvpn_verify_x509_name() {
+        let config = create_openvpn_config().with_verify_x509_name("vpn.example.com", "name");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "verify-x509-name").as_deref(),
+            Some("vpn.example.com")
+        );
+        assert_eq!(
+            get_vpn_data_value(&settings, "verify-x509-type").as_deref(),
+            Some("name")
+        );
+    }
+
+    #[test]
+    fn openvpn_crl_verify() {
+        let config = create_openvpn_config().with_crl_verify("/etc/openvpn/crl.pem");
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert_eq!(
+            get_vpn_data_value(&settings, "crl-verify").as_deref(),
+            Some("/etc/openvpn/crl.pem")
+        );
+    }
+
+    #[test]
+    fn openvpn_tls_options_absent_by_default() {
+        let config = create_openvpn_config();
+        let opts = create_test_options();
+        let settings = build_openvpn_connection(&config, &opts).unwrap();
+        assert!(get_vpn_data_value(&settings, "tls-auth").is_none());
+        assert!(get_vpn_data_value(&settings, "ta-dir").is_none());
+        assert!(get_vpn_data_value(&settings, "tls-crypt").is_none());
+        assert!(get_vpn_data_value(&settings, "tls-crypt-v2").is_none());
+        assert!(get_vpn_data_value(&settings, "tls-version-min").is_none());
+        assert!(get_vpn_data_value(&settings, "tls-version-max").is_none());
+        assert!(get_vpn_data_value(&settings, "tls-cipher").is_none());
+        assert!(get_vpn_data_value(&settings, "remote-cert-tls").is_none());
+        assert!(get_vpn_data_value(&settings, "verify-x509-name").is_none());
+        assert!(get_vpn_data_value(&settings, "crl-verify").is_none());
     }
 }
