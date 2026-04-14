@@ -3,6 +3,10 @@ use super::openvpn::OpenVpnConfig;
 use super::wireguard::WireGuardConfig;
 use uuid::Uuid;
 
+pub(crate) mod sealed {
+    pub trait Sealed {}
+}
+
 /// VPN connection type.
 ///
 /// Identifies the VPN protocol/technology used for the connection.
@@ -38,6 +42,8 @@ impl From<OpenVpnConfig> for VpnConfiguration {
         Self::OpenVpn(Box::new(config))
     }
 }
+
+impl sealed::Sealed for VpnConfiguration {}
 
 impl VpnConfig for VpnConfiguration {
     fn vpn_type(&self) -> VpnType {
@@ -77,7 +83,10 @@ impl VpnConfig for VpnConfiguration {
 }
 
 /// Common metadata shared by VPN connection configurations.
-pub trait VpnConfig: Send + Sync + std::fmt::Debug {
+///
+/// This trait is sealed and cannot be implemented outside of this crate.
+/// Use [`WireGuardConfig`], [`OpenVpnConfig`], or [`VpnConfiguration`] instead.
+pub trait VpnConfig: sealed::Sealed + Send + Sync + std::fmt::Debug {
     /// Returns the VPN protocol used by this configuration.
     fn vpn_type(&self) -> VpnType;
 
@@ -102,9 +111,9 @@ pub trait VpnConfig: Send + Sync + std::fmt::Debug {
 /// # Fields
 ///
 /// - `name`: The connection name/identifier
-/// - `vpn_type`: The type of VPN (WireGuard, etc.)
+/// - `vpn_type`: The type of VPN (WireGuard, OpenVPN)
 /// - `state`: Current connection state (for active connections)
-/// - `interface`: Network interface name (e.g., "wg0") when active
+/// - `interface`: Network interface name when active
 ///
 /// # Example
 ///
@@ -119,11 +128,11 @@ pub trait VpnConfig: Send + Sync + std::fmt::Debug {
 pub struct VpnConnection {
     /// The connection name/identifier.
     pub name: String,
-    /// The type of VPN (WireGuard, etc.).
+    /// The type of VPN (WireGuard, OpenVPN).
     pub vpn_type: VpnType,
     /// Current connection state.
     pub state: DeviceState,
-    /// Network interface name when active (e.g., "wg0").
+    /// Network interface name when active.
     pub interface: Option<String>,
 }
 
