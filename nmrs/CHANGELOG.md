@@ -15,11 +15,18 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - OpenVPN builder: compression, proxy, and `build_openvpn_connection()` ([#315](https://github.com/cachebag/nmrs/pull/315))
 - `VpnConfiguration` to dispatch WireGuard vs OpenVPN; `connect_vpn` wired to the OpenVPN builder ([#322](https://github.com/cachebag/nmrs/pull/322))
 - Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
+- `OpenVpnBuilder`: fluent validated builder for `OpenVpnConfig` with auth-type-specific field requirements and 17 unit tests ([#326](https://github.com/cachebag/nmrs/pull/326))
+- Parse `auth-user-pass` directive in `.ovpn` files and automatically infer `OpenVpnAuthType` ([#340](https://github.com/cachebag/nmrs/pull/340))
+- OpenVPN input validation via `validate_openvpn_config`; `validate_vpn_credentials` now dispatches on VPN type ([#345](https://github.com/cachebag/nmrs/pull/345))
+- TLS hardening options for `OpenVpnConfig`: `tls-auth`, `tls-crypt`, `tls-crypt-v2`, `remote-cert-tls`, `verify-x509-name`, `crl-verify`, min/max TLS version, and TLS cipher ([#346](https://github.com/cachebag/nmrs/pull/346))
+- `NetworkManager::import_ovpn()` and `OpenVpnBuilder::from_ovpn_file()` / `from_ovpn_str()` for importing `.ovpn` profiles directly into NetworkManager ([#347](https://github.com/cachebag/nmrs/pull/347))
 
 ### Fixed
 - Add `Send` bound to monitoring stream trait objects so `monitor_network_changes` and `monitor_device_changes` work with `tokio::spawn` ([#359](https://github.com/cachebag/nmrs/pull/359))
 - Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
 - `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
+- `vpn.data` and `vpn.secrets` now correctly serialized as `zvariant::Dict` on the D-Bus wire ([#337](https://github.com/cachebag/nmrs/pull/337))
+- `get_vpn_info` now deserializes `vpn.data` as `HashMap<String, String>` and correctly populates `gateway` for OpenVPN connections ([#344](https://github.com/cachebag/nmrs/pull/344))
 
 ## [2.3.0] - 2026-04-10
 ### Added
