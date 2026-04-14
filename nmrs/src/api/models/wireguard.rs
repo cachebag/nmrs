@@ -121,6 +121,8 @@ impl WireGuardConfig {
     }
 }
 
+impl super::vpn::sealed::Sealed for WireGuardConfig {}
+
 impl VpnConfig for WireGuardConfig {
     fn vpn_type(&self) -> VpnType {
         VpnType::WireGuard
@@ -274,6 +276,8 @@ impl VpnCredentials {
         self
     }
 }
+
+impl super::vpn::sealed::Sealed for VpnCredentials {}
 
 impl VpnConfig for VpnCredentials {
     fn vpn_type(&self) -> VpnType {
