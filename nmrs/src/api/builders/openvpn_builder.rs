@@ -9,11 +9,15 @@
 //! struct. Use [`super::vpn::build_openvpn_connection`] to convert it into
 //! NetworkManager connection settings.
 
+use std::path::Path;
+
 use uuid::Uuid;
 
 use crate::api::models::{
     ConnectionError, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy,
 };
+use crate::core::ovpn_parser::parser::{self, CertSource, OvpnFile};
+use crate::util::cert_store::store_inline_cert;
 use crate::util::validation::validate_connection_name;
 
 /// Builder for OpenVPN connections.
@@ -41,6 +45,7 @@ use crate::util::validation::validate_connection_name;
 ///     .build()
 ///     .expect("Failed to build OpenVPN config");
 /// ```
+#[derive(Debug)]
 pub struct OpenVpnBuilder {
     name: String,
     remote: Option<String>,
@@ -106,6 +111,150 @@ impl OpenVpnBuilder {
             verify_x509_name: None,
             crl_verify: None,
         }
+    }
+
+    /// Creates a builder pre-populated from a `.ovpn` file on disk.
+    ///
+    /// Reads the file, parses it, extracts inline certificates (persisting them
+    /// via the cert store), and pre-populates the builder. The connection name
+    /// defaults to the file stem (e.g. `"corp"` for `corp.ovpn`).
+    ///
+    /// The caller can override any field before calling [`build()`](Self::build).
+    ///
+    /// # Errors
+    ///
+    /// - `ConnectionError::VpnFailed` if the file cannot be read
+    /// - `ConnectionError::ParseError` if the `.ovpn` content is malformed
+    /// - `ConnectionError::InvalidGateway` if no `remote` directive is found
+    pub fn from_ovpn_file(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
+        let path = path.as_ref();
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            ConnectionError::VpnFailed(format!("failed to read {}: {e}", path.display()))
+        })?;
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("openvpn")
+            .to_string();
+        Self::from_ovpn_str(&content, name)
+    }
+
+    /// Creates a builder pre-populated from `.ovpn` file content.
+    ///
+    /// Parses the content, extracts inline certificates (persisting them via
+    /// the cert store under `name`), and pre-populates the builder.
+    ///
+    /// The caller can override any field before calling [`build()`](Self::build).
+    ///
+    /// # Errors
+    ///
+    /// - `ConnectionError::ParseError` if the content is malformed
+    /// - `ConnectionError::InvalidGateway` if no `remote` directive is found
+    /// - `ConnectionError::VpnFailed` if inline cert storage fails
+    pub fn from_ovpn_str(content: &str, name: impl Into<String>) -> Result<Self, ConnectionError> {
+        let name = name.into();
+        let ovpn = parser::parse_ovpn(content)?;
+        Self::from_parsed(ovpn, name)
+    }
+
+    /// Populates a builder from a parsed `OvpnFile`, resolving inline certs.
+    fn from_parsed(f: OvpnFile, name: String) -> Result<Self, ConnectionError> {
+        use crate::core::ovpn_parser::parser::{AllowCompress, Compress};
+
+        let first_remote = f
+            .remotes
+            .into_iter()
+            .next()
+            .ok_or_else(|| ConnectionError::InvalidGateway("no remote in .ovpn file".into()))?;
+
+        let tcp = first_remote
+            .proto
+            .as_deref()
+            .map(|p: &str| p.starts_with("tcp"))
+            .unwrap_or_else(|| {
+                f.proto
+                    .as_deref()
+                    .map(|p: &str| p.starts_with("tcp"))
+                    .unwrap_or(false)
+            });
+
+        let compression = match (f.compress, f.allow_compress) {
+            (Some(Compress::Algorithm(ref s)), _) => Some(match s.as_str() {
+                "lz4" => OpenVpnCompression::Lz4,
+                "lz4-v2" => OpenVpnCompression::Lz4V2,
+                _ => OpenVpnCompression::Yes,
+            }),
+            (Some(Compress::Stub | Compress::StubV2), _) => Some(OpenVpnCompression::No),
+            (None, Some(AllowCompress::No)) => Some(OpenVpnCompression::No),
+            _ => None,
+        };
+
+        let resolve_cert =
+            |src: CertSource, cert_type: &str, conn: &str| -> Result<String, ConnectionError> {
+                match src {
+                    CertSource::File(p) => Ok(p),
+                    CertSource::Inline(pem) => {
+                        let path = store_inline_cert(conn, cert_type, &pem)?;
+                        Ok(path.to_string_lossy().into_owned())
+                    }
+                }
+            };
+
+        let ca_cert = f.ca.map(|s| resolve_cert(s, "ca", &name)).transpose()?;
+        let client_cert = f.cert.map(|s| resolve_cert(s, "cert", &name)).transpose()?;
+        let client_key = f.key.map(|s| resolve_cert(s, "key", &name)).transpose()?;
+
+        let has_client_cert_pair = client_cert.is_some() && client_key.is_some();
+        let auth_type = match (f.auth_user_pass, has_client_cert_pair) {
+            (true, true) => Some(OpenVpnAuthType::PasswordTls),
+            (true, false) => Some(OpenVpnAuthType::Password),
+            (false, true) => Some(OpenVpnAuthType::Tls),
+            (false, false) => None,
+        };
+
+        let (tls_auth_key, tls_auth_direction) = match f.tls_auth {
+            Some(ta) => {
+                let path = resolve_cert(ta.source, "ta", &name)?;
+                (Some(path), ta.key_direction)
+            }
+            None => (None, None),
+        };
+
+        let tls_crypt = f
+            .tls_crypt
+            .map(|s| resolve_cert(s, "tls-crypt", &name))
+            .transpose()?;
+
+        Ok(Self {
+            name,
+            remote: Some(first_remote.host),
+            port: first_remote.port,
+            tcp,
+            auth_type,
+            auth: f.auth,
+            cipher: f.cipher,
+            dns: None,
+            mtu: None,
+            uuid: None,
+            ca_cert,
+            client_cert,
+            client_key,
+            key_password: None,
+            username: None,
+            password: None,
+            compression,
+            proxy: None,
+            tls_auth_key,
+            tls_auth_direction,
+            tls_crypt,
+            tls_crypt_v2: None,
+            tls_version_min: None,
+            tls_version_max: None,
+            tls_cipher: None,
+            remote_cert_tls: None,
+            verify_x509_name: None,
+            crl_verify: None,
+        })
     }
 
     /// Sets the remote server hostname or IP address.
@@ -628,5 +777,201 @@ mod tests {
             .client_cert("/etc/openvpn/client.crt")
             .build();
         assert!(matches!(result.unwrap_err(), ConnectionError::VpnFailed(_)));
+    }
+
+    // --- from_ovpn_str tests ---
+
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_fake_xdg<R>(f: impl FnOnce() -> R) -> R {
+        let _g = ENV_LOCK.lock().unwrap();
+        let base = std::env::temp_dir().join(format!("nmrs-ovpn-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+        unsafe { std::env::set_var("XDG_DATA_HOME", &base) };
+        let out = f();
+        unsafe { std::env::remove_var("XDG_DATA_HOME") };
+        let _ = std::fs::remove_dir_all(&base);
+        out
+    }
+
+    #[test]
+    fn from_ovpn_str_basic_tls_file_certs() {
+        let ovpn = "\
+remote vpn.example.com 1194 udp
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+";
+        let builder = OpenVpnBuilder::from_ovpn_str(ovpn, "test-tls").unwrap();
+        let config = builder.build().unwrap();
+        assert_eq!(config.remote, "vpn.example.com");
+        assert_eq!(config.port, 1194);
+        assert!(!config.tcp);
+        assert_eq!(config.auth_type, Some(OpenVpnAuthType::Tls));
+        assert_eq!(config.ca_cert, Some("/etc/openvpn/ca.crt".into()));
+        assert_eq!(config.client_cert, Some("/etc/openvpn/client.crt".into()));
+        assert_eq!(config.client_key, Some("/etc/openvpn/client.key".into()));
+    }
+
+    #[test]
+    fn from_ovpn_str_password_auth() {
+        let ovpn = "remote vpn.example.com 443 tcp\nauth-user-pass\n";
+        let builder = OpenVpnBuilder::from_ovpn_str(ovpn, "test-pw")
+            .unwrap()
+            .username("user");
+        let config = builder.build().unwrap();
+        assert_eq!(config.auth_type, Some(OpenVpnAuthType::Password));
+        assert!(config.tcp);
+        assert_eq!(config.port, 443);
+    }
+
+    #[test]
+    fn from_ovpn_str_inline_certs_stored() {
+        with_fake_xdg(|| {
+            let ovpn = "\
+remote vpn.example.com 1194
+<ca>
+-----BEGIN CERTIFICATE-----
+FAKECA
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+FAKECERT
+-----END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+FAKEKEY
+-----END PRIVATE KEY-----
+</key>
+";
+            let builder = OpenVpnBuilder::from_ovpn_str(ovpn, "inline-test").unwrap();
+            let config = builder.build().unwrap();
+            assert_eq!(config.auth_type, Some(OpenVpnAuthType::Tls));
+
+            let ca = config.ca_cert.unwrap();
+            assert!(
+                std::path::Path::new(&ca).exists(),
+                "CA cert should be written to disk: {ca}"
+            );
+            assert!(config.client_cert.is_some());
+            assert!(config.client_key.is_some());
+        });
+    }
+
+    #[test]
+    fn from_ovpn_str_tls_auth_with_direction() {
+        let ovpn = "\
+remote vpn.example.com 1194
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+tls-auth /etc/openvpn/ta.key 1
+";
+        let builder = OpenVpnBuilder::from_ovpn_str(ovpn, "test-ta").unwrap();
+        let config = builder.build().unwrap();
+        assert_eq!(config.tls_auth_key, Some("/etc/openvpn/ta.key".into()));
+        assert_eq!(config.tls_auth_direction, Some(1));
+    }
+
+    #[test]
+    fn from_ovpn_str_inline_tls_auth() {
+        with_fake_xdg(|| {
+            let ovpn = "\
+remote vpn.example.com 1194
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+key-direction 0
+<tls-auth>
+-----BEGIN OpenVPN Static key V1-----
+FAKEKEY
+-----END OpenVPN Static key V1-----
+</tls-auth>
+";
+            let builder = OpenVpnBuilder::from_ovpn_str(ovpn, "inline-ta").unwrap();
+            let config = builder.build().unwrap();
+            assert!(config.tls_auth_key.is_some());
+            assert_eq!(config.tls_auth_direction, Some(0));
+        });
+    }
+
+    #[test]
+    fn from_ovpn_str_compression_lz4() {
+        let ovpn = "\
+remote vpn.example.com 1194
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+compress lz4-v2
+";
+        let builder = OpenVpnBuilder::from_ovpn_str(ovpn, "test-comp").unwrap();
+        let config = builder.build().unwrap();
+        assert_eq!(config.compression, Some(OpenVpnCompression::Lz4V2));
+    }
+
+    #[test]
+    fn from_ovpn_str_cipher_and_auth() {
+        let ovpn = "\
+remote vpn.example.com 1194
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+cipher AES-256-GCM
+auth SHA256
+";
+        let builder = OpenVpnBuilder::from_ovpn_str(ovpn, "test-cipher").unwrap();
+        let config = builder.build().unwrap();
+        assert_eq!(config.cipher, Some("AES-256-GCM".into()));
+        assert_eq!(config.auth, Some("SHA256".into()));
+    }
+
+    #[test]
+    fn from_ovpn_str_caller_can_override() {
+        let ovpn = "\
+remote vpn.example.com 1194
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/client.crt
+key /etc/openvpn/client.key
+";
+        let config = OpenVpnBuilder::from_ovpn_str(ovpn, "test-override")
+            .unwrap()
+            .port(443)
+            .tcp(true)
+            .dns(vec!["1.1.1.1".into()])
+            .build()
+            .unwrap();
+        assert_eq!(config.port, 443);
+        assert!(config.tcp);
+        assert!(config.dns.is_some());
+    }
+
+    #[test]
+    fn from_ovpn_str_no_remote_fails() {
+        let ovpn = "cipher AES-256-GCM\n";
+        let result = OpenVpnBuilder::from_ovpn_str(ovpn, "test-fail");
+        assert!(matches!(
+            result.unwrap_err(),
+            ConnectionError::InvalidGateway(_)
+        ));
+    }
+
+    #[test]
+    fn from_ovpn_file_reads_and_parses() {
+        let dir = std::env::temp_dir().join(format!("nmrs-ovpn-file-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("corp.ovpn");
+        std::fs::write(&path, "remote vpn.corp.com 1194\nauth-user-pass\n").unwrap();
+
+        let builder = OpenVpnBuilder::from_ovpn_file(&path).unwrap();
+        assert_eq!(builder.name, "corp");
+        let config = builder.username("user").build().unwrap();
+        assert_eq!(config.remote, "vpn.corp.com");
+        assert_eq!(config.auth_type, Some(OpenVpnAuthType::Password));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
