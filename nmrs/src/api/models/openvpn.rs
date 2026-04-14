@@ -3,7 +3,51 @@
 use super::vpn::{VpnConfig, VpnType};
 use crate::api::models::error::ConnectionError;
 use std::convert::TryFrom;
+use std::net::Ipv4Addr;
 use uuid::Uuid;
+
+/// A static IPv4 route for OpenVPN split tunneling.
+///
+/// Serialized to NetworkManager `ipv4.route-data`.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VpnRoute {
+    /// Destination network (e.g. `10.0.0.0`).
+    pub dest: String,
+    /// CIDR prefix length (0–32).
+    pub prefix: u32,
+    /// Optional gateway (`next-hop` in NM).
+    pub next_hop: Option<String>,
+    /// Optional route metric.
+    pub metric: Option<u32>,
+}
+
+impl VpnRoute {
+    /// Creates a route to `dest`/`prefix`.
+    #[must_use]
+    pub fn new(dest: impl Into<String>, prefix: u32) -> Self {
+        Self {
+            dest: dest.into(),
+            prefix,
+            next_hop: None,
+            metric: None,
+        }
+    }
+
+    /// Sets the gateway for this route.
+    #[must_use]
+    pub fn next_hop(mut self, gateway: impl Into<String>) -> Self {
+        self.next_hop = Some(gateway.into());
+        self
+    }
+
+    /// Sets the route metric.
+    #[must_use]
+    pub fn metric(mut self, metric: u32) -> Self {
+        self.metric = Some(metric);
+        self
+    }
+}
 
 /// OpenVPN authentication type.
 ///
@@ -97,6 +141,28 @@ pub struct OpenVpnConfig {
     pub verify_x509_name: Option<(String, String)>,
     /// Path to a Certificate Revocation List file.
     pub crl_verify: Option<String>,
+    /// When true, this profile may become the default route (full tunnel / `redirect-gateway`).
+    ///
+    /// Maps to `ipv4.never-default = false` in NetworkManager when set.
+    pub redirect_gateway: bool,
+    /// Static IPv4 routes for split tunneling (`ipv4.route-data`).
+    pub routes: Vec<VpnRoute>,
+    /// OpenVPN `ping` interval in seconds.
+    pub ping: Option<u32>,
+    /// OpenVPN `ping-exit` seconds.
+    pub ping_exit: Option<u32>,
+    /// OpenVPN `ping-restart` seconds.
+    pub ping_restart: Option<u32>,
+    /// TLS renegotiation period (`reneg-sec`).
+    pub reneg_seconds: Option<u32>,
+    /// Initial connection timeout in seconds (`connect-timeout`).
+    pub connect_timeout: Option<u32>,
+    /// Negotiable data ciphers list (`data-ciphers`), colon-separated.
+    pub data_ciphers: Option<String>,
+    /// Fallback data cipher (`data-ciphers-fallback`).
+    pub data_ciphers_fallback: Option<String>,
+    /// When true, disables NCP (`ncp-disable`).
+    pub ncp_disable: bool,
 }
 
 impl OpenVpnConfig {
@@ -131,6 +197,16 @@ impl OpenVpnConfig {
             remote_cert_tls: None,
             verify_x509_name: None,
             crl_verify: None,
+            redirect_gateway: false,
+            routes: Vec::new(),
+            ping: None,
+            ping_exit: None,
+            ping_restart: None,
+            reneg_seconds: None,
+            connect_timeout: None,
+            data_ciphers: None,
+            data_ciphers_fallback: None,
+            ncp_disable: false,
         }
     }
 
@@ -312,6 +388,114 @@ impl OpenVpnConfig {
         self.crl_verify = Some(path.into());
         self
     }
+
+    /// When true, the connection may become the default IPv4 route (full tunnel).
+    #[must_use]
+    pub fn with_redirect_gateway(mut self, redirect: bool) -> Self {
+        self.redirect_gateway = redirect;
+        self
+    }
+
+    /// Replaces static IPv4 routes for split tunneling.
+    #[must_use]
+    pub fn with_routes(mut self, routes: Vec<VpnRoute>) -> Self {
+        self.routes = routes;
+        self
+    }
+
+    /// Sets the OpenVPN `ping` interval (seconds).
+    #[must_use]
+    pub fn with_ping(mut self, seconds: u32) -> Self {
+        self.ping = Some(seconds);
+        self
+    }
+
+    /// Sets OpenVPN `ping-exit` (seconds).
+    #[must_use]
+    pub fn with_ping_exit(mut self, seconds: u32) -> Self {
+        self.ping_exit = Some(seconds);
+        self
+    }
+
+    /// Sets OpenVPN `ping-restart` (seconds).
+    #[must_use]
+    pub fn with_ping_restart(mut self, seconds: u32) -> Self {
+        self.ping_restart = Some(seconds);
+        self
+    }
+
+    /// Sets TLS renegotiation period (`reneg-sec`, seconds).
+    #[must_use]
+    pub fn with_reneg_seconds(mut self, seconds: u32) -> Self {
+        self.reneg_seconds = Some(seconds);
+        self
+    }
+
+    /// Sets initial connection timeout (`connect-timeout`, seconds).
+    #[must_use]
+    pub fn with_connect_timeout(mut self, seconds: u32) -> Self {
+        self.connect_timeout = Some(seconds);
+        self
+    }
+
+    /// Sets negotiable data ciphers (colon-separated, e.g. `AES-256-GCM:AES-128-GCM`).
+    #[must_use]
+    pub fn with_data_ciphers(mut self, ciphers: impl Into<String>) -> Self {
+        self.data_ciphers = Some(ciphers.into());
+        self
+    }
+
+    /// Sets the fallback data cipher (`data-ciphers-fallback`).
+    #[must_use]
+    pub fn with_data_ciphers_fallback(mut self, cipher: impl Into<String>) -> Self {
+        self.data_ciphers_fallback = Some(cipher.into());
+        self
+    }
+
+    /// When true, disables NCP cipher negotiation (`ncp-disable`).
+    #[must_use]
+    pub fn with_ncp_disable(mut self, disable: bool) -> Self {
+        self.ncp_disable = disable;
+        self
+    }
+}
+
+fn ipv4_netmask_to_prefix(netmask: Ipv4Addr) -> u32 {
+    let mut prefix = 0u32;
+    for byte in netmask.octets() {
+        if byte == 0xff {
+            prefix += 8;
+        } else if byte == 0 {
+            break;
+        } else {
+            let mut b = byte;
+            while b & 0x80 != 0 {
+                prefix += 1;
+                b <<= 1;
+            }
+            break;
+        }
+    }
+    prefix
+}
+
+pub(crate) fn vpn_route_from_parser(
+    r: crate::core::ovpn_parser::parser::Route,
+) -> Result<VpnRoute, ConnectionError> {
+    let dest = r.network.to_string();
+    let prefix = r.netmask.map(ipv4_netmask_to_prefix).unwrap_or(32);
+    if prefix > 32 {
+        return Err(ConnectionError::InvalidAddress(format!(
+            "invalid route netmask for destination {dest}"
+        )));
+    }
+    let next_hop = r.gateway.map(|g| g.to_string());
+    Ok(VpnRoute {
+        dest,
+        prefix,
+        next_hop,
+        metric: None,
+    })
 }
 
 impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
@@ -368,6 +552,20 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             }
         };
 
+        let routes: Vec<VpnRoute> = f
+            .routes
+            .into_iter()
+            .map(vpn_route_from_parser)
+            .collect::<Result<_, _>>()?;
+
+        let redirect_gateway = f.redirect_gateway.is_some();
+
+        let data_ciphers = if f.data_ciphers.is_empty() {
+            None
+        } else {
+            Some(f.data_ciphers.join(":"))
+        };
+
         Ok(OpenVpnConfig {
             name: String::new(),
             remote: first_remote.host,
@@ -397,6 +595,16 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
             remote_cert_tls: None,
             verify_x509_name: None,
             crl_verify: None,
+            redirect_gateway,
+            routes,
+            ping: None,
+            ping_exit: None,
+            ping_restart: None,
+            reneg_seconds: None,
+            connect_timeout: None,
+            data_ciphers,
+            data_ciphers_fallback: None,
+            ncp_disable: false,
         })
     }
 }

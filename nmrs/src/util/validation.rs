@@ -598,6 +598,39 @@ pub fn validate_openvpn_config(config: &OpenVpnConfig) -> Result<(), ConnectionE
         }
     }
 
+    for route in &config.routes {
+        if route.dest.trim().is_empty() {
+            return Err(ConnectionError::InvalidAddress(
+                "OpenVPN route destination cannot be empty".to_string(),
+            ));
+        }
+        if route.prefix > 32 {
+            return Err(ConnectionError::InvalidAddress(format!(
+                "OpenVPN route prefix must be at most 32, got {}",
+                route.prefix
+            )));
+        }
+        if let Some(ref nh) = route.next_hop {
+            validate_ip_address(nh)?;
+        }
+    }
+
+    for (label, val) in [
+        ("ping", config.ping),
+        ("ping-exit", config.ping_exit),
+        ("ping-restart", config.ping_restart),
+        ("reneg-sec", config.reneg_seconds),
+        ("connect-timeout", config.connect_timeout),
+    ] {
+        if let Some(v) = val
+            && v == 0
+        {
+            return Err(ConnectionError::InvalidAddress(format!(
+                "{label} must be greater than 0 if set"
+            )));
+        }
+    }
+
     Ok(())
 }
 

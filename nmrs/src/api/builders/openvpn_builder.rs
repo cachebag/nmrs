@@ -14,7 +14,8 @@ use std::path::Path;
 use uuid::Uuid;
 
 use crate::api::models::{
-    ConnectionError, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy,
+    ConnectionError, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, VpnRoute,
+    vpn_route_from_parser,
 };
 use crate::core::ovpn_parser::parser::{self, CertSource, OvpnFile};
 use crate::util::cert_store::store_inline_cert;
@@ -75,6 +76,16 @@ pub struct OpenVpnBuilder {
     remote_cert_tls: Option<String>,
     verify_x509_name: Option<(String, String)>,
     crl_verify: Option<String>,
+    redirect_gateway: bool,
+    routes: Vec<VpnRoute>,
+    ping: Option<u32>,
+    ping_exit: Option<u32>,
+    ping_restart: Option<u32>,
+    reneg_seconds: Option<u32>,
+    connect_timeout: Option<u32>,
+    data_ciphers: Option<String>,
+    data_ciphers_fallback: Option<String>,
+    ncp_disable: bool,
 }
 
 impl OpenVpnBuilder {
@@ -110,6 +121,16 @@ impl OpenVpnBuilder {
             remote_cert_tls: None,
             verify_x509_name: None,
             crl_verify: None,
+            redirect_gateway: false,
+            routes: Vec::new(),
+            ping: None,
+            ping_exit: None,
+            ping_restart: None,
+            reneg_seconds: None,
+            connect_timeout: None,
+            data_ciphers: None,
+            data_ciphers_fallback: None,
+            ncp_disable: false,
         }
     }
 
@@ -177,6 +198,20 @@ impl OpenVpnBuilder {
                     .map(|p: &str| p.starts_with("tcp"))
                     .unwrap_or(false)
             });
+
+        let routes: Vec<VpnRoute> = f
+            .routes
+            .into_iter()
+            .map(vpn_route_from_parser)
+            .collect::<Result<_, _>>()?;
+
+        let redirect_gateway = f.redirect_gateway.is_some();
+
+        let data_ciphers = if f.data_ciphers.is_empty() {
+            None
+        } else {
+            Some(f.data_ciphers.join(":"))
+        };
 
         let compression = match (f.compress, f.allow_compress) {
             (Some(Compress::Algorithm(ref s)), _) => Some(match s.as_str() {
@@ -254,6 +289,16 @@ impl OpenVpnBuilder {
             remote_cert_tls: None,
             verify_x509_name: None,
             crl_verify: None,
+            redirect_gateway,
+            routes,
+            ping: None,
+            ping_exit: None,
+            ping_restart: None,
+            reneg_seconds: None,
+            connect_timeout: None,
+            data_ciphers,
+            data_ciphers_fallback: None,
+            ncp_disable: false,
         })
     }
 
@@ -449,6 +494,76 @@ impl OpenVpnBuilder {
         self
     }
 
+    /// When true, the profile may become the default IPv4 route.
+    #[must_use]
+    pub fn redirect_gateway(mut self, redirect: bool) -> Self {
+        self.redirect_gateway = redirect;
+        self
+    }
+
+    /// Sets static IPv4 routes for split tunneling.
+    #[must_use]
+    pub fn routes(mut self, routes: Vec<VpnRoute>) -> Self {
+        self.routes = routes;
+        self
+    }
+
+    /// Sets OpenVPN `ping` (seconds).
+    #[must_use]
+    pub fn ping(mut self, seconds: u32) -> Self {
+        self.ping = Some(seconds);
+        self
+    }
+
+    /// Sets OpenVPN `ping-exit` (seconds).
+    #[must_use]
+    pub fn ping_exit(mut self, seconds: u32) -> Self {
+        self.ping_exit = Some(seconds);
+        self
+    }
+
+    /// Sets OpenVPN `ping-restart` (seconds).
+    #[must_use]
+    pub fn ping_restart(mut self, seconds: u32) -> Self {
+        self.ping_restart = Some(seconds);
+        self
+    }
+
+    /// Sets TLS renegotiation period (`reneg-sec`, seconds).
+    #[must_use]
+    pub fn reneg_seconds(mut self, seconds: u32) -> Self {
+        self.reneg_seconds = Some(seconds);
+        self
+    }
+
+    /// Sets initial connection timeout (`connect-timeout`, seconds).
+    #[must_use]
+    pub fn connect_timeout(mut self, seconds: u32) -> Self {
+        self.connect_timeout = Some(seconds);
+        self
+    }
+
+    /// Sets negotiable data ciphers (colon-separated).
+    #[must_use]
+    pub fn data_ciphers(mut self, ciphers: impl Into<String>) -> Self {
+        self.data_ciphers = Some(ciphers.into());
+        self
+    }
+
+    /// Sets `data-ciphers-fallback`.
+    #[must_use]
+    pub fn data_ciphers_fallback(mut self, cipher: impl Into<String>) -> Self {
+        self.data_ciphers_fallback = Some(cipher.into());
+        self
+    }
+
+    /// When true, disables NCP (`ncp-disable`).
+    #[must_use]
+    pub fn ncp_disable(mut self, disable: bool) -> Self {
+        self.ncp_disable = disable;
+        self
+    }
+
     /// Builds and validates the `OpenVpnConfig`.
     ///
     /// # Errors
@@ -551,6 +666,16 @@ impl OpenVpnBuilder {
             remote_cert_tls: self.remote_cert_tls,
             verify_x509_name: self.verify_x509_name,
             crl_verify: self.crl_verify,
+            redirect_gateway: self.redirect_gateway,
+            routes: self.routes,
+            ping: self.ping,
+            ping_exit: self.ping_exit,
+            ping_restart: self.ping_restart,
+            reneg_seconds: self.reneg_seconds,
+            connect_timeout: self.connect_timeout,
+            data_ciphers: self.data_ciphers,
+            data_ciphers_fallback: self.data_ciphers_fallback,
+            ncp_disable: self.ncp_disable,
         })
     }
 }
