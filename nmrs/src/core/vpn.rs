@@ -26,7 +26,9 @@ use crate::core::state_wait::wait_for_connection_activation;
 use crate::dbus::{NMActiveConnectionProxy, NMProxy};
 use crate::models::VpnConfiguration;
 use crate::util::utils::{extract_connection_state_reason, nm_proxy, settings_proxy};
-use crate::util::validation::{validate_connection_name, validate_vpn_credentials};
+use crate::util::validation::{
+    validate_connection_name, validate_openvpn_config, validate_vpn_credentials,
+};
 
 // Detects the VPN type from a raw NM connection settings map.
 // WireGuard: connection.type == "wireguard"
@@ -104,7 +106,10 @@ pub(crate) async fn connect_vpn(
                 validate_vpn_credentials(&creds)?;
                 build_wireguard_connection(&creds, &opts)?
             }
-            VpnConfiguration::OpenVpn(ref ovpn) => build_openvpn_connection(ovpn, &opts)?,
+            VpnConfiguration::OpenVpn(ref ovpn) => {
+                validate_openvpn_config(ovpn)?;
+                build_openvpn_connection(ovpn, &opts)?
+            }
         };
 
         let settings_api = settings_proxy(conn).await?;
