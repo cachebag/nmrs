@@ -127,6 +127,37 @@ pub struct VpnConnection {
     pub interface: Option<String>,
 }
 
+/// Protocol-specific details for an active VPN connection.
+///
+/// Provides configuration details extracted from the NetworkManager connection
+/// profile, varying by VPN type.
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub enum VpnDetails {
+    /// WireGuard-specific connection details.
+    WireGuard {
+        /// The local interface's public key.
+        public_key: Option<String>,
+        /// The peer endpoint (e.g. "vpn.example.com:51820").
+        endpoint: Option<String>,
+    },
+    /// OpenVPN-specific connection details.
+    OpenVpn {
+        /// Remote server address (e.g. "vpn.example.com:1194").
+        remote: String,
+        /// Remote server port.
+        port: u16,
+        /// Transport protocol ("udp" or "tcp").
+        protocol: String,
+        /// Data channel cipher (e.g. "AES-256-GCM").
+        cipher: Option<String>,
+        /// HMAC digest algorithm (e.g. "SHA256").
+        auth: Option<String>,
+        /// Compression mode if enabled (e.g. "lz4-v2").
+        compression: Option<String>,
+    },
+}
+
 /// Detailed VPN connection information and statistics.
 ///
 /// Provides comprehensive information about an active VPN connection,
@@ -164,4 +195,6 @@ pub struct VpnConnectionInfo {
     pub ip6_address: Option<String>,
     /// DNS servers configured for this VPN.
     pub dns_servers: Vec<String>,
+    /// Protocol-specific connection details, if available.
+    pub details: Option<VpnDetails>,
 }

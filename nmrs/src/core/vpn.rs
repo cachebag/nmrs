@@ -19,7 +19,7 @@ use zvariant::OwnedObjectPath;
 use crate::Result;
 use crate::api::models::{
     ConnectionError, ConnectionOptions, DeviceState, TimeoutConfig, VpnConfig, VpnConnection,
-    VpnConnectionInfo, VpnCredentials, VpnType,
+    VpnConnectionInfo, VpnCredentials, VpnDetails, VpnType,
 };
 use crate::builders::{build_openvpn_connection, build_wireguard_connection};
 use crate::core::state_wait::wait_for_connection_activation;
@@ -826,6 +826,11 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             None
         };
 
+        let details = match vpn_type {
+            VpnType::WireGuard => extract_wireguard_details(&settings_map),
+            VpnType::OpenVpn => extract_openvpn_details(&settings_map),
+        };
+
         return Ok(VpnConnectionInfo {
             name: id.to_string(),
             vpn_type,
@@ -835,6 +840,7 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             ip4_address,
             ip6_address,
             dns_servers,
+            details,
         });
     }
 
@@ -857,6 +863,90 @@ fn extract_openvpn_gateway(
             Some(v.to_string())
         }
         _ => None,
+    })
+}
+
+/// Extracts a string value from an OpenVPN `vpn.data` dict by key.
+fn extract_openvpn_data_value(
+    settings_map: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+    key: &str,
+) -> Option<String> {
+    let zvariant::Value::Dict(dict) = settings_map.get("vpn")?.get("data")? else {
+        return None;
+    };
+    dict.iter().find_map(|(k, v)| match (k, v) {
+        (zvariant::Value::Str(k_str), zvariant::Value::Str(v_str)) if k_str.as_str() == key => {
+            Some(v_str.to_string())
+        }
+        _ => None,
+    })
+}
+
+fn extract_openvpn_details(
+    settings_map: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> Option<VpnDetails> {
+    let remote_raw = extract_openvpn_data_value(settings_map, "remote")?;
+
+    let (remote, port) = if let Some(idx) = remote_raw.rfind(':') {
+        let host = remote_raw[..idx].to_string();
+        let port = remote_raw[idx + 1..].parse::<u16>().unwrap_or(1194);
+        (host, port)
+    } else {
+        (remote_raw, 1194)
+    };
+
+    let protocol =
+        if extract_openvpn_data_value(settings_map, "proto-tcp").as_deref() == Some("yes") {
+            "tcp".to_string()
+        } else {
+            "udp".to_string()
+        };
+
+    let cipher = extract_openvpn_data_value(settings_map, "cipher");
+    let auth = extract_openvpn_data_value(settings_map, "auth");
+
+    let compression = extract_openvpn_data_value(settings_map, "compress")
+        .or_else(|| extract_openvpn_data_value(settings_map, "comp-lzo").map(|_| "lzo".into()));
+
+    Some(VpnDetails::OpenVpn {
+        remote,
+        port,
+        protocol,
+        cipher,
+        auth,
+        compression,
+    })
+}
+
+fn extract_wireguard_details(
+    settings_map: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> Option<VpnDetails> {
+    let wg_sec = settings_map.get("wireguard")?;
+
+    let public_key = wg_sec.get("public-key").and_then(|v| match v {
+        zvariant::Value::Str(s) => Some(s.to_string()),
+        _ => None,
+    });
+
+    let endpoint = wg_sec
+        .get("peers")
+        .and_then(|v| match v {
+            zvariant::Value::Str(s) => Some(s.as_str().to_string()),
+            _ => None,
+        })
+        .and_then(|peers| {
+            let first = peers.split(',').next()?.trim().to_string();
+            for tok in first.split_whitespace() {
+                if let Some(rest) = tok.strip_prefix("endpoint=") {
+                    return Some(rest.to_string());
+                }
+            }
+            None
+        });
+
+    Some(VpnDetails::WireGuard {
+        public_key,
+        endpoint,
     })
 }
 
@@ -905,5 +995,160 @@ mod tests {
         )]);
         let settings = HashMap::from([("vpn".to_string(), vpn_sec)]);
         assert_eq!(extract_openvpn_gateway(&settings), None);
+    }
+
+    #[test]
+    fn openvpn_details_full() {
+        let data = HashMap::from([
+            ("remote".to_string(), "vpn.example.com:1194".to_string()),
+            ("proto-tcp".to_string(), "yes".to_string()),
+            ("cipher".to_string(), "AES-256-GCM".to_string()),
+            ("auth".to_string(), "SHA256".to_string()),
+            ("compress".to_string(), "lz4-v2".to_string()),
+        ]);
+        let settings = openvpn_settings_with_data(data);
+        let details = extract_openvpn_details(&settings).unwrap();
+        match details {
+            VpnDetails::OpenVpn {
+                remote,
+                port,
+                protocol,
+                cipher,
+                auth,
+                compression,
+            } => {
+                assert_eq!(remote, "vpn.example.com");
+                assert_eq!(port, 1194);
+                assert_eq!(protocol, "tcp");
+                assert_eq!(cipher, Some("AES-256-GCM".into()));
+                assert_eq!(auth, Some("SHA256".into()));
+                assert_eq!(compression, Some("lz4-v2".into()));
+            }
+            _ => panic!("expected OpenVpn variant"),
+        }
+    }
+
+    #[test]
+    fn openvpn_details_minimal() {
+        let data = HashMap::from([("remote".to_string(), "vpn.example.com:443".to_string())]);
+        let settings = openvpn_settings_with_data(data);
+        let details = extract_openvpn_details(&settings).unwrap();
+        match details {
+            VpnDetails::OpenVpn {
+                remote,
+                port,
+                protocol,
+                cipher,
+                auth,
+                compression,
+            } => {
+                assert_eq!(remote, "vpn.example.com");
+                assert_eq!(port, 443);
+                assert_eq!(protocol, "udp");
+                assert!(cipher.is_none());
+                assert!(auth.is_none());
+                assert!(compression.is_none());
+            }
+            _ => panic!("expected OpenVpn variant"),
+        }
+    }
+
+    #[test]
+    fn openvpn_details_none_when_no_remote() {
+        let data = HashMap::from([("cipher".to_string(), "AES-256-GCM".to_string())]);
+        let settings = openvpn_settings_with_data(data);
+        assert!(extract_openvpn_details(&settings).is_none());
+    }
+
+    #[test]
+    fn openvpn_details_remote_without_port() {
+        let data = HashMap::from([("remote".to_string(), "vpn.example.com".to_string())]);
+        let settings = openvpn_settings_with_data(data);
+        let details = extract_openvpn_details(&settings).unwrap();
+        match details {
+            VpnDetails::OpenVpn { remote, port, .. } => {
+                assert_eq!(remote, "vpn.example.com");
+                assert_eq!(port, 1194);
+            }
+            _ => panic!("expected OpenVpn variant"),
+        }
+    }
+
+    #[test]
+    fn openvpn_details_comp_lzo_fallback() {
+        let data = HashMap::from([
+            ("remote".to_string(), "vpn.example.com:1194".to_string()),
+            ("comp-lzo".to_string(), "yes".to_string()),
+        ]);
+        let settings = openvpn_settings_with_data(data);
+        let details = extract_openvpn_details(&settings).unwrap();
+        match details {
+            VpnDetails::OpenVpn { compression, .. } => {
+                assert_eq!(compression, Some("lzo".into()));
+            }
+            _ => panic!("expected OpenVpn variant"),
+        }
+    }
+
+    fn wireguard_settings(
+        pairs: Vec<(&str, zvariant::Value<'static>)>,
+    ) -> HashMap<String, HashMap<String, zvariant::Value<'static>>> {
+        let wg_sec: HashMap<String, zvariant::Value<'static>> =
+            pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+        HashMap::from([("wireguard".to_string(), wg_sec)])
+    }
+
+    #[test]
+    fn wireguard_details_full() {
+        let settings = wireguard_settings(vec![
+            (
+                "public-key",
+                zvariant::Value::Str("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into()),
+            ),
+            (
+                "peers",
+                zvariant::Value::Str("endpoint=vpn.example.com:51820 allowed-ips=0.0.0.0/0".into()),
+            ),
+        ]);
+        let details = extract_wireguard_details(&settings).unwrap();
+        match details {
+            VpnDetails::WireGuard {
+                public_key,
+                endpoint,
+            } => {
+                assert_eq!(
+                    public_key,
+                    Some("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into())
+                );
+                assert_eq!(endpoint, Some("vpn.example.com:51820".into()));
+            }
+            _ => panic!("expected WireGuard variant"),
+        }
+    }
+
+    #[test]
+    fn wireguard_details_no_public_key() {
+        let settings = wireguard_settings(vec![(
+            "peers",
+            zvariant::Value::Str("endpoint=vpn.example.com:51820".into()),
+        )]);
+        let details = extract_wireguard_details(&settings).unwrap();
+        match details {
+            VpnDetails::WireGuard {
+                public_key,
+                endpoint,
+            } => {
+                assert!(public_key.is_none());
+                assert_eq!(endpoint, Some("vpn.example.com:51820".into()));
+            }
+            _ => panic!("expected WireGuard variant"),
+        }
+    }
+
+    #[test]
+    fn wireguard_details_none_when_no_section() {
+        let settings: HashMap<String, HashMap<String, zvariant::Value<'static>>> =
+            HashMap::from([("connection".to_string(), HashMap::new())]);
+        assert!(extract_wireguard_details(&settings).is_none());
     }
 }
