@@ -3,6 +3,8 @@
 All notable changes to the `nmrs-gui` crate will be documented in this file.
 
 ## [Unreleased]
+### Changed
+- Use `Arc<Notify>` for monitor callbacks to satisfy `Send` bound ([#359](https://github.com/cachebag/nmrs/pull/359))
 
 ## [1.5.1] - 2026-04-10
 ### Fixed
