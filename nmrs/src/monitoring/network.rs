@@ -38,13 +38,13 @@ pub async fn monitor_network_changes<F>(
     callback: F,
 ) -> Result<()>
 where
-    F: Fn() + 'static,
+    F: Fn() + Send + 'static,
 {
     let nm = NMProxy::new(conn).await?;
     let devices = nm.get_devices().await?;
 
     // Use dynamic dispatch to handle different signal stream types
-    let mut streams: Vec<Pin<Box<dyn Stream<Item = _>>>> = Vec::new();
+    let mut streams: Vec<Pin<Box<dyn Stream<Item = _> + Send>>> = Vec::new();
 
     // Subscribe to signals on all Wi-Fi devices
     for dev_path in devices {
