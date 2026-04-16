@@ -38,12 +38,12 @@ pub async fn monitor_device_changes<F>(
     callback: F,
 ) -> Result<()>
 where
-    F: Fn() + 'static,
+    F: Fn() + Send + 'static,
 {
     let nm = NMProxy::new(conn).await?;
 
     // Use dynamic dispatch to handle different signal stream types
-    let mut streams: Vec<Pin<Box<dyn Stream<Item = _>>>> = Vec::new();
+    let mut streams: Vec<Pin<Box<dyn Stream<Item = _> + Send>>> = Vec::new();
 
     // Subscribe to DeviceAdded and DeviceRemoved signals from main NetworkManager
     // This is more reliable than subscribing to individual devices

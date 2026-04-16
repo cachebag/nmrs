@@ -646,21 +646,18 @@ impl NetworkManager {
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
     ///
-    /// // Spawn monitoring task
-    /// glib::MainContext::default().spawn_local({
-    ///     let nm = nm.clone();
-    ///     async move {
-    ///         nm.monitor_network_changes(|| {
-    ///             println!("Networks changed!");
-    ///         }).await
-    ///     }
+    /// let nm_clone = nm.clone();
+    /// tokio::spawn(async move {
+    ///     nm_clone.monitor_network_changes(|| {
+    ///         println!("Networks changed!");
+    ///     }).await
     /// });
     /// # Ok(())
     /// # }
     /// ```
     pub async fn monitor_network_changes<F>(&self, callback: F) -> Result<()>
     where
-        F: Fn() + 'static,
+        F: Fn() + Send + 'static,
     {
         let (_tx, rx) = watch::channel(());
         network_monitor::monitor_network_changes(&self.conn, rx, callback).await
@@ -683,21 +680,18 @@ impl NetworkManager {
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
     ///
-    /// // Spawn monitoring task
-    /// glib::MainContext::default().spawn_local({
-    ///     let nm = nm.clone();
-    ///     async move {
-    ///         nm.monitor_device_changes(|| {
-    ///             println!("Device state changed!");
-    ///         }).await
-    ///     }
+    /// let nm_clone = nm.clone();
+    /// tokio::spawn(async move {
+    ///     nm_clone.monitor_device_changes(|| {
+    ///         println!("Device state changed!");
+    ///     }).await
     /// });
     /// # Ok(())
     /// # }
     /// ```
     pub async fn monitor_device_changes<F>(&self, callback: F) -> Result<()>
     where
-        F: Fn() + 'static,
+        F: Fn() + Send + 'static,
     {
         let (_tx, rx) = watch::channel(());
         device_monitor::monitor_device_changes(&self.conn, rx, callback).await
