@@ -12,6 +12,8 @@ use gtk::{
 };
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 use crate::ui::header::THEMES;
 
@@ -164,46 +166,15 @@ pub fn build_ui(app: &Application) {
 
                 {
                     let nm_device_monitor = nm.clone();
-                    let list_container_device = list_container_clone.clone();
-                    let is_scanning_device = is_scanning_clone.clone();
-                    let ctx_device = ctx.clone();
-                    let pending_device_refresh = Rc::new(std::cell::RefCell::new(false));
+                    let device_notify = Arc::new(Notify::new());
 
+                    let notify_clone = device_notify.clone();
                     glib::MainContext::default().spawn_local(async move {
                         loop {
-                            let ctx_device_clone = ctx_device.clone();
-                            let list_container_clone = list_container_device.clone();
-                            let is_scanning_clone = is_scanning_device.clone();
-                            let pending_device_refresh_clone = pending_device_refresh.clone();
-
+                            let notify = notify_clone.clone();
                             let result = nm_device_monitor
                                 .monitor_device_changes(move || {
-                                    let ctx = ctx_device_clone.clone();
-                                    let list_container = list_container_clone.clone();
-                                    let is_scanning = is_scanning_clone.clone();
-                                    let pending_refresh = pending_device_refresh_clone.clone();
-
-                                    if pending_refresh.replace(true) {
-                                        return;
-                                    }
-
-                                    glib::MainContext::default().spawn_local(async move {
-                                        glib::timeout_future_seconds(3).await;
-                                        *pending_refresh.borrow_mut() = false;
-
-                                        let current_page = ctx.stack.visible_child_name();
-                                        let on_networks_page =
-                                            current_page.as_deref() == Some("networks");
-
-                                        if !is_scanning.get() && on_networks_page {
-                                            header::refresh_networks_no_scan(
-                                                ctx,
-                                                &list_container,
-                                                &is_scanning,
-                                            )
-                                            .await;
-                                        }
-                                    });
+                                    notify.notify_one();
                                 })
                                 .await;
 
@@ -213,50 +184,41 @@ pub fn build_ui(app: &Application) {
                             glib::timeout_future_seconds(5).await;
                         }
                     });
+
+                    let list_container_device = list_container_clone.clone();
+                    let is_scanning_device = is_scanning_clone.clone();
+                    let ctx_device = ctx.clone();
+                    glib::MainContext::default().spawn_local(async move {
+                        loop {
+                            device_notify.notified().await;
+                            glib::timeout_future_seconds(3).await;
+
+                            let current_page = ctx_device.stack.visible_child_name();
+                            let on_networks_page = current_page.as_deref() == Some("networks");
+
+                            if !is_scanning_device.get() && on_networks_page {
+                                header::refresh_networks_no_scan(
+                                    ctx_device.clone(),
+                                    &list_container_device,
+                                    &is_scanning_device,
+                                )
+                                .await;
+                            }
+                        }
+                    });
                 }
 
                 {
                     let nm_network_monitor = nm.clone();
-                    let list_container_network = list_container_clone.clone();
-                    let is_scanning_network = is_scanning_clone.clone();
-                    let ctx_network = ctx.clone();
-                    let pending_network_refresh = Rc::new(std::cell::RefCell::new(false));
+                    let network_notify = Arc::new(Notify::new());
 
+                    let notify_clone = network_notify.clone();
                     glib::MainContext::default().spawn_local(async move {
                         loop {
-                            let ctx_network_clone = ctx_network.clone();
-                            let list_container_clone = list_container_network.clone();
-                            let is_scanning_clone = is_scanning_network.clone();
-                            let pending_network_refresh_clone = pending_network_refresh.clone();
-
+                            let notify = notify_clone.clone();
                             let result = nm_network_monitor
                                 .monitor_network_changes(move || {
-                                    let ctx = ctx_network_clone.clone();
-                                    let list_container = list_container_clone.clone();
-                                    let is_scanning = is_scanning_clone.clone();
-                                    let pending_refresh = pending_network_refresh_clone.clone();
-
-                                    if pending_refresh.replace(true) {
-                                        return;
-                                    }
-
-                                    glib::MainContext::default().spawn_local(async move {
-                                        glib::timeout_future_seconds(8).await;
-                                        *pending_refresh.borrow_mut() = false;
-
-                                        let current_page = ctx.stack.visible_child_name();
-                                        let on_networks_page =
-                                            current_page.as_deref() == Some("networks");
-
-                                        if !is_scanning.get() && on_networks_page {
-                                            header::refresh_networks_no_scan(
-                                                ctx,
-                                                &list_container,
-                                                &is_scanning,
-                                            )
-                                            .await;
-                                        }
-                                    });
+                                    notify.notify_one();
                                 })
                                 .await;
 
@@ -264,6 +226,28 @@ pub fn build_ui(app: &Application) {
                                 eprintln!("Network monitoring error: {}, restarting in 5s...", e)
                             }
                             glib::timeout_future_seconds(5).await;
+                        }
+                    });
+
+                    let list_container_network = list_container_clone.clone();
+                    let is_scanning_network = is_scanning_clone.clone();
+                    let ctx_network = ctx.clone();
+                    glib::MainContext::default().spawn_local(async move {
+                        loop {
+                            network_notify.notified().await;
+                            glib::timeout_future_seconds(8).await;
+
+                            let current_page = ctx_network.stack.visible_child_name();
+                            let on_networks_page = current_page.as_deref() == Some("networks");
+
+                            if !is_scanning_network.get() && on_networks_page {
+                                header::refresh_networks_no_scan(
+                                    ctx_network.clone(),
+                                    &list_container_network,
+                                    &is_scanning_network,
+                                )
+                                .await;
+                            }
                         }
                     });
                 }
