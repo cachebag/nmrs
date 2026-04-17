@@ -339,7 +339,7 @@ pub async fn refresh_networks(
                 (None, None)
             };
 
-            nets.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
+            nets.sort_by_key(|b| std::cmp::Reverse(b.strength.unwrap_or(0)));
 
             let mut seen_combinations = HashSet::new();
             nets.retain(|net| {
@@ -473,7 +473,7 @@ pub async fn refresh_networks_no_scan(
                 (None, None)
             };
 
-            nets.sort_by(|a, b| b.strength.unwrap_or(0).cmp(&a.strength.unwrap_or(0)));
+            nets.sort_by_key(|b| std::cmp::Reverse(b.strength.unwrap_or(0)));
 
             let mut seen_combinations = HashSet::new();
             nets.retain(|net| {
