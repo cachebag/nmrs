@@ -4,7 +4,8 @@ nmrs uses D-Bus signals to provide real-time notifications when network state ch
 
 ## Network Change Monitoring
 
-Subscribe to network list changes (access points appearing or disappearing):
+Subscribe to network changes (access points appearing or disappearing, or signal
+strength changing):
 
 ```rust
 use nmrs::NetworkManager;
@@ -22,7 +23,7 @@ async fn main() -> nmrs::Result<()> {
 }
 ```
 
-`monitor_network_changes()` subscribes to D-Bus signals for access point additions and removals on all Wi-Fi devices. The callback fires whenever the visible network list changes.
+`monitor_network_changes()` subscribes to D-Bus signals for access point additions, removals, and signal strength updates on all Wi-Fi devices. The callback fires whenever the visible network list or signal data changes.
 
 ## Device State Monitoring
 

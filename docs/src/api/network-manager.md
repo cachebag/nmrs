@@ -91,7 +91,7 @@ let config = nm.timeout_config();
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `monitor_network_changes(callback)` | `Result<()>` | Watch for AP changes (runs forever) |
+| `monitor_network_changes(callback)` | `Result<()>` | Watch for AP and signal strength changes (runs forever) |
 | `monitor_device_changes(callback)` | `Result<()>` | Watch for device state changes (runs forever) |
 
 ## Thread Safety

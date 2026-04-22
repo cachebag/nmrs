@@ -55,8 +55,8 @@ nmrs: nm.list_devices()
 
 ```
 nmrs: nm.monitor_network_changes(callback)
-  → D-Bus: Subscribe to AccessPointAdded/Removed signals
-  ← D-Bus: Signal whenever an AP appears or disappears
+  → D-Bus: Subscribe to AccessPointAdded/Removed and AP Strength changes
+  ← D-Bus: Signal whenever an AP appears, disappears, or changes strength
   → nmrs: Invoke callback
 ```
 
