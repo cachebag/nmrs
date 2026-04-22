@@ -632,9 +632,10 @@ impl NetworkManager {
         .await
     }
     ///
-    /// Subscribes to D-Bus signals for access point additions and removals
-    /// on all Wi-Fi devices. Invokes the callback whenever the network list
-    /// changes, enabling live UI updates without polling.
+    /// Subscribes to D-Bus signals for access point additions, removals, and
+    /// signal strength changes on all Wi-Fi devices. Invokes the callback
+    /// whenever the network list or signal data changes, enabling live UI
+    /// updates without polling.
     ///
     /// This function runs indefinitely until an error occurs. Run it in a
     /// background task.
