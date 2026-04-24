@@ -180,7 +180,7 @@ pub fn build_header(
             ctx.stack.set_visible_child_name("loading");
             clear_children(&list_container);
 
-            match ctx.nm.wifi_enabled().await {
+            match ctx.nm.wifi_state().await.map(|s| s.enabled) {
                 Ok(enabled) => {
                     wifi_switch.set_active(enabled);
                     if enabled {
@@ -207,7 +207,7 @@ pub fn build_header(
             glib::MainContext::default().spawn_local(async move {
                 clear_children(&list_container);
 
-                if let Err(err) = ctx.nm.set_wifi_enabled(sw.is_active()).await {
+                if let Err(err) = ctx.nm.set_wireless_enabled(sw.is_active()).await {
                     ctx.status.set_text(&format!("Error setting Wi-Fi: {err}"));
                     return;
                 }
