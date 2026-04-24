@@ -5,6 +5,7 @@
 
 mod access_point;
 mod active_connection;
+pub(crate) mod agent_manager;
 mod bluetooth;
 mod device;
 mod main_nm;
@@ -13,6 +14,7 @@ mod wireless;
 
 pub(crate) use access_point::NMAccessPointProxy;
 pub(crate) use active_connection::NMActiveConnectionProxy;
+pub(crate) use agent_manager::AgentManagerProxy;
 pub(crate) use bluetooth::{BluezDeviceExtProxy, NMBluetoothProxy};
 pub(crate) use device::NMDeviceProxy;
 pub(crate) use main_nm::NMProxy;
