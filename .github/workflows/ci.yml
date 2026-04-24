@@ -115,18 +115,16 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/cache@v5
+      # Prebuilt binary (GitHub Releases + checksums); avoids compiling the tool every run.
+      - uses: taiki-e/install-action@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-semver-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-semver-
+          tool: cargo-semver-checks@0.47
+          fallback: none
 
-      - name: Install cargo-semver-checks
-        run: cargo install cargo-semver-checks --locked
+      # Smarter cache than hand-rolled keys; pairs well with semver-checks rustdoc builds.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: semver-checks
 
       - name: Check semver compatibility
         run: cargo semver-checks check-release -p nmrs
