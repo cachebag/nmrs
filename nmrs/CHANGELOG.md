@@ -17,7 +17,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
 
 ### Fixed
-- `monitor_network_changes` now fires for Wi-Fi access point signal strength changes, not only access point additions and removals ([#363](https://github.com/cachebag/nmrs/issues/363))
+- `list_networks` fills `device`, `ip4_address`, and `ip6_address` for the access point currently in use on each Wi-Fi interface ([#368](https://github.com/cachebag/nmrs/pull/368))
+- `monitor_network_changes` now fires for Wi-Fi access point signal strength changes, not only access point additions and removals ([#367](https://github.com/cachebag/nmrs/pull/367))
 - Add `Send` bound to monitoring stream trait objects so `monitor_network_changes` and `monitor_device_changes` work with `tokio::spawn` ([#359](https://github.com/cachebag/nmrs/pull/359))
 - Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
 - `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))

@@ -628,5 +628,56 @@ impl Network {
         self.is_psk |= other.is_psk;
         self.is_eap |= other.is_eap;
         self.is_hotspot |= other.is_hotspot;
+
+        if self.ip4_address.is_none() {
+            self.ip4_address.clone_from(&other.ip4_address);
+        }
+        if self.ip6_address.is_none() {
+            self.ip6_address.clone_from(&other.ip6_address);
+        }
+        if self.device.is_empty() {
+            self.device.clone_from(&other.device);
+        }
+    }
+}
+
+#[cfg(test)]
+mod network_merge_tests {
+    use super::Network;
+
+    #[test]
+    fn merge_ap_keeps_ip_and_device_when_stronger_ap_has_none() {
+        let mut weaker_connected = Network {
+            device: "wlan0".into(),
+            ssid: "net".into(),
+            bssid: Some("aa:aa:aa:aa:aa:aa".into()),
+            strength: Some(20),
+            frequency: Some(5200),
+            secured: true,
+            is_psk: true,
+            is_eap: false,
+            is_hotspot: false,
+            ip4_address: Some("192.168.1.5/24".into()),
+            ip6_address: Some("fe80::1/64".into()),
+        };
+        let stronger = Network {
+            device: String::new(),
+            ssid: "net".into(),
+            bssid: Some("bb:bb:bb:bb:bb:bb".into()),
+            strength: Some(90),
+            frequency: Some(5200),
+            secured: true,
+            is_psk: true,
+            is_eap: false,
+            is_hotspot: false,
+            ip4_address: None,
+            ip6_address: None,
+        };
+        weaker_connected.merge_ap(&stronger);
+        assert_eq!(weaker_connected.strength, Some(90));
+        assert_eq!(weaker_connected.bssid, Some("bb:bb:bb:bb:bb:bb".into()));
+        assert_eq!(weaker_connected.ip4_address, Some("192.168.1.5/24".into()));
+        assert_eq!(weaker_connected.ip6_address, Some("fe80::1/64".into()));
+        assert_eq!(weaker_connected.device, "wlan0");
     }
 }

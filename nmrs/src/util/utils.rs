@@ -104,7 +104,11 @@ pub(crate) fn strength_or_zero(strength: Option<u8>) -> u8 {
 
 /// This helper iterates through all WiFi access points and calls the provided async function.
 ///
-/// Loops through devices, filters for WiFi, and invokes `func` with each access point proxy.
+/// Loops through devices, filters for WiFi, and invokes `func` for each access point.
+///
+/// For each Wi-Fi device, queries the active access point and, when connected, the interface
+/// name and IP addresses once per device (not per AP).
+///
 /// The function is awaited immediately in the loop to avoid lifetime issues.
 ///
 /// The `+ Send` bound on the returned future lets callers await this helper (and everything
@@ -115,7 +119,11 @@ pub(crate) fn strength_or_zero(strength: Option<u8>) -> u8 {
 pub(crate) async fn for_each_access_point<F, T>(conn: &Connection, mut func: F) -> Result<Vec<T>>
 where
     F: for<'a> FnMut(
+        &'a NMDeviceProxy<'a>,
+        &'a OwnedObjectPath,
+        OwnedObjectPath,
         &'a NMAccessPointProxy<'a>,
+        (String, Option<String>, Option<String>),
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<Option<T>>> + Send + 'a>,
     >,
@@ -140,12 +148,28 @@ where
             .build()
             .await?;
 
+        let active_ap = wifi.active_access_point().await?;
+        let on_device = if active_ap.as_str() != "/" {
+            match d_proxy.active_connection().await {
+                Ok(ac) if ac.as_str() != "/" => {
+                    let (ip4, ip6) = get_ip_addresses_from_active_connection(conn, &ac).await;
+                    let iface = d_proxy.interface().await.unwrap_or_default();
+                    (iface, ip4, ip6)
+                }
+                _ => (String::new(), None, None),
+            }
+        } else {
+            (String::new(), None, None)
+        };
+
         for ap_path in wifi.access_points().await? {
             let ap = NMAccessPointProxy::builder(conn)
-                .path(ap_path)?
+                .path(ap_path.clone())?
                 .build()
                 .await?;
-            if let Some(result) = func(&ap).await? {
+            if let Some(result) =
+                func(&d_proxy, &active_ap, ap_path, &ap, on_device.clone()).await?
+            {
                 results.push(result);
             }
         }
