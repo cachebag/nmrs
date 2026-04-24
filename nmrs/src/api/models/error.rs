@@ -188,4 +188,12 @@ pub enum ConnectionError {
     /// An error occured while parsing a configuration
     #[error("error while parsing a configuration: {0}")]
     ParseError(OvpnParseError),
+
+    /// A radio is hardware-disabled via rfkill.
+    #[error("radio is hardware-disabled (rfkill)")]
+    HardwareRadioKilled,
+
+    /// The BlueZ Bluetooth stack is unavailable.
+    #[error("bluetooth stack unavailable: {0}")]
+    BluezUnavailable(String),
 }
