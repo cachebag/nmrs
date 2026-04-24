@@ -963,10 +963,11 @@ dependencies = [
 
 [[package]]
 name = "nmrs"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "async-trait",
  "base64",
+ "bitflags",
  "futures",
  "futures-timer",
  "log",
