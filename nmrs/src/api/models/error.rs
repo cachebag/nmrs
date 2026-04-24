@@ -167,4 +167,19 @@ pub enum ConnectionError {
         #[source]
         source: zbus::Error,
     },
+
+    /// Secret agent registration with NetworkManager failed.
+    #[error("secret agent registration failed: {context}")]
+    AgentRegistration {
+        /// What went wrong during registration.
+        context: String,
+    },
+
+    /// Operation requires a registered secret agent but none is active.
+    #[error("secret agent not registered")]
+    AgentNotRegistered,
+
+    /// A secret agent is already registered under this identifier.
+    #[error("secret agent already registered under this identifier")]
+    AgentAlreadyRegistered,
 }
