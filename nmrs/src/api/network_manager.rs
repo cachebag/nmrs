@@ -4,7 +4,10 @@ use tokio::sync::watch;
 use zbus::Connection;
 
 use crate::Result;
-use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
+use crate::api::models::{
+    AirplaneModeState, Device, Network, NetworkInfo, RadioState, WifiSecurity,
+};
+use crate::core::airplane;
 use crate::core::bluetooth::connect_bluetooth;
 use crate::core::connection::{
     connect, connect_wired, disconnect, forget_by_name_and_type, get_device_by_interface,
@@ -14,8 +17,7 @@ use crate::core::connection_settings::{
     get_saved_connection_path, has_saved_connection, list_saved_connections,
 };
 use crate::core::device::{
-    is_connecting, list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready,
-    wifi_enabled, wifi_hardware_enabled,
+    is_connecting, list_bluetooth_devices, list_devices, wait_for_wifi_ready,
 };
 use crate::core::scan::{current_network, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
@@ -89,8 +91,12 @@ use crate::types::constants::device_type;
 /// let devices = nm.list_devices().await?;
 ///
 /// // Control WiFi
-/// nm.set_wifi_enabled(false).await?;  // Disable WiFi
-/// nm.set_wifi_enabled(true).await?;   // Enable WiFi
+/// nm.set_wireless_enabled(false).await?;  // Disable WiFi
+/// nm.set_wireless_enabled(true).await?;   // Enable WiFi
+///
+/// // Check airplane mode
+/// let state = nm.airplane_mode_state().await?;
+/// println!("Airplane mode: {}", state.is_airplane_mode());
 /// # Ok(())
 /// # }
 /// ```
@@ -491,20 +497,86 @@ impl NetworkManager {
         get_vpn_info(&self.conn, name).await
     }
 
+    /// Returns the combined software/hardware state of the Wi-Fi radio.
+    ///
+    /// See [`RadioState`] for the distinction between `enabled` (software)
+    /// and `hardware_enabled` (rfkill).
+    pub async fn wifi_state(&self) -> Result<RadioState> {
+        airplane::wifi_state(&self.conn).await
+    }
+
+    /// Returns the combined software/hardware state of the WWAN radio.
+    pub async fn wwan_state(&self) -> Result<RadioState> {
+        airplane::wwan_state(&self.conn).await
+    }
+
+    /// Returns the combined software/hardware state of the Bluetooth radio.
+    ///
+    /// Reads power state from all BlueZ adapters and cross-references rfkill.
+    /// If BlueZ is not running or no adapters exist, returns
+    /// `RadioState { enabled: true, hardware_enabled: false }`.
+    pub async fn bluetooth_radio_state(&self) -> Result<RadioState> {
+        airplane::bluetooth_radio_state(&self.conn).await
+    }
+
+    /// Returns the aggregated airplane-mode state across all radios.
+    ///
+    /// Fans out to Wi-Fi, WWAN, and Bluetooth concurrently and returns
+    /// an [`AirplaneModeState`] snapshot.
+    pub async fn airplane_mode_state(&self) -> Result<AirplaneModeState> {
+        airplane::airplane_mode_state(&self.conn).await
+    }
+
+    /// Enables or disables the Wi-Fi radio (software toggle).
+    ///
+    /// This replaces the deprecated [`set_wifi_enabled`](Self::set_wifi_enabled).
+    /// If the radio is hardware-killed, NM accepts the write but the radio
+    /// remains off until hardware is unkilled.
+    pub async fn set_wireless_enabled(&self, enabled: bool) -> Result<()> {
+        airplane::set_wireless_enabled(&self.conn, enabled).await
+    }
+
+    /// Enables or disables the WWAN (mobile broadband) radio.
+    ///
+    /// Writes the `WwanEnabled` property on NetworkManager.
+    pub async fn set_wwan_enabled(&self, enabled: bool) -> Result<()> {
+        airplane::set_wwan_enabled(&self.conn, enabled).await
+    }
+
+    /// Enables or disables the Bluetooth radio by toggling all BlueZ adapters.
+    ///
+    /// Returns [`ConnectionError::BluezUnavailable`] if BlueZ is not running
+    /// or no adapters exist.
+    pub async fn set_bluetooth_radio_enabled(&self, enabled: bool) -> Result<()> {
+        airplane::set_bluetooth_radio_enabled(&self.conn, enabled).await
+    }
+
+    /// Flips all three radios in one call.
+    ///
+    /// **`enabled = true` means airplane mode is on, i.e. radios are off.**
+    ///
+    /// Does not fail fast: attempts all three toggles concurrently and
+    /// returns the first error at the end, if any.
+    pub async fn set_airplane_mode(&self, enabled: bool) -> Result<()> {
+        airplane::set_airplane_mode(&self.conn, enabled).await
+    }
+
     /// Returns whether Wi-Fi is currently enabled.
+    #[deprecated(since = "2.5.0", note = "use `wifi_state()` instead")]
     pub async fn wifi_enabled(&self) -> Result<bool> {
-        wifi_enabled(&self.conn).await
+        Ok(self.wifi_state().await?.enabled)
     }
 
     /// Enables or disables Wi-Fi.
+    #[deprecated(since = "2.5.0", note = "use `set_wireless_enabled()` instead")]
     pub async fn set_wifi_enabled(&self, value: bool) -> Result<()> {
-        set_wifi_enabled(&self.conn, value).await
+        self.set_wireless_enabled(value).await
     }
 
     /// Returns whether wireless hardware is currently enabled.
-    /// Reflects rfkill state which helps check if the radio is enabled or blocked.
+    #[deprecated(since = "2.5.0", note = "use `wifi_state()` instead")]
     pub async fn wifi_hardware_enabled(&self) -> Result<bool> {
-        wifi_hardware_enabled(&self.conn).await
+        Ok(self.wifi_state().await?.hardware_enabled)
     }
 
     /// Waits for a Wi-Fi device to become ready (disconnected or activated).
