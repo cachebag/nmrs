@@ -17,11 +17,14 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
 
 ### Fixed
+- Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
+- `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
+
+## [2.4.0] - 2026-04-24
+### Fixed
 - `list_networks` fills `device`, `ip4_address`, and `ip6_address` for the access point currently in use on each Wi-Fi interface ([#368](https://github.com/cachebag/nmrs/pull/368))
 - `monitor_network_changes` now fires for Wi-Fi access point signal strength changes, not only access point additions and removals ([#367](https://github.com/cachebag/nmrs/pull/367))
 - Add `Send` bound to monitoring stream trait objects so `monitor_network_changes` and `monitor_device_changes` work with `tokio::spawn` ([#359](https://github.com/cachebag/nmrs/pull/359))
-- Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
-- `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
 
 ## [2.3.0] - 2026-04-10
 ### Added
@@ -207,7 +210,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [2.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.0.1
 [2.2.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.2.0
 [2.3.0]: https://github.com/cachebag/nmrs/compare/nmrs-v2.2.0...nmrs-v2.3.0
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.3.0...HEAD
+[2.4.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.4.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.4.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
