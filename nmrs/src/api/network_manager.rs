@@ -545,7 +545,7 @@ impl NetworkManager {
 
     /// Enables or disables the Bluetooth radio by toggling all BlueZ adapters.
     ///
-    /// Returns [`ConnectionError::BluezUnavailable`] if BlueZ is not running
+    /// Returns [`BluezUnavailable`](crate::ConnectionError::BluezUnavailable) if BlueZ is not running
     /// or no adapters exist.
     pub async fn set_bluetooth_radio_enabled(&self, enabled: bool) -> Result<()> {
         airplane::set_bluetooth_radio_enabled(&self.conn, enabled).await
