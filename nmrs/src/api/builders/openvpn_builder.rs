@@ -600,12 +600,10 @@ impl OpenVpnBuilder {
 
         // auth_type-specific validation
         match &auth_type {
-            OpenVpnAuthType::Password | OpenVpnAuthType::PasswordTls => {
-                if self.username.is_none() {
-                    return Err(ConnectionError::VpnFailed(
-                        "username is required for Password and PasswordTls auth".into(),
-                    ));
-                }
+            OpenVpnAuthType::Password | OpenVpnAuthType::PasswordTls if self.username.is_none() => {
+                return Err(ConnectionError::VpnFailed(
+                    "username is required for Password and PasswordTls auth".into(),
+                ));
             }
             _ => {}
         }
