@@ -253,6 +253,12 @@ mod monitoring;
 mod types;
 mod util;
 
+/// NetworkManager secret agent for credential prompting over D-Bus.
+///
+/// See the [module documentation](agent) for the three-stream model,
+/// lifecycle, and a full example.
+pub mod agent;
+
 // ============================================================================
 // Public API
 // ============================================================================
