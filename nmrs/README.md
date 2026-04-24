@@ -18,6 +18,7 @@ Rust bindings for NetworkManager via D-Bus.
 - **Network Discovery**: Scan and list available access points with signal strength
 - **Profile Management**: Create, query, and delete saved connection profiles
 - **Real-Time Monitoring**: Signal-based network and device state change notifications
+- **Secret Agent**: Respond to NetworkManager credential prompts via an async stream API
 - **Typed Errors**: Structured error types with specific failure reasons
 - **Fully Async**: Built on `zbus` with async/await throughout
 
@@ -153,6 +154,36 @@ async fn main() -> nmrs::Result<()> {
     nm.set_wifi_enabled(false).await?;
     nm.set_wifi_enabled(true).await?;
     
+    Ok(())
+}
+```
+
+### Secret Agent
+
+Register as a NetworkManager secret agent to handle credential prompts
+(Wi-Fi passwords, VPN tokens, 802.1X credentials):
+
+```rust
+use futures::StreamExt;
+use nmrs::agent::{SecretAgent, SecretAgentFlags, SecretSetting};
+
+#[tokio::main]
+async fn main() -> nmrs::Result<()> {
+    let (handle, mut requests) = SecretAgent::builder()
+        .with_identifier("com.example.my_app")
+        .register()
+        .await?;
+
+    while let Some(req) = requests.next().await {
+        if let SecretSetting::WifiPsk { ref ssid } = req.setting {
+            println!("Password needed for {ssid}");
+            req.responder.wifi_psk("my-password").await?;
+        } else {
+            req.responder.cancel().await?;
+        }
+    }
+
+    handle.unregister().await?;
     Ok(())
 }
 ```

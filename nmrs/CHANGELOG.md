@@ -3,11 +3,12 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Added
+- `nmrs::agent` module: NetworkManager secret agent for credential prompting over D-Bus (`SecretAgent`, `SecretAgentBuilder`, `SecretAgentHandle`, `SecretRequest`, `SecretResponder`, `SecretSetting`, `SecretAgentFlags`, `SecretAgentCapabilities`, `CancelReason`, `SecretStoreEvent`)
+- `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
+
 ### Changed
 - Introduce `VpnConfig` trait and refactor `connect_vpn` signature ([#303](https://github.com/cachebag/nmrs/pull/303))
-
-### Added
-- `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
 - OpenVPN connection settings model expansion ([#309](https://github.com/cachebag/nmrs/pull/309))
 - Multi-VPN plumbing: `detect_vpn_type()`, `VpnType::OpenVpn`, and shared detection across connect, disconnect, and list VPN flows ([#311](https://github.com/cachebag/nmrs/pull/311))
 - `.ovpn` profile lexer and parser for translating OpenVPN configs toward NetworkManager ([#314](https://github.com/cachebag/nmrs/pull/314))
