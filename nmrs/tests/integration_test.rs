@@ -98,18 +98,20 @@ async fn test_wifi_enabled_get_set() {
     require_wifi!(&nm);
 
     let initial_state = nm
-        .wifi_enabled()
+        .wifi_state()
         .await
-        .expect("Failed to get WiFi enabled state");
+        .expect("Failed to get WiFi enabled state")
+        .enabled;
 
-    match nm.set_wifi_enabled(!initial_state).await {
+    match nm.set_wireless_enabled(!initial_state).await {
         Ok(_) => {
             sleep(Duration::from_millis(500)).await;
 
             let new_state = nm
-                .wifi_enabled()
+                .wifi_state()
                 .await
-                .expect("Failed to get WiFi enabled state after toggle");
+                .expect("Failed to get WiFi enabled state after toggle")
+                .enabled;
 
             if new_state == initial_state {
                 eprintln!(
@@ -125,16 +127,17 @@ async fn test_wifi_enabled_get_set() {
         }
     }
 
-    nm.set_wifi_enabled(initial_state)
+    nm.set_wireless_enabled(initial_state)
         .await
         .expect("Failed to restore WiFi enabled state");
 
     sleep(Duration::from_millis(500)).await;
 
     let restored_state = nm
-        .wifi_enabled()
+        .wifi_state()
         .await
-        .expect("Failed to get WiFi enabled state after restore");
+        .expect("Failed to get WiFi enabled state after restore")
+        .enabled;
     assert_eq!(
         restored_state, initial_state,
         "WiFi state should be restored to original"
@@ -152,10 +155,11 @@ async fn test_wifi_hardware_enabled() {
     require_wifi!(&nm);
 
     // Read-only property — just verify the call succeeds
-    let _ = nm
-        .wifi_hardware_enabled()
+    let state = nm
+        .wifi_state()
         .await
-        .expect("Failed to get WiFi hardware enabled state");
+        .expect("Failed to get WiFi radio state");
+    let _ = state.hardware_enabled;
 }
 
 /// Test waiting for WiFi to be ready
@@ -169,7 +173,7 @@ async fn test_wait_for_wifi_ready() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -200,7 +204,7 @@ async fn test_scan_networks() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -233,7 +237,7 @@ async fn test_list_networks() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -271,7 +275,7 @@ async fn test_current_ssid() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -298,7 +302,7 @@ async fn test_current_connection_info() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -325,7 +329,7 @@ async fn test_show_details() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -428,7 +432,7 @@ async fn test_connect_open_network() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -488,7 +492,7 @@ async fn test_connect_psk_network_with_empty_password() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -640,7 +644,7 @@ async fn test_network_properties() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -692,7 +696,7 @@ async fn test_multiple_scan_requests() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
@@ -731,17 +735,17 @@ async fn test_concurrent_operations() {
     require_wifi!(&nm);
 
     // Ensure WiFi is enabled
-    nm.set_wifi_enabled(true)
+    nm.set_wireless_enabled(true)
         .await
         .expect("Failed to enable WiFi");
 
     // Run multiple operations concurrently
-    let (devices_result, wifi_enabled_result, networks_result) =
-        tokio::join!(nm.list_devices(), nm.wifi_enabled(), nm.list_networks());
+    let (devices_result, wifi_state_result, networks_result) =
+        tokio::join!(nm.list_devices(), nm.wifi_state(), nm.list_networks());
 
     // All should succeed
     assert!(devices_result.is_ok(), "list_devices should succeed");
-    assert!(wifi_enabled_result.is_ok(), "wifi_enabled should succeed");
+    assert!(wifi_state_result.is_ok(), "wifi_state should succeed");
     // networks_result may fail if WiFi is not ready, which is acceptable
     let _ = networks_result;
 }
