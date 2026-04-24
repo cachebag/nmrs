@@ -19,6 +19,7 @@ Rust bindings for NetworkManager via D-Bus.
 - **Profile Management**: Create, query, and delete saved connection profiles
 - **Real-Time Monitoring**: Signal-based network and device state change notifications
 - **Secret Agent**: Respond to NetworkManager credential prompts via an async stream API
+- **Airplane Mode**: Toggle Wi-Fi, WWAN, and Bluetooth radios with rfkill hardware awareness
 - **Typed Errors**: Structured error types with specific failure reasons
 - **Fully Async**: Built on `zbus` with async/await throughout
 
