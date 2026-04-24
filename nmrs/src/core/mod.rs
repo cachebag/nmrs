@@ -3,11 +3,13 @@
 //! This module contains the internal implementation details for managing
 //! network connections, devices, scanning, and state monitoring.
 
+pub(crate) mod airplane;
 pub(crate) mod bluetooth;
 pub(crate) mod connection;
 pub(crate) mod connection_settings;
 pub(crate) mod device;
 pub(crate) mod ovpn_parser;
+pub(crate) mod rfkill;
 pub(crate) mod scan;
 pub(crate) mod state_wait;
 pub(crate) mod vpn;
