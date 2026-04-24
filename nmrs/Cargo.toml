@@ -47,3 +47,7 @@ path = "examples/vpn_connect.rs"
 [[example]]
 name = "secret_agent"
 path = "examples/secret_agent.rs"
+
+[[example]]
+name = "airplane_mode"
+path = "examples/airplane_mode.rs"
