@@ -62,6 +62,18 @@ pub trait NM {
     #[zbus(signal, name = "DeviceRemoved")]
     fn device_removed(&self, device: OwnedObjectPath);
 
+    /// Whether WWAN (mobile broadband) is globally enabled.
+    #[zbus(property)]
+    fn wwan_enabled(&self) -> zbus::Result<bool>;
+
+    /// Enable or disable WWAN globally.
+    #[zbus(property)]
+    fn set_wwan_enabled(&self, value: bool) -> zbus::Result<()>;
+
+    /// Whether WWAN hardware is enabled (rfkill state).
+    #[zbus(property)]
+    fn wwan_hardware_enabled(&self) -> zbus::Result<bool>;
+
     /// Signal emitted when any device changes state.
     #[zbus(signal, name = "StateChanged")]
     fn state_changed(&self, state: u32);
