@@ -67,7 +67,7 @@ pub(crate) async fn show_details(conn: &Connection, net: &Network) -> Result<Net
         (None, None)
     };
 
-    let results = for_each_access_point(conn, |ap| {
+    let results = for_each_access_point(conn, |_dev, _active_ap, _ap_path, ap, _on_device| {
         let target_ssid = target_ssid_outer.clone();
         let is_connected = is_connected_outer;
         Box::pin(async move {

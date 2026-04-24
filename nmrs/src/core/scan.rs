@@ -70,10 +70,15 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
 ///
 /// When multiple access points share the same SSID and frequency (e.g., mesh
 /// networks), the one with the strongest signal is returned.
+///
+/// For the access point that matches the device's active connection, the result
+/// includes the interface name and assigned IPv4/IPv6 addresses (CIDR), consistent
+/// with `current_network`.
 pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
     let mut networks: HashMap<(String, u32), Network> = HashMap::new();
 
-    let all_networks = for_each_access_point(conn, |ap| {
+    let all_networks = for_each_access_point(conn, |_dev, active_ap, ap_path, ap, on_device| {
+        let is_this_ap = active_ap.as_str() != "/" && active_ap == &ap_path;
         Box::pin(async move {
             let ssid_bytes = ap.ssid().await?;
             let ssid = decode_ssid_or_hidden(&ssid_bytes);
@@ -89,8 +94,14 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
             let is_eap = (wpa & security_flags::EAP) != 0 || (rsn & security_flags::EAP) != 0;
             let is_hotspot = ap.mode().await.unwrap_or(0) == wifi_mode::AP;
 
+            let (device, ip4_address, ip6_address) = if is_this_ap {
+                on_device
+            } else {
+                (String::new(), None, None)
+            };
+
             let network = Network {
-                device: String::new(),
+                device,
                 ssid: ssid.to_string(),
                 bssid: Some(bssid),
                 strength: Some(strength),
@@ -99,8 +110,8 @@ pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
                 is_psk,
                 is_eap,
                 is_hotspot,
-                ip4_address: None,
-                ip6_address: None,
+                ip4_address,
+                ip6_address,
             };
 
             Ok(Some((ssid, frequency, network)))
