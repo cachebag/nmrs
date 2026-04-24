@@ -77,6 +77,16 @@ pub mod timeouts {
     pub fn stabilization_delay() -> Duration {
         Duration::from_millis(STABILIZATION_DELAY_MS)
     }
+
+    /// Maximum time the agent waits for a consumer to respond to a `GetSecrets`
+    /// request before auto-replying `NoSecrets`. Matches NetworkManager's own
+    /// 120-second `GetSecrets` timeout with some margin.
+    const SECRET_AGENT_RESPONSE_TIMEOUT_SECS: u64 = 120;
+
+    /// Returns the secret agent response timeout duration.
+    pub fn secret_agent_response_timeout() -> Duration {
+        Duration::from_secs(SECRET_AGENT_RESPONSE_TIMEOUT_SECS)
+    }
 }
 
 /// Signal strength thresholds for bar display
