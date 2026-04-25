@@ -4,14 +4,15 @@ use tokio::sync::watch;
 use zbus::Connection;
 
 use crate::Result;
+use crate::api::models::access_point::AccessPoint;
 use crate::api::models::{
     AirplaneModeState, Device, Network, NetworkInfo, RadioState, WifiSecurity,
 };
 use crate::core::airplane;
 use crate::core::bluetooth::connect_bluetooth;
 use crate::core::connection::{
-    connect, connect_wired, disconnect, forget_by_name_and_type, get_device_by_interface,
-    is_connected,
+    connect, connect_to_bssid, connect_wired, disconnect, forget_by_name_and_type,
+    get_device_by_interface, is_connected,
 };
 use crate::core::connection_settings::{
     get_saved_connection_path, has_saved_connection, list_saved_connections,
@@ -19,7 +20,7 @@ use crate::core::connection_settings::{
 use crate::core::device::{
     is_connecting, list_bluetooth_devices, list_devices, wait_for_wifi_ready,
 };
-use crate::core::scan::{current_network, list_networks, scan_networks};
+use crate::core::scan::{current_network, list_access_points, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
 use crate::models::{
     BluetoothDevice, BluetoothIdentity, VpnConfig, VpnConfiguration, VpnConnection,
@@ -222,8 +223,78 @@ impl NetworkManager {
     }
 
     /// Lists all visible Wi-Fi networks.
+    ///
+    /// Networks sharing an SSID on the same device are grouped, keeping the
+    /// strongest AP as the representative. Each returned [`Network`] carries
+    /// `best_bssid`, `bssids`, and `security_features` from the underlying APs.
     pub async fn list_networks(&self) -> Result<Vec<Network>> {
         list_networks(&self.conn).await
+    }
+
+    /// Lists all visible access points, one entry per BSSID.
+    ///
+    /// Unlike [`list_networks`](Self::list_networks), this preserves
+    /// duplicate BSSIDs for the same SSID and includes per-AP details
+    /// like BSSID, exact frequency, bitrate, and device state.
+    ///
+    /// Pass `interface` to restrict to a single wireless device (e.g.
+    /// `Some("wlan0")`), or `None` for all devices.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let mut aps = nm.list_access_points(None).await?;
+    /// aps.sort_by(|a, b| b.strength.cmp(&a.strength));
+    /// for ap in &aps {
+    ///     println!("{:>3}%  {:<20} {}  {} MHz",
+    ///         ap.strength, ap.ssid, ap.bssid, ap.frequency_mhz);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_access_points(&self, interface: Option<&str>) -> Result<Vec<AccessPoint>> {
+        list_access_points(&self.conn, interface).await
+    }
+
+    /// Connects to a specific access point by SSID and optional BSSID.
+    ///
+    /// If `bssid` is `Some`, the connection targets that specific AP rather
+    /// than the strongest match for the SSID. If `None`, behaves identically
+    /// to [`connect`](Self::connect).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ApBssidNotFound`](crate::ConnectionError::ApBssidNotFound) if
+    /// no AP matching both the SSID and BSSID is visible.
+    /// Returns [`InvalidBssid`](crate::ConnectionError::InvalidBssid) if the
+    /// BSSID format is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::{NetworkManager, WifiSecurity};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.connect_to_bssid(
+    ///     "HomeWiFi",
+    ///     Some("AA:BB:CC:DD:EE:FF"),
+    ///     WifiSecurity::WpaPsk { psk: "password".into() },
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connect_to_bssid(
+        &self,
+        ssid: &str,
+        bssid: Option<&str>,
+        creds: WifiSecurity,
+    ) -> Result<()> {
+        connect_to_bssid(&self.conn, ssid, bssid, creds, Some(self.timeout_config)).await
     }
 
     /// Connects to a Wi-Fi network with the given credentials.
