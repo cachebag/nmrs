@@ -13,14 +13,14 @@
 //! # async fn example() -> nmrs::Result<()> {
 //! let nm = NetworkManager::new().await?;
 //!
-//! // List visible networks
-//! let networks = nm.list_networks().await?;
+//! // List visible networks (None = all Wi-Fi devices)
+//! let networks = nm.list_networks(None).await?;
 //! for net in &networks {
 //!     println!("{} - Signal: {}%", net.ssid, net.strength.unwrap_or(0));
 //! }
 //!
-//! // Connect to a network
-//! nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+//! // Connect to a network on the first Wi-Fi device
+//! nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 //!     psk: "password123".into()
 //! }).await?;
 //!
@@ -135,10 +135,10 @@
 //! let nm = NetworkManager::new().await?;
 //!
 //! // Open network
-//! nm.connect("OpenWiFi", WifiSecurity::Open).await?;
+//! nm.connect("OpenWiFi", None, WifiSecurity::Open).await?;
 //!
 //! // WPA-PSK (password-protected)
-//! nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+//! nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
 //!     psk: "my_password".into()
 //! }).await?;
 //!
@@ -149,7 +149,7 @@
 //!     .with_method(EapMethod::Peap)
 //!     .with_phase2(Phase2::Mschapv2);
 //!
-//! nm.connect("CorpWiFi", WifiSecurity::WpaEap {
+//! nm.connect("CorpWiFi", None, WifiSecurity::WpaEap {
 //!     opts: eap_opts
 //! }).await?;
 //!
@@ -170,7 +170,7 @@
 //! # async fn example() -> nmrs::Result<()> {
 //! let nm = NetworkManager::new().await?;
 //!
-//! match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+//! match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 //!     psk: "wrong_password".into()
 //! }).await {
 //!     Ok(_) => println!("Connected successfully"),
@@ -352,10 +352,12 @@ pub use api::models::{
     ConnectionStateReason, Device, DeviceState, DeviceType, EapMethod, EapOptions, Network,
     NetworkInfo, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, Phase2,
     RadioState, SecurityFeatures, StateReason, TimeoutConfig, VpnConfig, VpnConfiguration,
-    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnRoute, VpnType, WifiSecurity,
-    WireGuardConfig, WireGuardPeer, connection_state_reason_to_error, reason_to_error,
+    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnRoute, VpnType, WifiDevice,
+    WifiSecurity, WireGuardConfig, WireGuardPeer, connection_state_reason_to_error,
+    reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
+pub use api::wifi_scope::WifiScope;
 
 /// A specialized `Result` type for network operations.
 ///
