@@ -6,16 +6,16 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ### Added
 - `nmrs::agent` module: NetworkManager secret agent for credential prompting over D-Bus (`SecretAgent`, `SecretAgentBuilder`, `SecretAgentHandle`, `SecretRequest`, `SecretResponder`, `SecretSetting`, `SecretAgentFlags`, `SecretAgentCapabilities`, `CancelReason`, `SecretStoreEvent`)
 - `AccessPoint` model preserving per-AP BSSID, frequency, security flags, and device state; `list_access_points(interface)` for full AP enumeration
-- `SecurityFeatures`, `ApMode`, `ConnectType` types for decoded NM security capabilities
-- `connect_to_bssid(ssid, bssid, creds)` for BSSID-targeted connections
-- `Network` gains `best_bssid`, `bssids`, `is_active`, `known`, and `security_features` fields
-- `ApBssidNotFound` and `InvalidBssid` error variants
 - Airplane-mode surface: `RadioState`, `AirplaneModeState`, `wifi_state()`, `wwan_state()`, `bluetooth_radio_state()`, `airplane_mode_state()`, `set_wireless_enabled()`, `set_wwan_enabled()`, `set_bluetooth_radio_enabled()`, `set_airplane_mode()`
 - Kernel rfkill awareness: hardware kill switch state via `/sys/class/rfkill`
 - `HardwareRadioKilled` and `BluezUnavailable` error variants
+- Per-Wi-Fi-device scoping: `WifiDevice` model, `list_wifi_devices()`, `wifi_device_by_interface()`, `WifiScope` builder via `nm.wifi("wlan1")`, `set_wifi_enabled(interface, bool)` for per-radio enable/disable
+- `WifiInterfaceNotFound` and `NotAWifiDevice` error variants
 
 ### Changed
-- Deprecated `wifi_enabled()`, `set_wifi_enabled()`, and `wifi_hardware_enabled()` in favor of `wifi_state()` and `set_wireless_enabled()`
+- **Breaking (3.0):** `connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`.
+- **Breaking (3.0):** `set_wifi_enabled` now requires an `interface: &str` argument and toggles only that radio (via `Device.Autoconnect` + `Device.Disconnect()`). For the global wireless killswitch use `set_wireless_enabled(bool)`.
+- **Breaking (3.0):** Removed deprecated `wifi_enabled()`, `wifi_hardware_enabled()`, and the no-arg `set_wifi_enabled(bool)`. Use `wifi_state()` and `set_wireless_enabled()`.
 - `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
 
 ### Changed
