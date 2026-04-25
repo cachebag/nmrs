@@ -212,7 +212,7 @@ async fn test_scan_networks() {
     let _ = nm.wait_for_wifi_ready().await;
 
     // Request a scan
-    let result = nm.scan_networks().await;
+    let result = nm.scan_networks(None).await;
 
     // Scan should either succeed or fail gracefully
     match result {
@@ -245,11 +245,14 @@ async fn test_list_networks() {
     let _ = nm.wait_for_wifi_ready().await;
 
     // Request a scan first
-    let _ = nm.scan_networks().await;
+    let _ = nm.scan_networks(None).await;
     sleep(Duration::from_secs(2)).await;
 
     // List networks
-    let networks = nm.list_networks().await.expect("Failed to list networks");
+    let networks = nm
+        .list_networks(None)
+        .await
+        .expect("Failed to list networks");
 
     // Verify network structure
     for network in &networks {
@@ -337,11 +340,14 @@ async fn test_show_details() {
     let _ = nm.wait_for_wifi_ready().await;
 
     // Request a scan first
-    let _ = nm.scan_networks().await;
+    let _ = nm.scan_networks(None).await;
     sleep(Duration::from_secs(2)).await;
 
     // List networks
-    let networks = nm.list_networks().await.expect("Failed to list networks");
+    let networks = nm
+        .list_networks(None)
+        .await
+        .expect("Failed to list networks");
 
     // Try to show details for the first network (if any)
     if let Some(network) = networks.first() {
@@ -440,11 +446,14 @@ async fn test_connect_open_network() {
     let _ = nm.wait_for_wifi_ready().await;
 
     // Request a scan first
-    let _ = nm.scan_networks().await;
+    let _ = nm.scan_networks(None).await;
     sleep(Duration::from_secs(2)).await;
 
     // List networks to find an open network
-    let networks = nm.list_networks().await.expect("Failed to list networks");
+    let networks = nm
+        .list_networks(None)
+        .await
+        .expect("Failed to list networks");
 
     // Find an open network (if any)
     let open_network = networks.iter().find(|n| !n.secured);
@@ -459,7 +468,7 @@ async fn test_connect_open_network() {
         }
 
         // Try to connect to the open network
-        let result = nm.connect(test_ssid, WifiSecurity::Open).await;
+        let result = nm.connect(test_ssid, None, WifiSecurity::Open).await;
 
         match result {
             Ok(_) => {
@@ -500,11 +509,14 @@ async fn test_connect_psk_network_with_empty_password() {
     let _ = nm.wait_for_wifi_ready().await;
 
     // Request a scan first
-    let _ = nm.scan_networks().await;
+    let _ = nm.scan_networks(None).await;
     sleep(Duration::from_secs(2)).await;
 
     // List networks to find a PSK network
-    let networks = nm.list_networks().await.expect("Failed to list networks");
+    let networks = nm
+        .list_networks(None)
+        .await
+        .expect("Failed to list networks");
 
     // Find a PSK network (if any)
     let psk_network = networks.iter().find(|n| n.is_psk);
@@ -527,7 +539,7 @@ async fn test_connect_psk_network_with_empty_password() {
         if has_saved {
             // Try to connect with empty password (should use saved credentials)
             let result = nm
-                .connect(test_ssid, WifiSecurity::WpaPsk { psk: String::new() })
+                .connect(test_ssid, None, WifiSecurity::WpaPsk { psk: String::new() })
                 .await;
 
             match result {
@@ -652,11 +664,14 @@ async fn test_network_properties() {
     let _ = nm.wait_for_wifi_ready().await;
 
     // Request a scan first
-    let _ = nm.scan_networks().await;
+    let _ = nm.scan_networks(None).await;
     sleep(Duration::from_secs(2)).await;
 
     // List networks
-    let networks = nm.list_networks().await.expect("Failed to list networks");
+    let networks = nm
+        .list_networks(None)
+        .await
+        .expect("Failed to list networks");
 
     // Verify network properties
     for network in &networks {
@@ -707,7 +722,7 @@ async fn test_multiple_scan_requests() {
     for i in 0..3 {
         nm.wait_for_wifi_ready().await.expect("WiFi not ready");
 
-        let result = nm.scan_networks().await;
+        let result = nm.scan_networks(None).await;
         match result {
             Ok(_) => eprintln!("Scan {} succeeded", i + 1),
             Err(e) => eprintln!("Scan {} failed: {}", i + 1, e),
@@ -720,7 +735,10 @@ async fn test_multiple_scan_requests() {
     }
 
     // List networks after multiple scans
-    let networks = nm.list_networks().await.expect("Failed to list networks");
+    let networks = nm
+        .list_networks(None)
+        .await
+        .expect("Failed to list networks");
     eprintln!("Found {} networks after multiple scans", networks.len());
 }
 
@@ -741,7 +759,7 @@ async fn test_concurrent_operations() {
 
     // Run multiple operations concurrently
     let (devices_result, wifi_state_result, networks_result) =
-        tokio::join!(nm.list_devices(), nm.wifi_state(), nm.list_networks());
+        tokio::join!(nm.list_devices(), nm.wifi_state(), nm.list_networks(None));
 
     // All should succeed
     assert!(devices_result.is_ok(), "list_devices should succeed");
