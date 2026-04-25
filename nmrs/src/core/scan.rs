@@ -17,14 +17,16 @@ use crate::util::utils::{
     decode_ssid_or_empty, decode_ssid_or_hidden, get_ip_addresses_from_active_connection,
 };
 
-/// Triggers a Wi-Fi scan on all wireless devices.
+/// Triggers a Wi-Fi scan.
 ///
-/// Requests NetworkManager to scan for available networks. The scan
-/// runs asynchronously; call `list_networks` after a delay to see results.
-pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
+/// When `interface` is `None`, scans on every Wi-Fi device.
+/// When `Some`, scans only the matching device.
+/// The scan runs asynchronously; call [`list_networks`] after a delay.
+pub(crate) async fn scan_networks(conn: &Connection, interface: Option<&str>) -> Result<()> {
     let nm = NMProxy::new(conn).await?;
     let devices = nm.get_devices().await?;
 
+    let mut scanned_any = false;
     for dp in devices {
         let d_proxy = NMDeviceProxy::builder(conn)
             .path(dp.clone())?
@@ -46,6 +48,13 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
             continue;
         }
 
+        if let Some(want) = interface {
+            let iface = d_proxy.interface().await.unwrap_or_default();
+            if iface != want {
+                continue;
+            }
+        }
+
         let wifi = NMWirelessProxy::builder(conn)
             .path(dp.clone())?
             .build()
@@ -58,6 +67,15 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
                 context: format!("failed to request Wi-Fi scan on device {}", dp.as_str()),
                 source: e,
             })?;
+        scanned_any = true;
+    }
+
+    if let Some(want) = interface
+        && !scanned_any
+    {
+        return Err(ConnectionError::WifiInterfaceNotFound {
+            interface: want.to_string(),
+        });
     }
 
     Ok(())
@@ -163,8 +181,11 @@ pub(crate) async fn list_access_points(
 ///
 /// Each returned [`Network`] carries the `best_bssid`, `bssids` list, and
 /// `security_features` from the underlying access points.
-pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
-    let aps = list_access_points(conn, None).await?;
+pub(crate) async fn list_networks(
+    conn: &Connection,
+    interface: Option<&str>,
+) -> Result<Vec<Network>> {
+    let aps = list_access_points(conn, interface).await?;
 
     let mut groups: HashMap<(String, String), Network> = HashMap::new();
 
