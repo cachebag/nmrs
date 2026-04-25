@@ -22,7 +22,7 @@ async fn main() -> nmrs::Result<()> {
     let security = WifiSecurity::WpaEap { opts: eap_opts };
 
     println!("Connecting to enterprise WiFi network...");
-    nm.connect("CorpNetwork", security).await?;
+    nm.connect("CorpNetwork", None, security).await?;
 
     println!("Successfully connected to enterprise WiFi!");
 
