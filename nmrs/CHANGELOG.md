@@ -11,11 +11,12 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - `HardwareRadioKilled` and `BluezUnavailable` error variants
 - Per-Wi-Fi-device scoping: `WifiDevice` model, `list_wifi_devices()`, `wifi_device_by_interface()`, `WifiScope` builder via `nm.wifi("wlan1")`, `set_wifi_enabled(interface, bool)` for per-radio enable/disable
 - `WifiInterfaceNotFound` and `NotAWifiDevice` error variants
+- Saved profile enumeration: `SavedConnection`, `SavedConnectionBrief`, `SettingsSummary`, `SettingsPatch`, `WifiSecuritySummary`, `WifiKeyMgmt`, `VpnSecretFlags`; `list_saved_connections()`, `list_saved_connections_brief()`, `list_saved_connection_ids()`, `get_saved_connection()`, `get_saved_connection_raw()`, `delete_saved_connection()`, `update_saved_connection()`, `reload_saved_connections()`; D-Bus proxies `NMSettingsProxy` / `NMSettingsConnectionProxy`; example `saved_list`
 
 ### Changed
-- **Breaking (3.0):** `connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`.
-- **Breaking (3.0):** `set_wifi_enabled` now requires an `interface: &str` argument and toggles only that radio (via `Device.Autoconnect` + `Device.Disconnect()`). For the global wireless killswitch use `set_wireless_enabled(bool)`.
-- **Breaking (3.0):** Removed deprecated `wifi_enabled()`, `wifi_hardware_enabled()`, and the no-arg `set_wifi_enabled(bool)`. Use `wifi_state()` and `set_wireless_enabled()`.
+-`list_saved_connections()` now returns `Vec<SavedConnection>` (full decode + summaries). Use `list_saved_connection_ids()` for the previous `Vec<String>` behavior (connection `id` names only).
+-`connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`.
+-`set_wifi_enabled` now requires an `interface: &str` argument and toggles only that radio (via `Device.Autoconnect` + `Device.Disconnect()`). For the global wireless killswitch use `set_wireless_enabled(bool)`.
 - `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
 
 ### Changed

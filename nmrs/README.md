@@ -17,7 +17,7 @@ Rust bindings for NetworkManager via D-Bus.
 - **Ethernet**: Wired network connection management
 - **Network Discovery**: Scan and list available access points with per-BSSID detail and security capabilities
 - **Per-Interface Scoping**: Target specific Wi-Fi radios on multi-NIC systems via `nm.wifi("wlan1")` or `Option<&str>` interface arguments
-- **Profile Management**: Create, query, and delete saved connection profiles
+- **Profile Management**: List saved profiles with decoded summaries (`list_saved_connections`), raw settings, UUID-based delete/update, plus create/query/delete helpers
 - **Real-Time Monitoring**: Signal-based network and device state change notifications
 - **Secret Agent**: Respond to NetworkManager credential prompts via an async stream API
 - **Airplane Mode**: Toggle Wi-Fi, WWAN, and Bluetooth radios with rfkill hardware awareness
