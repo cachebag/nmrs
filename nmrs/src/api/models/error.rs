@@ -146,6 +146,14 @@ pub enum ConnectionError {
     #[error("no VPN connection found")]
     NoVpnConnection,
 
+    /// VPN connection not found by UUID or name.
+    #[error("VPN connection '{0}' not found")]
+    VpnNotFound(String),
+
+    /// Multiple VPN connections share the same display name.
+    #[error("multiple VPN connections named '{0}', use UUID")]
+    VpnIdAmbiguous(String),
+
     /// Invalid IP address or CIDR notation
     #[error("invalid address: {0}")]
     InvalidAddress(String),
