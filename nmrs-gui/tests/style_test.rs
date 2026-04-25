@@ -5,5 +5,5 @@ fn style_css_loads() {
     }
 
     gtk::init().unwrap();
-    nmrs_gui::style::load_css();
+    nmrs_gui::style::init(include_str!("../src/style.css"));
 }

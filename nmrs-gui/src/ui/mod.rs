@@ -8,15 +8,13 @@ pub mod wired_page;
 
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box as GtkBox, Label, Orientation,
-    STYLE_PROVIDER_PRIORITY_USER, ScrolledWindow, Spinner, Stack, pango::EllipsizeMode,
+    Application, ApplicationWindow, Box as GtkBox, Label, Orientation, ScrolledWindow, Spinner,
+    Stack, pango::EllipsizeMode,
 };
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Notify;
-
-use crate::ui::header::THEMES;
 
 type Callback = Rc<dyn Fn()>;
 type CallbackCell = Rc<std::cell::RefCell<Option<Callback>>>;
@@ -34,26 +32,7 @@ pub fn build_ui(app: &Application) {
     let win = ApplicationWindow::new(app);
     win.set_title(Some(""));
     win.set_default_size(100, 600);
-
-    if let Some(key) = crate::theme_config::load_theme()
-        && let Some(theme) = THEMES.iter().find(|t| t.key == key.as_str())
-    {
-        let provider = gtk::CssProvider::new();
-        provider.load_from_data(theme.css);
-
-        let display = gtk::prelude::RootExt::display(&win);
-        gtk::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            STYLE_PROVIDER_PRIORITY_USER,
-        );
-
-        win.add_css_class("dark-theme");
-    }
-
-    // User's custom style.css must be registered after the theme so that it
-    // takes precedence when both run at STYLE_PROVIDER_PRIORITY_USER.
-    crate::style::load_user_css();
+    win.add_css_class("dark-theme");
 
     let vbox = GtkBox::new(Orientation::Vertical, 0);
     let status = Label::new(None);

@@ -1,7 +1,9 @@
 use gtk::prelude::*;
-use gtk::{Align, Box, Button, Label, Orientation, STYLE_PROVIDER_PRIORITY_USER};
+use gtk::{Align, Box, Button, Label, Orientation};
 
-use crate::ui::header::{THEMES, ThemeDef};
+use crate::ui::header::THEMES;
+
+const CUSTOM_INDEX: u32 = 0;
 
 pub struct SettingsPage {
     root: gtk::Box,
@@ -33,13 +35,13 @@ impl SettingsPage {
         title.set_halign(Align::Start);
         root.append(&title);
 
-        Self::build_theme_section(&root, window);
+        Self::build_theme_section(&root);
         Self::build_light_dark_section(&root, window);
 
         Self { root }
     }
 
-    fn build_theme_section(root: &gtk::Box, window: &gtk::ApplicationWindow) {
+    fn build_theme_section(root: &gtk::Box) {
         let section = Box::new(Orientation::Vertical, 6);
 
         let label = Label::new(Some("Theme"));
@@ -47,29 +49,47 @@ impl SettingsPage {
         label.set_halign(Align::Start);
         section.append(&label);
 
-        let names: Vec<&str> = THEMES.iter().map(|t| t.name).collect();
+        let hint = Label::new(Some(
+            "Your overrides in ~/.config/nmrs/style.css are preserved",
+        ));
+        hint.add_css_class("info-value");
+        hint.set_halign(Align::Start);
+        hint.set_opacity(0.6);
+        section.append(&hint);
+
+        let mut names: Vec<&str> = vec!["Custom"];
+        names.extend(THEMES.iter().map(|t| t.name));
         let dropdown = gtk::DropDown::from_strings(&names);
         dropdown.set_halign(Align::Start);
         dropdown.set_hexpand(false);
 
-        if let Some(saved) = crate::theme_config::load_theme()
-            && let Some(idx) = THEMES.iter().position(|t| t.key == saved.as_str())
-        {
-            dropdown.set_selected(idx as u32);
+        if let Some(saved) = crate::theme_config::load_theme() {
+            if let Some(idx) = THEMES.iter().position(|t| t.key == saved.as_str()) {
+                dropdown.set_selected(idx as u32 + 1);
+            } else {
+                dropdown.set_selected(CUSTOM_INDEX);
+            }
+        } else {
+            dropdown.set_selected(CUSTOM_INDEX);
         }
 
-        let window_weak = window.downgrade();
         dropdown.connect_selected_notify(move |dd| {
-            let idx = dd.selected() as usize;
-            if idx >= THEMES.len() {
+            let idx = dd.selected();
+
+            if idx == CUSTOM_INDEX {
+                crate::style::switch_to_custom();
+                crate::theme_config::save_theme("custom");
                 return;
             }
 
-            let theme = &THEMES[idx];
-
-            if let Some(window) = window_weak.upgrade() {
-                Self::apply_theme(theme, &window);
+            let theme_idx = (idx - 1) as usize;
+            if theme_idx >= THEMES.len() {
+                return;
             }
+
+            let theme = &THEMES[theme_idx];
+            crate::style::switch_to_theme(theme.css);
+            crate::theme_config::save_theme(theme.key);
         });
 
         section.append(&dropdown);
@@ -101,7 +121,6 @@ impl SettingsPage {
                     window.add_css_class("light-theme");
                     btn.add_css_class("appearance-active");
                     dark_btn_clone.remove_css_class("appearance-active");
-                    crate::theme_config::save_theme("dark");
                 }
             });
         }
@@ -115,7 +134,6 @@ impl SettingsPage {
                     window.add_css_class("dark-theme");
                     btn.add_css_class("appearance-active");
                     light_btn_clone.remove_css_class("appearance-active");
-                    crate::theme_config::save_theme("light");
                 }
             });
         }
@@ -130,22 +148,6 @@ impl SettingsPage {
         toggle_box.append(&dark_btn);
         section.append(&toggle_box);
         root.append(&section);
-    }
-
-    fn apply_theme(theme: &ThemeDef, window: &gtk::ApplicationWindow) {
-        let provider = gtk::CssProvider::new();
-        provider.load_from_data(theme.css);
-
-        let display = gtk::prelude::RootExt::display(window);
-
-        gtk::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            STYLE_PROVIDER_PRIORITY_USER,
-        );
-
-        crate::theme_config::save_theme(theme.key);
-        crate::style::load_user_css();
     }
 
     pub fn widget(&self) -> &gtk::Box {

@@ -9,7 +9,6 @@ use gtk::Application;
 use gtk::prelude::*;
 
 use crate::file_lock::acquire_app_lock;
-use crate::style::load_css;
 use crate::ui::build_ui;
 
 #[derive(Parser, Debug)]
@@ -44,7 +43,7 @@ pub fn run() -> anyhow::Result<()> {
     };
 
     app.connect_activate(|app| {
-        load_css();
+        crate::style::init(include_str!("style.css"));
         build_ui(app);
     });
 
