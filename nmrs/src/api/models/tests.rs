@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -9,6 +11,7 @@ use super::error::*;
 use super::state_reason::*;
 use super::vpn::*;
 use super::wifi::*;
+use super::wireguard::*;
 use crate::api::models::DeviceType;
 
 #[test]
@@ -601,10 +604,11 @@ fn test_vpn_credentials_builder_basic() {
         .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
         .address("10.0.0.2/24")
         .add_peer(peer)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(creds.name, "TestVPN");
-    assert_eq!(creds.vpn_type, VpnType::WireGuard);
+    assert_eq!(creds.vpn_type, VpnKind::WireGuard);
     assert_eq!(creds.gateway, "vpn.example.com:51820");
     assert_eq!(
         creds.private_key,
@@ -614,6 +618,92 @@ fn test_vpn_credentials_builder_basic() {
     assert_eq!(creds.peers.len(), 1);
     assert!(creds.dns.is_none());
     assert!(creds.mtu.is_none());
+}
+
+#[test]
+fn test_wireguard_config_basic() {
+    let peer = WireGuardPeer::new(
+        "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".into()],
+    );
+
+    let config = WireGuardConfig::new(
+        "TestVPN",
+        "vpn.example.com:51820",
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
+        "10.0.0.2/24",
+        vec![peer],
+    );
+
+    assert_eq!(config.name, "TestVPN");
+    assert_eq!(config.gateway, "vpn.example.com:51820");
+    assert_eq!(
+        config.private_key,
+        "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM="
+    );
+    assert_eq!(config.address, "10.0.0.2/24");
+    assert_eq!(config.peers.len(), 1);
+    assert!(config.dns.is_none());
+    assert!(config.mtu.is_none());
+}
+
+#[test]
+fn test_wireguard_config_implements_vpn_config() {
+    let uuid = Uuid::new_v4();
+    let config = WireGuardConfig::new(
+        "TestVPN",
+        "vpn.example.com:51820",
+        "private_key",
+        "10.0.0.2/24",
+        vec![WireGuardPeer::new(
+            "public_key",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        )],
+    )
+    .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+    .with_mtu(1420)
+    .with_uuid(uuid);
+
+    let vpn_config: &dyn VpnConfig = &config;
+
+    assert_eq!(vpn_config.vpn_kind(), VpnKind::WireGuard);
+    assert_eq!(vpn_config.name(), "TestVPN");
+    assert_eq!(
+        vpn_config.dns(),
+        Some(["1.1.1.1".to_string(), "8.8.8.8".to_string()].as_slice())
+    );
+    assert_eq!(vpn_config.mtu(), Some(1420));
+    assert_eq!(vpn_config.uuid(), Some(uuid));
+}
+
+#[test]
+fn test_wireguard_config_roundtrips_through_vpn_credentials() {
+    let config = WireGuardConfig::new(
+        "TestVPN",
+        "vpn.example.com:51820",
+        "private_key",
+        "10.0.0.2/24",
+        vec![WireGuardPeer::new(
+            "public_key",
+            "vpn.example.com:51820",
+            vec!["0.0.0.0/0".into()],
+        )],
+    )
+    .with_dns(vec!["1.1.1.1".into()])
+    .with_mtu(1420);
+
+    let legacy: VpnCredentials = config.clone().into();
+    let roundtrip = WireGuardConfig::from(legacy);
+
+    assert_eq!(roundtrip.name, config.name);
+    assert_eq!(roundtrip.gateway, config.gateway);
+    assert_eq!(roundtrip.private_key, config.private_key);
+    assert_eq!(roundtrip.address, config.address);
+    assert_eq!(roundtrip.peers.len(), config.peers.len());
+    assert_eq!(roundtrip.dns, config.dns);
+    assert_eq!(roundtrip.mtu, config.mtu);
 }
 
 #[test]
@@ -635,7 +725,8 @@ fn test_vpn_credentials_builder_with_optionals() {
         .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
         .with_mtu(1420)
         .with_uuid(uuid)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(creds.dns, Some(vec!["1.1.1.1".into(), "8.8.8.8".into()]));
     assert_eq!(creds.mtu, Some(1420));
@@ -659,7 +750,8 @@ fn test_vpn_credentials_builder_multiple_peers() {
         .address("10.0.0.2/24")
         .add_peer(peer1)
         .add_peer(peer2)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(creds.peers.len(), 2);
 }
@@ -678,49 +770,53 @@ fn test_vpn_credentials_builder_peers_method() {
         .private_key("private_key")
         .address("10.0.0.2/24")
         .peers(peers)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(creds.peers.len(), 2);
 }
 
 #[test]
-#[should_panic(expected = "name is required")]
 fn test_vpn_credentials_builder_missing_name() {
     let peer = WireGuardPeer::new("key", "vpn.example.com:51820", vec!["0.0.0.0/0".into()]);
 
-    let _ = VpnCredentials::builder()
+    let err = VpnCredentials::builder()
         .wireguard()
         .gateway("vpn.example.com:51820")
         .private_key("private_key")
         .address("10.0.0.2/24")
         .add_peer(peer)
-        .build();
+        .build()
+        .unwrap_err();
+    assert!(matches!(err, ConnectionError::IncompleteBuilder(_)));
 }
 
 #[test]
-#[should_panic(expected = "vpn_type is required")]
 fn test_vpn_credentials_builder_missing_vpn_type() {
     let peer = WireGuardPeer::new("key", "vpn.example.com:51820", vec!["0.0.0.0/0".into()]);
 
-    let _ = VpnCredentials::builder()
+    let err = VpnCredentials::builder()
         .name("TestVPN")
         .gateway("vpn.example.com:51820")
         .private_key("private_key")
         .address("10.0.0.2/24")
         .add_peer(peer)
-        .build();
+        .build()
+        .unwrap_err();
+    assert!(matches!(err, ConnectionError::IncompleteBuilder(_)));
 }
 
 #[test]
-#[should_panic(expected = "at least one peer is required")]
 fn test_vpn_credentials_builder_missing_peers() {
-    let _ = VpnCredentials::builder()
+    let err = VpnCredentials::builder()
         .name("TestVPN")
         .wireguard()
         .gateway("vpn.example.com:51820")
         .private_key("private_key")
         .address("10.0.0.2/24")
-        .build();
+        .build()
+        .unwrap_err();
+    assert!(matches!(err, ConnectionError::InvalidPeers(_)));
 }
 
 #[test]
@@ -730,7 +826,8 @@ fn test_eap_options_builder_basic() {
         .password("password")
         .method(EapMethod::Peap)
         .phase2(Phase2::Mschapv2)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(opts.identity, "user@example.com");
     assert_eq!(opts.password, "password");
@@ -753,7 +850,8 @@ fn test_eap_options_builder_with_optionals() {
         .domain_suffix_match("company.com")
         .ca_cert_path("file:///etc/ssl/certs/ca.pem")
         .system_ca_certs(true)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(opts.identity, "user@company.com");
     assert_eq!(opts.password, "password");
@@ -779,7 +877,8 @@ fn test_eap_options_builder_peap_mschapv2() {
         .method(EapMethod::Peap)
         .phase2(Phase2::Mschapv2)
         .system_ca_certs(true)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(opts.method, EapMethod::Peap);
     assert_eq!(opts.phase2, Phase2::Mschapv2);
@@ -794,7 +893,8 @@ fn test_eap_options_builder_ttls_pap() {
         .method(EapMethod::Ttls)
         .phase2(Phase2::Pap)
         .ca_cert_path("file:///etc/ssl/certs/university.pem")
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(opts.method, EapMethod::Ttls);
     assert_eq!(opts.phase2, Phase2::Pap);
@@ -805,43 +905,47 @@ fn test_eap_options_builder_ttls_pap() {
 }
 
 #[test]
-#[should_panic(expected = "identity is required")]
 fn test_eap_options_builder_missing_identity() {
-    let _ = EapOptions::builder()
+    let err = EapOptions::builder()
         .password("password")
         .method(EapMethod::Peap)
         .phase2(Phase2::Mschapv2)
-        .build();
+        .build()
+        .unwrap_err();
+    assert!(matches!(err, ConnectionError::IncompleteBuilder(_)));
 }
 
 #[test]
-#[should_panic(expected = "password is required")]
 fn test_eap_options_builder_missing_password() {
-    let _ = EapOptions::builder()
+    let err = EapOptions::builder()
         .identity("user@example.com")
         .method(EapMethod::Peap)
         .phase2(Phase2::Mschapv2)
-        .build();
+        .build()
+        .unwrap_err();
+    assert!(matches!(err, ConnectionError::IncompleteBuilder(_)));
 }
 
 #[test]
-#[should_panic(expected = "method is required")]
 fn test_eap_options_builder_missing_method() {
-    let _ = EapOptions::builder()
+    let err = EapOptions::builder()
         .identity("user@example.com")
         .password("password")
         .phase2(Phase2::Mschapv2)
-        .build();
+        .build()
+        .unwrap_err();
+    assert!(matches!(err, ConnectionError::IncompleteBuilder(_)));
 }
 
 #[test]
-#[should_panic(expected = "phase2 is required")]
 fn test_eap_options_builder_missing_phase2() {
-    let _ = EapOptions::builder()
+    let err = EapOptions::builder()
         .identity("user@example.com")
         .password("password")
         .method(EapMethod::Peap)
-        .build();
+        .build()
+        .unwrap_err();
+    assert!(matches!(err, ConnectionError::IncompleteBuilder(_)));
 }
 
 #[test]
@@ -853,7 +957,7 @@ fn test_vpn_credentials_builder_equivalence_to_new() {
     );
 
     let creds_new = VpnCredentials::new(
-        VpnType::WireGuard,
+        VpnKind::WireGuard,
         "TestVPN",
         "vpn.example.com:51820",
         "private_key",
@@ -868,7 +972,8 @@ fn test_vpn_credentials_builder_equivalence_to_new() {
         .private_key("private_key")
         .address("10.0.0.2/24")
         .add_peer(peer)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(creds_new.name, creds_builder.name);
     assert_eq!(creds_new.vpn_type, creds_builder.vpn_type);
@@ -889,7 +994,8 @@ fn test_eap_options_builder_equivalence_to_new() {
         .password("password")
         .method(EapMethod::Peap)
         .phase2(Phase2::Mschapv2)
-        .build();
+        .build()
+        .unwrap();
 
     assert_eq!(opts_new.identity, opts_builder.identity);
     assert_eq!(opts_new.password, opts_builder.password);

@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+use super::access_point::SecurityFeatures;
+use super::error::ConnectionError;
+
 /// Represents a Wi-Fi network discovered during a scan.
 ///
 /// This struct contains information about a WiFi network that was discovered
@@ -13,9 +16,9 @@ use serde::{Deserialize, Serialize};
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// // Scan for networks
-/// nm.scan_networks().await?;
-/// let networks = nm.list_networks().await?;
+/// // Scan for networks (None = all Wi-Fi devices)
+/// nm.scan_networks(None).await?;
+/// let networks = nm.list_networks(None).await?;
 ///
 /// for net in networks {
 ///     println!("SSID: {}", net.ssid);
@@ -55,6 +58,21 @@ pub struct Network {
     pub ip4_address: Option<String>,
     /// Assigned IPv6 address with CIDR notation (only present when connected)
     pub ip6_address: Option<String>,
+    /// BSSID of the strongest AP for this SSID.
+    #[serde(default)]
+    pub best_bssid: String,
+    /// All known BSSIDs for this SSID, strongest first.
+    #[serde(default)]
+    pub bssids: Vec<String>,
+    /// `true` if this network is currently active (connected).
+    #[serde(default)]
+    pub is_active: bool,
+    /// `true` if a saved connection profile exists for this SSID.
+    #[serde(default)]
+    pub known: bool,
+    /// Decoded security capabilities from NM flag triplet.
+    #[serde(default)]
+    pub security_features: SecurityFeatures,
 }
 
 /// Detailed information about a Wi-Fi network.
@@ -69,7 +87,7 @@ pub struct Network {
 ///
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
-/// let networks = nm.list_networks().await?;
+/// let networks = nm.list_networks(None).await?;
 ///
 /// if let Some(network) = networks.first() {
 ///     let info = nm.show_details(network).await?;
@@ -248,7 +266,8 @@ impl EapOptions {
     ///     .phase2(Phase2::Mschapv2)
     ///     .domain_suffix_match("company.com")
     ///     .system_ca_certs(true)
-    ///     .build();
+    ///     .build()
+    ///     .expect("all required fields set");
     /// ```
     #[must_use]
     pub fn builder() -> EapOptionsBuilder {
@@ -318,7 +337,8 @@ impl EapOptions {
 ///     .anonymous_identity("anonymous@company.com")
 ///     .domain_suffix_match("company.com")
 ///     .system_ca_certs(true)
-///     .build();
+///     .build()
+///     .expect("all required fields set");
 /// ```
 ///
 /// ## TTLS with PAP
@@ -332,7 +352,8 @@ impl EapOptions {
 ///     .method(EapMethod::Ttls)
 ///     .phase2(Phase2::Pap)
 ///     .ca_cert_path("file:///etc/ssl/certs/university-ca.pem")
-///     .build();
+///     .build()
+///     .expect("all required fields set");
 /// ```
 #[derive(Debug, Default)]
 pub struct EapOptionsBuilder {
@@ -480,13 +501,10 @@ impl EapOptionsBuilder {
 
     /// Builds the `EapOptions` from the configured values.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if any required field is missing:
-    /// - `identity` (use [`identity()`](Self::identity))
-    /// - `password` (use [`password()`](Self::password))
-    /// - `method` (use [`method()`](Self::method))
-    /// - `phase2` (use [`phase2()`](Self::phase2))
+    /// Returns [`ConnectionError::IncompleteBuilder`](crate::ConnectionError::IncompleteBuilder)
+    /// if any required field is missing.
     ///
     /// # Examples
     ///
@@ -498,24 +516,35 @@ impl EapOptionsBuilder {
     ///     .password("password")
     ///     .method(EapMethod::Peap)
     ///     .phase2(Phase2::Mschapv2)
-    ///     .build();
+    ///     .build()
+    ///     .expect("all required fields set");
     /// ```
-    #[must_use]
-    pub fn build(self) -> EapOptions {
-        EapOptions {
-            identity: self
-                .identity
-                .expect("identity is required (use .identity())"),
-            password: self
-                .password
-                .expect("password is required (use .password())"),
+    #[must_use = "use the EAP options with WifiSecurity::WpaEap or handle the error"]
+    pub fn build(self) -> Result<EapOptions, ConnectionError> {
+        Ok(EapOptions {
+            identity: self.identity.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder(
+                    "EAP identity is required (use .identity())".into(),
+                )
+            })?,
+            password: self.password.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder(
+                    "EAP password is required (use .password())".into(),
+                )
+            })?,
             anonymous_identity: self.anonymous_identity,
             domain_suffix_match: self.domain_suffix_match,
             ca_cert_path: self.ca_cert_path,
             system_ca_certs: self.system_ca_certs,
-            method: self.method.expect("method is required (use .method())"),
-            phase2: self.phase2.expect("phase2 is required (use .phase2())"),
-        }
+            method: self.method.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder("EAP method is required (use .method())".into())
+            })?,
+            phase2: self.phase2.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder(
+                    "EAP phase 2 method is required (use .phase2())".into(),
+                )
+            })?,
+        })
     }
 }
 
@@ -547,7 +576,7 @@ impl EapOptionsBuilder {
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+/// nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
 ///     psk: "my_secure_password".into()
 /// }).await?;
 /// # Ok(())
@@ -568,7 +597,7 @@ impl EapOptionsBuilder {
 ///     .with_method(EapMethod::Peap)
 ///     .with_phase2(Phase2::Mschapv2);
 ///
-/// nm.connect("CorpWiFi", WifiSecurity::WpaEap {
+/// nm.connect("CorpWiFi", None, WifiSecurity::WpaEap {
 ///     opts: eap_opts
 /// }).await?;
 /// # Ok(())
@@ -618,16 +647,26 @@ impl Network {
     /// this method keeps the strongest signal and combines security flags.
     /// Used internally during network scanning to deduplicate results.
     pub fn merge_ap(&mut self, other: &Network) {
+        if let Some(ref b) = other.bssid
+            && !self.bssids.contains(b)
+        {
+            self.bssids.push(b.clone());
+        }
+
         if other.strength.unwrap_or(0) > self.strength.unwrap_or(0) {
             self.strength = other.strength;
             self.frequency = other.frequency;
             self.bssid = other.bssid.clone();
+            self.best_bssid = other.best_bssid.clone();
+            self.security_features = other.security_features;
         }
 
         self.secured |= other.secured;
         self.is_psk |= other.is_psk;
         self.is_eap |= other.is_eap;
         self.is_hotspot |= other.is_hotspot;
+        self.is_active |= other.is_active;
+        self.known |= other.known;
 
         if self.ip4_address.is_none() {
             self.ip4_address.clone_from(&other.ip4_address);
@@ -659,6 +698,11 @@ mod network_merge_tests {
             is_hotspot: false,
             ip4_address: Some("192.168.1.5/24".into()),
             ip6_address: Some("fe80::1/64".into()),
+            best_bssid: "aa:aa:aa:aa:aa:aa".into(),
+            bssids: vec!["aa:aa:aa:aa:aa:aa".into()],
+            is_active: true,
+            known: false,
+            security_features: Default::default(),
         };
         let stronger = Network {
             device: String::new(),
@@ -672,12 +716,20 @@ mod network_merge_tests {
             is_hotspot: false,
             ip4_address: None,
             ip6_address: None,
+            best_bssid: "bb:bb:bb:bb:bb:bb".into(),
+            bssids: vec!["bb:bb:bb:bb:bb:bb".into()],
+            is_active: false,
+            known: false,
+            security_features: Default::default(),
         };
         weaker_connected.merge_ap(&stronger);
         assert_eq!(weaker_connected.strength, Some(90));
         assert_eq!(weaker_connected.bssid, Some("bb:bb:bb:bb:bb:bb".into()));
+        assert_eq!(weaker_connected.best_bssid, "bb:bb:bb:bb:bb:bb");
         assert_eq!(weaker_connected.ip4_address, Some("192.168.1.5/24".into()));
         assert_eq!(weaker_connected.ip6_address, Some("fe80::1/64".into()));
         assert_eq!(weaker_connected.device, "wlan0");
+        assert!(weaker_connected.is_active);
+        assert_eq!(weaker_connected.bssids.len(), 2);
     }
 }

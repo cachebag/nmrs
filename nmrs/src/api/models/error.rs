@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::core::ovpn_parser::error::OvpnParseError;
+
 use super::connection_state::ConnectionStateReason;
 use super::state_reason::StateReason;
 
@@ -18,7 +20,7 @@ use super::state_reason::StateReason;
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+/// match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 ///     psk: "password".into()
 /// }).await {
 ///     Ok(_) => println!("Connected!"),
@@ -46,7 +48,7 @@ use super::state_reason::StateReason;
 /// let nm = NetworkManager::new().await?;
 ///
 /// for attempt in 1..=3 {
-///     match nm.connect("MyNetwork", WifiSecurity::Open).await {
+///     match nm.connect("MyNetwork", None, WifiSecurity::Open).await {
 ///         Ok(_) => {
 ///             println!("Connected on attempt {}", attempt);
 ///             break;
@@ -112,6 +114,22 @@ pub enum ConnectionError {
     #[error("no saved connection for network")]
     NoSavedConnection,
 
+    /// No saved profile with the given UUID.
+    #[error("saved connection '{0}' not found")]
+    SavedConnectionNotFound(String),
+
+    /// Saved profile settings are missing required keys or are inconsistent.
+    #[error("saved connection malformed: {0}")]
+    MalformedSavedConnection(String),
+
+    /// A public builder was missing a required field.
+    #[error("incomplete builder: {0}")]
+    IncompleteBuilder(String),
+
+    /// NM's connectivity checks are disabled; `check_connectivity` cannot run.
+    #[error("connectivity checks are disabled in NetworkManager")]
+    ConnectivityCheckDisabled,
+
     /// An empty password was provided for the requested network.
     #[error("no password was provided")]
     MissingPassword,
@@ -131,6 +149,14 @@ pub enum ConnectionError {
     /// No VPN connection found
     #[error("no VPN connection found")]
     NoVpnConnection,
+
+    /// VPN connection not found by UUID or name.
+    #[error("VPN connection '{0}' not found")]
+    VpnNotFound(String),
+
+    /// Multiple VPN connections share the same display name.
+    #[error("multiple VPN connections named '{0}', use UUID")]
+    VpnIdAmbiguous(String),
 
     /// Invalid IP address or CIDR notation
     #[error("invalid address: {0}")]
@@ -182,4 +208,43 @@ pub enum ConnectionError {
     /// A secret agent is already registered under this identifier.
     #[error("secret agent already registered under this identifier")]
     AgentAlreadyRegistered,
+
+    /// An error occured while parsing a configuration
+    #[error("error while parsing a configuration: {0}")]
+    ParseError(OvpnParseError),
+
+    /// Access point with the given SSID and BSSID was not found.
+    #[error("access point for SSID '{ssid}' with BSSID '{bssid}' not found")]
+    ApBssidNotFound {
+        /// SSID that was searched for.
+        ssid: String,
+        /// BSSID that was searched for.
+        bssid: String,
+    },
+
+    /// Invalid BSSID format.
+    #[error("invalid BSSID format: '{0}' (expected XX:XX:XX:XX:XX:XX)")]
+    InvalidBssid(String),
+
+    /// Interface exists but is not a Wi-Fi device.
+    #[error("interface '{interface}' is not a Wi-Fi device")]
+    NotAWifiDevice {
+        /// The interface name that was checked.
+        interface: String,
+    },
+
+    /// No Wi-Fi device with the given interface name.
+    #[error("no Wi-Fi device named '{interface}'")]
+    WifiInterfaceNotFound {
+        /// The interface name that was searched for.
+        interface: String,
+    },
+
+    /// A radio is hardware-disabled via rfkill.
+    #[error("radio is hardware-disabled (rfkill)")]
+    HardwareRadioKilled,
+
+    /// The BlueZ Bluetooth stack is unavailable.
+    #[error("bluetooth stack unavailable: {0}")]
+    BluezUnavailable(String),
 }

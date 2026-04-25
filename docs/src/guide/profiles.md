@@ -12,15 +12,15 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
     let connections = nm.list_saved_connections().await?;
-    for name in &connections {
-        println!("  {}", name);
+    for conn in &connections {
+        println!("  {} ({})", conn.id, conn.connection_type);
     }
 
     Ok(())
 }
 ```
 
-`list_saved_connections()` returns the names of all saved connection profiles across all connection types — Wi-Fi, Ethernet, VPN, and Bluetooth.
+`list_saved_connections()` returns full `SavedConnection` objects for all saved connection profiles across all connection types — Wi-Fi, Ethernet, VPN, and Bluetooth. Each `SavedConnection` includes the profile `id` (name), `connection_type`, and other metadata.
 
 ## Checking for a Saved Connection
 
@@ -46,12 +46,12 @@ When you call `connect()` with an SSID that has a saved profile, nmrs activates 
 let nm = NetworkManager::new().await?;
 
 // First connection — credentials are required and saved
-nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
     psk: "password".into(),
 }).await?;
 
 // Later reconnection — saved profile is used, security parameter is ignored
-nm.connect("HomeWiFi", WifiSecurity::Open).await?;
+nm.connect("HomeWiFi", None, WifiSecurity::Open).await?;
 ```
 
 ## Forgetting (Deleting) Connections

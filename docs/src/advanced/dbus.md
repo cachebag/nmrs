@@ -65,7 +65,7 @@ nmrs: nm.monitor_network_changes(callback)
 When connecting to a network, nmrs builds a settings dictionary and sends it via D-Bus:
 
 ```
-nmrs: nm.connect("MyWiFi", WifiSecurity::WpaPsk { psk: "..." })
+nmrs: nm.connect("MyWiFi", None, WifiSecurity::WpaPsk { psk: "..." })
   → Build settings HashMap
   → D-Bus: AddAndActivateConnection(settings, device_path, specific_object)
   ← D-Bus: Active connection path

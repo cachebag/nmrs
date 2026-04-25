@@ -31,6 +31,9 @@ All public methods return `nmrs::Result<T>`.
 |------|-------------|
 | `Network` | A discovered Wi-Fi network (SSID, signal, security flags) |
 | `NetworkInfo` | Detailed network information (channel, speed, bars) |
+| `AccessPoint` | A single AP with BSSID, frequency, and security flags |
+| `WifiDevice` | A Wi-Fi device with interface, MAC, state, and active SSID |
+| `WifiScope` | Per-interface operations scope (from `nm.wifi("wlan1")`) |
 | `WifiSecurity` | Authentication type: `Open`, `WpaPsk`, `WpaEap` |
 | `EapOptions` | Enterprise Wi-Fi (802.1X) configuration |
 | `EapOptionsBuilder` | Builder for `EapOptions` |
@@ -46,16 +49,48 @@ All public methods return `nmrs::Result<T>`.
 | `DeviceType` | Device kind: `Wifi`, `Ethernet`, `Bluetooth`, `WifiP2P`, `Loopback`, `Other(u32)` |
 | `DeviceState` | Operational state: `Disconnected`, `Activated`, `Failed`, etc. |
 
+## Radio / Airplane-Mode Types
+
+| Type | Description |
+|------|-------------|
+| `RadioState` | Combined software (`enabled`) and hardware (`hardware_enabled`) radio state |
+| `AirplaneModeState` | Aggregated state across Wi-Fi, WWAN, and Bluetooth |
+
 ## VPN Types
 
 | Type | Description |
 |------|-------------|
-| `VpnType` | VPN protocol: `WireGuard` |
-| `VpnCredentials` | Full VPN configuration for connecting |
-| `VpnCredentialsBuilder` | Builder for `VpnCredentials` |
+| `VpnConfig` | Sealed trait for VPN configurations |
+| `VpnConfiguration` | Dispatch enum: `WireGuard(WireGuardConfig)` or `OpenVpn(OpenVpnConfig)` |
+| `WireGuardConfig` | WireGuard VPN configuration |
 | `WireGuardPeer` | WireGuard peer configuration |
-| `VpnConnection` | A saved/active VPN connection |
-| `VpnConnectionInfo` | Detailed VPN info (IP, DNS, gateway) |
+| `OpenVpnConfig` | OpenVPN configuration |
+| `OpenVpnAuthType` | OpenVPN auth: `Password`, `Tls`, `PasswordTls`, `StaticKey` |
+| `OpenVpnCompression` | Compression mode: `No`, `Lz4`, `Lz4V2`, `Yes` |
+| `OpenVpnProxy` | Proxy: `Http { ... }`, `Socks { ... }` |
+| `VpnRoute` | Static IPv4 route for split tunneling |
+| `VpnType` | Protocol-specific metadata (data-carrying enum) |
+| `VpnKind` | `Plugin` (OpenVPN, etc.) vs `WireGuard` |
+| `VpnConnection` | A saved/active VPN connection with rich metadata |
+| `VpnConnectionInfo` | Detailed active VPN info (IP, DNS, gateway, protocol details) |
+| `VpnDetails` | Protocol-specific active connection details |
+| `VpnCredentials` | **Deprecated** — use `WireGuardConfig` instead |
+
+## Connectivity Types
+
+| Type | Description |
+|------|-------------|
+| `ConnectivityState` | NM connectivity: `Full`, `Portal`, `Limited`, `None`, `Unknown` |
+| `ConnectivityReport` | Full report with state, check URI, and captive portal URL |
+
+## Saved Connection Types
+
+| Type | Description |
+|------|-------------|
+| `SavedConnection` | Full decoded saved profile |
+| `SavedConnectionBrief` | Lightweight profile (`uuid`, `id`, `type`) |
+| `SettingsSummary` | Decoded settings within a profile |
+| `SettingsPatch` | Partial update for `update_saved_connection` |
 
 ## Bluetooth Types
 
@@ -88,6 +123,7 @@ All public methods return `nmrs::Result<T>`.
 | `ConnectionBuilder` | Base connection settings builder |
 | `WifiConnectionBuilder` | Wi-Fi connection builder |
 | `WireGuardBuilder` | WireGuard VPN builder |
+| `OpenVpnBuilder` | OpenVPN builder (also imports `.ovpn` files) |
 | `IpConfig` | IP address with CIDR prefix |
 | `Route` | Static route configuration |
 | `WifiBand` | Wi-Fi band: `Bg` (2.4 GHz), `A` (5 GHz) |
@@ -99,11 +135,15 @@ nmrs re-exports commonly used types at the crate root for convenience:
 
 ```rust
 use nmrs::{
-    NetworkManager,
+    NetworkManager, WifiScope,
     WifiSecurity, EapOptions, EapMethod, Phase2,
-    VpnCredentials, VpnType, WireGuardPeer,
+    WireGuardConfig, WireGuardPeer,
+    OpenVpnConfig, OpenVpnAuthType,
+    VpnConfig, VpnConfiguration, VpnType, VpnKind,
     TimeoutConfig, ConnectionOptions,
     ConnectionError, DeviceType, DeviceState,
+    RadioState, AirplaneModeState,
+    ConnectivityState, ConnectivityReport,
 };
 ```
 
@@ -111,5 +151,5 @@ Less commonly used types are available through the `models` and `builders` modul
 
 ```rust
 use nmrs::models::{BluetoothIdentity, BluetoothNetworkRole, BluetoothDevice};
-use nmrs::builders::{ConnectionBuilder, WireGuardBuilder, IpConfig, Route};
+use nmrs::builders::{ConnectionBuilder, WireGuardBuilder, OpenVpnBuilder, IpConfig, Route};
 ```

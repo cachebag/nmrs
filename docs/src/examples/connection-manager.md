@@ -56,14 +56,14 @@ async fn main() -> nmrs::Result<()> {
 
 async fn scan(nm: &NetworkManager) {
     println!("Scanning...");
-    match nm.scan_networks().await {
+    match nm.scan_networks(None).await {
         Ok(_) => println!("Scan complete"),
         Err(e) => eprintln!("Scan failed: {}", e),
     }
 }
 
 async fn list_networks(nm: &NetworkManager) {
-    match nm.list_networks().await {
+    match nm.list_networks(None).await {
         Ok(networks) => {
             println!("\n{:<5} {:<30} {:>6} {:>10}",
                 "#", "SSID", "Signal", "Security");
@@ -98,7 +98,7 @@ async fn connect_wifi(nm: &NetworkManager) {
     };
 
     println!("Connecting to '{}'...", ssid);
-    match nm.connect(ssid, security).await {
+    match nm.connect(ssid, None, security).await {
         Ok(_) => println!("Connected!"),
         Err(ConnectionError::AuthFailed) => eprintln!("Wrong password"),
         Err(ConnectionError::NotFound) => eprintln!("Network not found"),
@@ -108,7 +108,7 @@ async fn connect_wifi(nm: &NetworkManager) {
 }
 
 async fn disconnect(nm: &NetworkManager) {
-    match nm.disconnect().await {
+    match nm.disconnect(None).await {
         Ok(_) => println!("Disconnected"),
         Err(e) => eprintln!("Error: {}", e),
     }
@@ -144,8 +144,8 @@ async fn devices(nm: &NetworkManager) {
 async fn saved(nm: &NetworkManager) {
     match nm.list_saved_connections().await {
         Ok(connections) => {
-            for name in &connections {
-                println!("  {}", name);
+            for conn in &connections {
+                println!("  {} ({})", conn.id, conn.connection_type);
             }
         }
         Err(e) => eprintln!("Error: {}", e),

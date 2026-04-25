@@ -23,6 +23,9 @@ All public API methods return `nmrs::Result<T>`.
 | `MissingPassword` | Empty password provided |
 | `NoWifiDevice` | No Wi-Fi adapter found |
 | `WifiNotReady` | Wi-Fi device not ready in time |
+| `WifiInterfaceNotFound` | Specified Wi-Fi interface doesn't exist |
+| `NotAWifiDevice` | Interface exists but isn't Wi-Fi |
+| `HardwareRadioKilled` | Hardware kill switch is on |
 | `NoWiredDevice` | No Ethernet adapter found |
 | `DhcpFailed` | Failed to obtain an IP address via DHCP |
 | `Timeout` | Operation timed out waiting for activation |
@@ -41,6 +44,8 @@ All public API methods return `nmrs::Result<T>`.
 |---------|-------------|
 | `NoVpnConnection` | VPN not found or not active |
 | `VpnFailed(String)` | VPN connection failed with details |
+| `VpnIdAmbiguous` | Multiple VPNs share the same name |
+| `IncompleteBuilder` | VPN builder missing required fields |
 | `InvalidPrivateKey(String)` | Bad WireGuard private key |
 | `InvalidPublicKey(String)` | Bad WireGuard public key |
 | `InvalidAddress(String)` | Bad IP address or CIDR notation |
@@ -79,7 +84,7 @@ use nmrs::{NetworkManager, WifiSecurity};
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
-    nm.connect("MyWiFi", WifiSecurity::Open).await?;
+    nm.connect("MyWiFi", None, WifiSecurity::Open).await?;
     Ok(())
 }
 ```
@@ -93,7 +98,7 @@ use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 
 let nm = NetworkManager::new().await?;
 
-match nm.connect("MyWiFi", WifiSecurity::WpaPsk {
+match nm.connect("MyWiFi", None, WifiSecurity::WpaPsk {
     psk: "password".into(),
 }).await {
     Ok(_) => println!("Connected!"),
@@ -126,7 +131,7 @@ use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 let nm = NetworkManager::new().await?;
 
 for attempt in 1..=3 {
-    match nm.connect("MyWiFi", WifiSecurity::WpaPsk {
+    match nm.connect("MyWiFi", None, WifiSecurity::WpaPsk {
         psk: "password".into(),
     }).await {
         Ok(_) => {
@@ -168,10 +173,17 @@ use nmrs::NetworkManager;
 
 async fn connect() -> Result<()> {
     let nm = NetworkManager::new().await?;
-    nm.connect("MyWiFi", nmrs::WifiSecurity::Open).await?;
+    nm.connect("MyWiFi", None, nmrs::WifiSecurity::Open).await?;
     Ok(())
 }
 ```
+
+### Radio / Airplane-mode Errors
+
+| Variant | Description |
+|---------|-------------|
+| `HardwareRadioKilled` | Hardware kill switch is on; Wi-Fi cannot be enabled until the switch is toggled |
+| `BluezUnavailable` | Bluetooth D-Bus service (BlueZ) is not running or unreachable |
 
 ## Non-Exhaustive
 

@@ -21,7 +21,7 @@ async fn main() -> nmrs::Result<()> {
     env_logger::init();
 
     let nm = NetworkManager::new().await?;
-    nm.scan_networks().await?;
+    nm.scan_networks(None).await?;
 
     Ok(())
 }

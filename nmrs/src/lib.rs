@@ -13,14 +13,14 @@
 //! # async fn example() -> nmrs::Result<()> {
 //! let nm = NetworkManager::new().await?;
 //!
-//! // List visible networks
-//! let networks = nm.list_networks().await?;
+//! // List visible networks (None = all Wi-Fi devices)
+//! let networks = nm.list_networks(None).await?;
 //! for net in &networks {
 //!     println!("{} - Signal: {}%", net.ssid, net.strength.unwrap_or(0));
 //! }
 //!
-//! // Connect to a network
-//! nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+//! // Connect to a network on the first Wi-Fi device
+//! nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 //!     psk: "password123".into()
 //! }).await?;
 //!
@@ -35,20 +35,18 @@
 //! ## VPN Connection (WireGuard)
 //!
 //! ```rust
-//! use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+//! use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
 //!
 //! # async fn example() -> nmrs::Result<()> {
 //! let nm = NetworkManager::new().await?;
 //!
-//! // Configure WireGuard VPN
 //! let peer = WireGuardPeer::new(
 //!     "peer_public_key",
 //!     "vpn.example.com:51820",
 //!     vec!["0.0.0.0/0".into()],
 //! ).with_persistent_keepalive(25);
 //!
-//! let creds = VpnCredentials::new(
-//!     VpnType::WireGuard,
+//! let config = WireGuardConfig::new(
 //!     "MyVPN",
 //!     "vpn.example.com:51820",
 //!     "your_private_key",
@@ -56,8 +54,31 @@
 //!     vec![peer],
 //! ).with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
 //!
-//! // Connect to VPN
-//! nm.connect_vpn(creds).await?;
+//! nm.connect_vpn(config).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## VPN Connection (OpenVPN)
+//!
+//! ```rust
+//! use nmrs::{NetworkManager, OpenVpnConfig, OpenVpnAuthType};
+//!
+//! # async fn example() -> nmrs::Result<()> {
+//! let nm = NetworkManager::new().await?;
+//!
+//! let config = OpenVpnConfig::new("CorpVPN", "vpn.example.com", 1194, false)
+//!     .with_auth_type(OpenVpnAuthType::PasswordTls)
+//!     .with_username("user")
+//!     .with_password("secret")
+//!     .with_ca_cert("/etc/openvpn/ca.crt")
+//!     .with_client_cert("/etc/openvpn/client.crt")
+//!     .with_client_key("/etc/openvpn/client.key");
+//!
+//! nm.connect_vpn(config).await?;
+//!
+//! // Or import an .ovpn file directly:
+//! nm.import_ovpn("corp.ovpn", Some("user"), Some("secret")).await?;
 //!
 //! // List VPN connections
 //! let vpns = nm.list_vpn_connections().await?;
@@ -65,8 +86,7 @@
 //!     println!("{}: {:?} - {:?}", vpn.name, vpn.vpn_type, vpn.state);
 //! }
 //!
-//! // Disconnect
-//! nm.disconnect_vpn("MyVPN").await?;
+//! nm.disconnect_vpn("CorpVPN").await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -88,10 +108,15 @@
 //! - [`Device`] - Represents a network device (WiFi, Ethernet, etc.)
 //! - [`Network`] - Represents a discovered WiFi network
 //! - [`WifiSecurity`] - Security types (Open, WPA-PSK, WPA-EAP)
-//! - [`VpnCredentials`] - VPN connection credentials
-//! - [`VpnType`] - Supported VPN types (WireGuard, etc.)
-//! - [`VpnConnection`] - Active VPN connection information
+//! - [`VpnCredentials`] - Legacy VPN connection credentials
+//! - [`VpnType`] - Protocol-specific VPN metadata (WireGuard, OpenVPN, strongSwan, etc.)
+//! - [`VpnKind`] - Plugin-based vs kernel WireGuard distinction
+//! - [`VpnConnection`] - VPN connection information
+//! - [`VpnDetails`] - Protocol-specific VPN details (WireGuard / OpenVPN)
+//! - [`WireGuardConfig`] - WireGuard connection configuration
 //! - [`WireGuardPeer`] - WireGuard peer configuration
+//! - [`OpenVpnConfig`] - OpenVPN connection configuration
+//! - [`OpenVpnAuthType`] - OpenVPN authentication types
 //! - [`ConnectionError`] - Comprehensive error types
 //!
 //! ## Connection Builders
@@ -111,10 +136,10 @@
 //! let nm = NetworkManager::new().await?;
 //!
 //! // Open network
-//! nm.connect("OpenWiFi", WifiSecurity::Open).await?;
+//! nm.connect("OpenWiFi", None, WifiSecurity::Open).await?;
 //!
 //! // WPA-PSK (password-protected)
-//! nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+//! nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
 //!     psk: "my_password".into()
 //! }).await?;
 //!
@@ -125,7 +150,7 @@
 //!     .with_method(EapMethod::Peap)
 //!     .with_phase2(Phase2::Mschapv2);
 //!
-//! nm.connect("CorpWiFi", WifiSecurity::WpaEap {
+//! nm.connect("CorpWiFi", None, WifiSecurity::WpaEap {
 //!     opts: eap_opts
 //! }).await?;
 //!
@@ -146,7 +171,7 @@
 //! # async fn example() -> nmrs::Result<()> {
 //! let nm = NetworkManager::new().await?;
 //!
-//! match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+//! match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 //!     psk: "wrong_password".into()
 //! }).await {
 //!     Ok(_) => println!("Connected successfully"),
@@ -187,8 +212,8 @@
 //! }
 //!
 //! // Enable/disable WiFi
-//! nm.set_wifi_enabled(false).await?;
-//! nm.set_wifi_enabled(true).await?;
+//! nm.set_wireless_enabled(false).await?;
+//! nm.set_wireless_enabled(true).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -321,14 +346,21 @@ pub mod models {
 }
 
 // Re-export commonly used types at crate root for convenience
+#[allow(deprecated)]
 pub use api::models::{
-    ActiveConnectionState, BluetoothDevice, BluetoothIdentity, BluetoothNetworkRole,
-    ConnectionError, ConnectionOptions, ConnectionStateReason, Device, DeviceState, DeviceType,
-    EapMethod, EapOptions, Network, NetworkInfo, Phase2, StateReason, TimeoutConfig, VpnConnection,
-    VpnConnectionInfo, VpnCredentials, VpnType, WifiSecurity, WireGuardPeer,
-    connection_state_reason_to_error, reason_to_error,
+    AccessPoint, ActiveConnectionState, AirplaneModeState, ApMode, BluetoothDevice,
+    BluetoothIdentity, BluetoothNetworkRole, ConnectType, ConnectionError, ConnectionOptions,
+    ConnectionStateReason, ConnectivityReport, ConnectivityState, Device, DeviceState, DeviceType,
+    EapMethod, EapOptions, Network, NetworkInfo, OpenVpnAuthType, OpenVpnCompression,
+    OpenVpnConfig, OpenVpnConnectionType, OpenVpnProxy, Phase2, RadioState, SavedConnection,
+    SavedConnectionBrief, SecurityFeatures, SettingsPatch, SettingsSummary, StateReason,
+    TimeoutConfig, VpnConfig, VpnConfiguration, VpnConnection, VpnConnectionInfo, VpnCredentials,
+    VpnDetails, VpnKind, VpnRoute, VpnSecretFlags, VpnType, WifiDevice, WifiKeyMgmt, WifiSecurity,
+    WifiSecuritySummary, WireGuardConfig, WireGuardPeer, connection_state_reason_to_error,
+    reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
+pub use api::wifi_scope::WifiScope;
 
 /// A specialized `Result` type for network operations.
 ///

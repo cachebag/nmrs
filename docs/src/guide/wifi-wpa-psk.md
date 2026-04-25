@@ -11,7 +11,7 @@ use nmrs::{NetworkManager, WifiSecurity};
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
-    nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+    nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
         psk: "my_secure_password".into(),
     }).await?;
 
@@ -42,7 +42,7 @@ async fn main() -> nmrs::Result<()> {
     let password = std::env::var("WIFI_PASSWORD")
         .expect("Set WIFI_PASSWORD environment variable");
 
-    nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+    nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
         psk: password,
     }).await?;
 
@@ -60,7 +60,7 @@ let nm = NetworkManager::new().await?;
 if nm.has_saved_connection("HomeWiFi").await? {
     // Saved profile exists; password is stored in it.
     // The WifiSecurity value is ignored when a saved profile exists.
-    nm.connect("HomeWiFi", WifiSecurity::Open).await?;
+    nm.connect("HomeWiFi", None, WifiSecurity::Open).await?;
 }
 ```
 
@@ -81,7 +81,7 @@ use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 
 let nm = NetworkManager::new().await?;
 
-match nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+match nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
     psk: "password".into(),
 }).await {
     Ok(_) => println!("Connected!"),

@@ -14,7 +14,7 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
     // Trigger an active scan on all wireless devices
-    nm.scan_networks().await?;
+    nm.scan_networks(None).await?;
 
     Ok(())
 }
@@ -33,7 +33,7 @@ use nmrs::NetworkManager;
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     for net in &networks {
         println!("{:30} {}%", net.ssid, net.strength.unwrap_or(0));
     }
@@ -70,7 +70,7 @@ use nmrs::NetworkManager;
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     if let Some(network) = networks.first() {
         let info = nm.show_details(network).await?;
 
@@ -108,8 +108,8 @@ use nmrs::NetworkManager;
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
-    nm.scan_networks().await?;
-    let networks = nm.list_networks().await?;
+    nm.scan_networks(None).await?;
+    let networks = nm.list_networks(None).await?;
 
     for net in &networks {
         let security = if net.is_eap {

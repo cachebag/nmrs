@@ -144,7 +144,7 @@ async fn main() -> nmrs::Result<()> {
     loop {
         notify.notified().await;
 
-        let networks = nm.list_networks().await?;
+        let networks = nm.list_networks(None).await?;
         println!("Updated: {} networks visible", networks.len());
     }
 }

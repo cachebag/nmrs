@@ -5,3 +5,4 @@
 pub mod builders;
 pub mod models;
 pub mod network_manager;
+pub mod wifi_scope;

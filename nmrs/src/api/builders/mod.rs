@@ -20,7 +20,7 @@
 //!
 //! ```ignore
 //! use nmrs::builders::{build_wifi_connection, build_wireguard_connection, build_ethernet_connection};
-//! use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials, VpnType, WireGuardPeer};
+//! use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials, VpnKind, WireGuardPeer};
 //!
 //! let opts = ConnectionOptions {
 //!     autoconnect: true,
@@ -45,7 +45,7 @@
 //! };
 //!
 //! let creds = VpnCredentials {
-//!     vpn_type: VpnType::WireGuard,
+//!     vpn_type: VpnKind::WireGuard,
 //!     name: "MyVPN".into(),
 //!     gateway: "vpn.example.com:51820".into(),
 //!     private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
@@ -70,6 +70,7 @@
 
 pub mod bluetooth;
 pub mod connection_builder;
+pub mod openvpn_builder;
 pub mod vpn;
 pub mod wifi;
 pub mod wifi_builder;
@@ -77,10 +78,11 @@ pub mod wireguard_builder;
 
 // Re-export core builder types
 pub use connection_builder::{ConnectionBuilder, IpConfig, Route};
+pub use openvpn_builder::OpenVpnBuilder;
 pub use wifi_builder::{WifiBand, WifiConnectionBuilder, WifiMode};
 pub use wireguard_builder::WireGuardBuilder;
 
 // Re-export builder functions for convenience
 pub use bluetooth::build_bluetooth_connection;
-pub use vpn::build_wireguard_connection;
+pub use vpn::{build_openvpn_connection, build_wireguard_connection};
 pub use wifi::{build_ethernet_connection, build_wifi_connection};

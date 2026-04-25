@@ -1,24 +1,36 @@
+use std::collections::HashMap;
+
 use tokio::sync::watch;
 use zbus::Connection;
+use zvariant::OwnedValue;
 
 use crate::Result;
-use crate::api::models::{Device, Network, NetworkInfo, WifiSecurity};
+use crate::api::models::access_point::AccessPoint;
+use crate::api::models::{
+    AirplaneModeState, Device, Network, NetworkInfo, RadioState, SavedConnection,
+    SavedConnectionBrief, SettingsPatch, WifiDevice, WifiSecurity,
+};
+use crate::api::wifi_scope::WifiScope;
+use crate::core::airplane;
 use crate::core::bluetooth::connect_bluetooth;
 use crate::core::connection::{
-    connect, connect_wired, disconnect, forget_by_name_and_type, get_device_by_interface,
-    is_connected,
+    connect, connect_to_bssid, connect_wired, disconnect, forget_by_name_and_type,
+    get_device_by_interface, is_connected,
 };
-use crate::core::connection_settings::{
-    get_saved_connection_path, has_saved_connection, list_saved_connections,
-};
+use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
 use crate::core::device::{
-    is_connecting, list_bluetooth_devices, list_devices, set_wifi_enabled, wait_for_wifi_ready,
-    wifi_enabled, wifi_hardware_enabled,
+    is_connecting, list_bluetooth_devices, list_devices, wait_for_wifi_ready,
 };
-use crate::core::scan::{current_network, list_networks, scan_networks};
-use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
+use crate::core::saved_connection as saved_profiles;
+use crate::core::scan::{current_network, list_access_points, list_networks, scan_networks};
+use crate::core::vpn::{
+    active_vpn_connections, connect_vpn, connect_vpn_by_id, connect_vpn_by_uuid, disconnect_vpn,
+    disconnect_vpn_by_uuid, get_vpn_info, list_vpn_connections,
+};
+use crate::core::wifi_device::{list_wifi_devices, set_wifi_enabled_for_interface};
 use crate::models::{
-    BluetoothDevice, BluetoothIdentity, VpnConnection, VpnConnectionInfo, VpnCredentials,
+    BluetoothDevice, BluetoothIdentity, VpnConfig, VpnConfiguration, VpnConnection,
+    VpnConnectionInfo,
 };
 use crate::monitoring::device as device_monitor;
 use crate::monitoring::info::show_details;
@@ -60,14 +72,14 @@ use crate::types::constants::device_type;
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// // Scan and list networks
-/// let networks = nm.list_networks().await?;
+/// // Scan and list networks (None = all Wi-Fi devices)
+/// let networks = nm.list_networks(None).await?;
 /// for net in &networks {
 ///     println!("{}: {}%", net.ssid, net.strength.unwrap_or(0));
 /// }
 ///
-/// // Connect to a network
-/// nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+/// // Connect to a network on the first Wi-Fi device
+/// nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 ///     psk: "password".into()
 /// }).await?;
 /// # Ok(())
@@ -86,8 +98,12 @@ use crate::types::constants::device_type;
 /// let devices = nm.list_devices().await?;
 ///
 /// // Control WiFi
-/// nm.set_wifi_enabled(false).await?;  // Disable WiFi
-/// nm.set_wifi_enabled(true).await?;   // Enable WiFi
+/// nm.set_wireless_enabled(false).await?;  // Disable WiFi
+/// nm.set_wireless_enabled(true).await?;   // Enable WiFi
+///
+/// // Check airplane mode
+/// let state = nm.airplane_mode_state().await?;
+/// println!("Airplane mode: {}", state.is_airplane_mode());
 /// # Ok(())
 /// # }
 /// ```
@@ -213,19 +229,185 @@ impl NetworkManager {
     }
 
     /// Lists all visible Wi-Fi networks.
-    pub async fn list_networks(&self) -> Result<Vec<Network>> {
-        list_networks(&self.conn).await
+    ///
+    /// Networks sharing an SSID on the same device are grouped, keeping the
+    /// strongest AP as the representative. Each returned [`Network`] carries
+    /// `best_bssid`, `bssids`, and `security_features` from the underlying APs.
+    ///
+    /// Pass `interface = Some("wlan0")` to scope to a single Wi-Fi device,
+    /// or `None` to enumerate across every Wi-Fi device.
+    ///
+    /// **3.0 break:** added the `interface` parameter. For old behavior,
+    /// pass `None`.
+    pub async fn list_networks(&self, interface: Option<&str>) -> Result<Vec<Network>> {
+        list_networks(&self.conn, interface).await
+    }
+
+    /// Lists every managed Wi-Fi device on the system.
+    ///
+    /// Each [`WifiDevice`] includes its interface name, MAC, current state,
+    /// and the SSID of any active connection.
+    pub async fn list_wifi_devices(&self) -> Result<Vec<WifiDevice>> {
+        list_wifi_devices(&self.conn).await
+    }
+
+    /// Look up a single Wi-Fi device by interface name.
+    ///
+    /// Returns
+    /// [`WifiInterfaceNotFound`](crate::ConnectionError::WifiInterfaceNotFound)
+    /// if no device matches, or
+    /// [`NotAWifiDevice`](crate::ConnectionError::NotAWifiDevice) if the
+    /// interface exists but isn't a Wi-Fi device.
+    pub async fn wifi_device_by_interface(&self, name: &str) -> Result<WifiDevice> {
+        let all = list_wifi_devices(&self.conn).await?;
+        all.into_iter()
+            .find(|d| d.interface == name)
+            .ok_or_else(|| crate::ConnectionError::WifiInterfaceNotFound {
+                interface: name.to_string(),
+            })
+    }
+
+    /// Build a [`WifiScope`] pinned to the given interface.
+    ///
+    /// All operations on the returned scope target only that one Wi-Fi
+    /// device. Useful on multi-radio systems (laptops with USB dongles,
+    /// docks with a second wireless adapter).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::{NetworkManager, WifiSecurity};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.wifi("wlan1").connect(
+    ///     "Guest",
+    ///     WifiSecurity::WpaPsk { psk: "guestpass".into() },
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn wifi(&self, interface: impl Into<String>) -> WifiScope {
+        WifiScope {
+            conn: self.conn.clone(),
+            interface: interface.into(),
+            timeout_config: self.timeout_config,
+        }
+    }
+
+    /// Lists all visible access points, one entry per BSSID.
+    ///
+    /// Unlike [`list_networks`](Self::list_networks), this preserves
+    /// duplicate BSSIDs for the same SSID and includes per-AP details
+    /// like BSSID, exact frequency, bitrate, and device state.
+    ///
+    /// Pass `interface` to restrict to a single wireless device (e.g.
+    /// `Some("wlan0")`), or `None` for all devices.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let mut aps = nm.list_access_points(None).await?;
+    /// aps.sort_by(|a, b| b.strength.cmp(&a.strength));
+    /// for ap in &aps {
+    ///     println!("{:>3}%  {:<20} {}  {} MHz",
+    ///         ap.strength, ap.ssid, ap.bssid, ap.frequency_mhz);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_access_points(&self, interface: Option<&str>) -> Result<Vec<AccessPoint>> {
+        list_access_points(&self.conn, interface).await
+    }
+
+    /// Connects to a specific access point by SSID and optional BSSID.
+    ///
+    /// If `bssid` is `Some`, the connection targets that specific AP rather
+    /// than the strongest match for the SSID. If `None`, behaves identically
+    /// to [`connect`](Self::connect).
+    ///
+    /// **3.0 break:** added the `interface` parameter (3rd argument). Pass
+    /// `None` for the previous behavior of using the first available Wi-Fi
+    /// device, or `Some("wlan1")` to pin the connection to a specific
+    /// interface. For an ergonomic per-interface API, see
+    /// [`wifi`](Self::wifi).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ApBssidNotFound`](crate::ConnectionError::ApBssidNotFound) if
+    /// no AP matching both the SSID and BSSID is visible.
+    /// Returns [`InvalidBssid`](crate::ConnectionError::InvalidBssid) if the
+    /// BSSID format is invalid.
+    /// Returns
+    /// [`WifiInterfaceNotFound`](crate::ConnectionError::WifiInterfaceNotFound)
+    /// or [`NotAWifiDevice`](crate::ConnectionError::NotAWifiDevice) if the
+    /// supplied interface name is bad.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::{NetworkManager, WifiSecurity};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.connect_to_bssid(
+    ///     "HomeWiFi",
+    ///     Some("AA:BB:CC:DD:EE:FF"),
+    ///     None,
+    ///     WifiSecurity::WpaPsk { psk: "password".into() },
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connect_to_bssid(
+        &self,
+        ssid: &str,
+        bssid: Option<&str>,
+        interface: Option<&str>,
+        creds: WifiSecurity,
+    ) -> Result<()> {
+        connect_to_bssid(
+            &self.conn,
+            ssid,
+            bssid,
+            creds,
+            interface,
+            Some(self.timeout_config),
+        )
+        .await
     }
 
     /// Connects to a Wi-Fi network with the given credentials.
+    ///
+    /// **3.0 break:** added the `interface` parameter (3rd argument). Pass
+    /// `None` for the previous behavior of using the first available Wi-Fi
+    /// device, or `Some("wlan1")` to pin the connection to a specific
+    /// interface.
     ///
     /// # Errors
     ///
     /// Returns `ConnectionError::NotFound` if the network is not visible,
     /// `ConnectionError::AuthFailed` if authentication fails, or other
     /// variants for specific failure reasons.
-    pub async fn connect(&self, ssid: &str, creds: WifiSecurity) -> Result<()> {
-        connect(&self.conn, ssid, creds, Some(self.timeout_config)).await
+    pub async fn connect(
+        &self,
+        ssid: &str,
+        interface: Option<&str>,
+        creds: WifiSecurity,
+    ) -> Result<()> {
+        connect(
+            &self.conn,
+            ssid,
+            creds,
+            interface,
+            Some(self.timeout_config),
+        )
+        .await
     }
 
     /// Connects to a wired (Ethernet) device.
@@ -265,17 +447,19 @@ impl NetworkManager {
         connect_bluetooth(&self.conn, name, identity, Some(self.timeout_config)).await
     }
 
-    /// Connects to a VPN using the provided credentials.
+    /// Connects to a VPN using the provided configuration.
     ///
-    /// Currently supports WireGuard VPN connections. The function checks for an
+    /// Supports WireGuard and OpenVPN connections. The function checks for an
     /// existing saved VPN connection by name. If found, it activates the saved
     /// connection. If not found, it creates a new VPN connection with the provided
-    /// credentials.
+    /// configuration.
     ///
-    /// # Example
+    /// # Examples
+    ///
+    /// ## WireGuard
     ///
     /// ```rust
-    /// use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+    /// use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
     ///
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
@@ -286,8 +470,7 @@ impl NetworkManager {
     ///     vec!["0.0.0.0/0".into()],
     /// ).with_persistent_keepalive(25);
     ///
-    /// let creds = VpnCredentials::new(
-    ///     VpnType::WireGuard,
+    /// let config = WireGuardConfig::new(
     ///     "MyVPN",
     ///     "vpn.example.com:51820",
     ///     "your_private_key",
@@ -295,7 +478,28 @@ impl NetworkManager {
     ///     vec![peer],
     /// ).with_dns(vec!["1.1.1.1".into()]);
     ///
-    /// nm.connect_vpn(creds).await?;
+    /// nm.connect_vpn(config).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// ## OpenVPN
+    ///
+    /// ```rust
+    /// use nmrs::{NetworkManager, OpenVpnConfig, OpenVpnAuthType};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    ///
+    /// let config = OpenVpnConfig::new("CorpVPN", "vpn.example.com", 1194, false)
+    ///     .with_auth_type(OpenVpnAuthType::PasswordTls)
+    ///     .with_username("user")
+    ///     .with_password("secret")
+    ///     .with_ca_cert("/etc/openvpn/ca.crt")
+    ///     .with_client_cert("/etc/openvpn/client.crt")
+    ///     .with_client_key("/etc/openvpn/client.key");
+    ///
+    /// nm.connect_vpn(config).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -304,10 +508,62 @@ impl NetworkManager {
     ///
     /// Returns an error if:
     /// - NetworkManager is not running or accessible
-    /// - The credentials are invalid or incomplete
+    /// - The configuration is invalid or incomplete
     /// - The VPN connection fails to activate
-    pub async fn connect_vpn(&self, creds: VpnCredentials) -> Result<()> {
-        connect_vpn(&self.conn, creds, Some(self.timeout_config)).await
+    pub async fn connect_vpn<C>(&self, config: C) -> Result<()>
+    where
+        C: VpnConfig + Into<VpnConfiguration>,
+    {
+        connect_vpn(&self.conn, config.into(), Some(self.timeout_config)).await
+    }
+
+    /// Imports a `.ovpn` file and activates the OpenVPN connection.
+    ///
+    /// Parses the file, persists any inline certificates, builds the
+    /// connection profile, and activates it through NetworkManager.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Path to the `.ovpn` configuration file
+    /// * `username` — Optional username for password-based authentication
+    /// * `password` — Optional password for password-based authentication
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.import_ovpn("corp.ovpn", Some("user"), Some("secret")).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file cannot be read or parsed
+    /// - Inline certificate storage fails
+    /// - The configuration is incomplete (e.g. TLS auth without certs)
+    /// - The VPN connection fails to activate
+    pub async fn import_ovpn(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        username: Option<&str>,
+        password: Option<&str>,
+    ) -> Result<()> {
+        use crate::builders::OpenVpnBuilder;
+
+        let mut builder = OpenVpnBuilder::from_ovpn_file(path)?;
+        if let Some(u) = username {
+            builder = builder.username(u);
+        }
+        if let Some(p) = password {
+            builder = builder.password(p);
+        }
+        let config = builder.build()?;
+        self.connect_vpn(config).await
     }
 
     /// Disconnects from an active VPN connection by name.
@@ -334,8 +590,8 @@ impl NetworkManager {
     /// Lists all saved VPN connections.
     ///
     /// Returns a list of all VPN connection profiles saved in NetworkManager,
-    /// including their name, type, and current state. Only VPN connections with
-    /// recognized types (currently WireGuard) are returned.
+    /// including their name, type, and current state. Returns WireGuard and
+    /// OpenVPN connections.
     ///
     /// # Example
     ///
@@ -354,6 +610,41 @@ impl NetworkManager {
     /// ```
     pub async fn list_vpn_connections(&self) -> Result<Vec<VpnConnection>> {
         list_vpn_connections(&self.conn).await
+    }
+
+    /// Only active VPNs (subset of `list_vpn_connections` with `active = true`).
+    pub async fn active_vpn_connections(&self) -> Result<Vec<VpnConnection>> {
+        active_vpn_connections(&self.conn).await
+    }
+
+    /// Activate a saved VPN by UUID.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.connect_vpn_by_uuid("2c3f1234-abcd-5678-ef01-234567890abc").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connect_vpn_by_uuid(&self, uuid: &str) -> Result<()> {
+        connect_vpn_by_uuid(&self.conn, uuid, Some(self.timeout_config)).await
+    }
+
+    /// Activate a saved VPN by connection display name.
+    ///
+    /// Fails with [`VpnIdAmbiguous`](crate::ConnectionError::VpnIdAmbiguous)
+    /// if multiple VPNs share the same name.
+    pub async fn connect_vpn_by_id(&self, id: &str) -> Result<()> {
+        connect_vpn_by_id(&self.conn, id, Some(self.timeout_config)).await
+    }
+
+    /// Disconnect a VPN by UUID.
+    pub async fn disconnect_vpn_by_uuid(&self, uuid: &str) -> Result<()> {
+        disconnect_vpn_by_uuid(&self.conn, uuid).await
     }
 
     /// Forgets (deletes) a saved VPN connection by name.
@@ -414,20 +705,143 @@ impl NetworkManager {
         get_vpn_info(&self.conn, name).await
     }
 
-    /// Returns whether Wi-Fi is currently enabled.
-    pub async fn wifi_enabled(&self) -> Result<bool> {
-        wifi_enabled(&self.conn).await
+    /// Returns the combined software/hardware state of the Wi-Fi radio.
+    ///
+    /// See [`RadioState`] for the distinction between `enabled` (software)
+    /// and `hardware_enabled` (rfkill).
+    pub async fn wifi_state(&self) -> Result<RadioState> {
+        airplane::wifi_state(&self.conn).await
     }
 
-    /// Enables or disables Wi-Fi.
-    pub async fn set_wifi_enabled(&self, value: bool) -> Result<()> {
-        set_wifi_enabled(&self.conn, value).await
+    /// Returns the combined software/hardware state of the WWAN radio.
+    pub async fn wwan_state(&self) -> Result<RadioState> {
+        airplane::wwan_state(&self.conn).await
     }
 
-    /// Returns whether wireless hardware is currently enabled.
-    /// Reflects rfkill state which helps check if the radio is enabled or blocked.
-    pub async fn wifi_hardware_enabled(&self) -> Result<bool> {
-        wifi_hardware_enabled(&self.conn).await
+    /// Returns the combined software/hardware state of the Bluetooth radio.
+    ///
+    /// Reads power state from all BlueZ adapters and cross-references rfkill.
+    /// If BlueZ is not running or no adapters exist, returns
+    /// `RadioState { enabled: true, hardware_enabled: false }`.
+    pub async fn bluetooth_radio_state(&self) -> Result<RadioState> {
+        airplane::bluetooth_radio_state(&self.conn).await
+    }
+
+    /// Returns the aggregated airplane-mode state across all radios.
+    ///
+    /// Fans out to Wi-Fi, WWAN, and Bluetooth concurrently and returns
+    /// an [`AirplaneModeState`] snapshot.
+    pub async fn airplane_mode_state(&self) -> Result<AirplaneModeState> {
+        airplane::airplane_mode_state(&self.conn).await
+    }
+
+    /// Enables or disables the Wi-Fi radio (software toggle).
+    ///
+    /// This replaces the deprecated [`set_wifi_enabled`](Self::set_wifi_enabled).
+    /// If the radio is hardware-killed, NM accepts the write but the radio
+    /// remains off until hardware is unkilled.
+    pub async fn set_wireless_enabled(&self, enabled: bool) -> Result<()> {
+        airplane::set_wireless_enabled(&self.conn, enabled).await
+    }
+
+    /// Enables or disables the WWAN (mobile broadband) radio.
+    ///
+    /// Writes the `WwanEnabled` property on NetworkManager.
+    pub async fn set_wwan_enabled(&self, enabled: bool) -> Result<()> {
+        airplane::set_wwan_enabled(&self.conn, enabled).await
+    }
+
+    /// Enables or disables the Bluetooth radio by toggling all BlueZ adapters.
+    ///
+    /// Returns [`BluezUnavailable`](crate::ConnectionError::BluezUnavailable) if BlueZ is not running
+    /// or no adapters exist.
+    pub async fn set_bluetooth_radio_enabled(&self, enabled: bool) -> Result<()> {
+        airplane::set_bluetooth_radio_enabled(&self.conn, enabled).await
+    }
+
+    /// Flips all three radios in one call.
+    ///
+    /// **`enabled = true` means airplane mode is on, i.e. radios are off.**
+    ///
+    /// Does not fail fast: attempts all three toggles concurrently and
+    /// returns the first error at the end, if any.
+    pub async fn set_airplane_mode(&self, enabled: bool) -> Result<()> {
+        airplane::set_airplane_mode(&self.conn, enabled).await
+    }
+
+    /// Current connectivity state as NM sees it (single property read).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let state = nm.connectivity().await?;
+    /// println!("{state:?}");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connectivity(&self) -> Result<crate::ConnectivityState> {
+        crate::core::connectivity::connectivity(&self.conn).await
+    }
+
+    /// Forces NM to re-check connectivity by probing the configured URI.
+    ///
+    /// Returns the new state once the check completes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConnectivityCheckDisabled`](crate::ConnectionError::ConnectivityCheckDisabled)
+    /// if NM's connectivity checks are turned off.
+    pub async fn check_connectivity(&self) -> Result<crate::ConnectivityState> {
+        crate::core::connectivity::check_connectivity(&self.conn).await
+    }
+
+    /// Full connectivity report including check URI and captive-portal URL.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let report = nm.connectivity_report().await?;
+    /// println!("{:?} portal={:?}", report.state, report.captive_portal_url);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connectivity_report(&self) -> Result<crate::ConnectivityReport> {
+        crate::core::connectivity::connectivity_report(&self.conn).await
+    }
+
+    /// Captive-portal URL detected by NM, if state is `Portal`.
+    ///
+    /// Returns `None` if NM is not in `Portal` state or if this NM version
+    /// does not expose the URL.
+    pub async fn captive_portal_url(&self) -> Result<Option<String>> {
+        let report = crate::core::connectivity::connectivity_report(&self.conn).await?;
+        Ok(report.captive_portal_url)
+    }
+
+    /// Disable or re-enable a single Wi-Fi interface.
+    ///
+    /// Sets `Device.Autoconnect = enabled` and, when disabling, calls
+    /// `Device.Disconnect()`. This is independent of the global wireless
+    /// killswitch ([`set_wireless_enabled`](Self::set_wireless_enabled)) and
+    /// safe to use on multi-radio systems.
+    ///
+    /// # Errors
+    ///
+    /// Returns
+    /// [`WifiInterfaceNotFound`](crate::ConnectionError::WifiInterfaceNotFound)
+    /// if no device with that name exists, or
+    /// [`NotAWifiDevice`](crate::ConnectionError::NotAWifiDevice) if the
+    /// interface isn't a Wi-Fi device.
+    pub async fn set_wifi_enabled(&self, interface: &str, enabled: bool) -> Result<()> {
+        set_wifi_enabled_for_interface(&self.conn, interface, enabled).await
     }
 
     /// Waits for a Wi-Fi device to become ready (disconnected or activated).
@@ -435,9 +849,13 @@ impl NetworkManager {
         wait_for_wifi_ready(&self.conn).await
     }
 
-    /// Triggers a Wi-Fi scan on all wireless devices.
-    pub async fn scan_networks(&self) -> Result<()> {
-        scan_networks(&self.conn).await
+    /// Triggers a Wi-Fi scan.
+    ///
+    /// **3.0 break:** added the `interface` parameter. Pass `None` to scan
+    /// every Wi-Fi device, or `Some("wlan0")` to scan one. See
+    /// [`wifi`](Self::wifi) for an ergonomic per-interface API.
+    pub async fn scan_networks(&self, interface: Option<&str>) -> Result<()> {
+        scan_networks(&self.conn, interface).await
     }
 
     /// Returns whether any network device is currently in a transitional state.
@@ -471,12 +889,18 @@ impl NetworkManager {
         is_connected(&self.conn, ssid).await
     }
 
-    /// Disconnects from the current network.
+    /// Disconnects from the current Wi-Fi network.
     ///
-    /// If currently connected to a WiFi network, this will deactivate
-    /// the connection and wait for the device to reach disconnected state.
+    /// If currently connected to a Wi-Fi network, this deactivates the
+    /// active connection on the targeted device and waits for it to reach
+    /// the disconnected state.
     ///
-    /// Returns `Ok(())` if disconnected successfully or if no active connection exists.
+    /// **3.0 break:** added the `interface` parameter. Pass `None` for the
+    /// previous behavior (first Wi-Fi device), or `Some("wlan1")` to target
+    /// a specific interface.
+    ///
+    /// Returns `Ok(())` if disconnected successfully or if no active
+    /// connection exists.
     ///
     /// # Example
     ///
@@ -485,12 +909,13 @@ impl NetworkManager {
     ///
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
-    /// nm.disconnect().await?;
+    /// nm.disconnect(None).await?;
+    /// nm.disconnect(Some("wlan1")).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn disconnect(&self) -> Result<()> {
-        disconnect(&self.conn, Some(self.timeout_config)).await
+    pub async fn disconnect(&self, interface: Option<&str>) -> Result<()> {
+        disconnect(&self.conn, interface, Some(self.timeout_config)).await
     }
 
     /// Returns the full `Network` object for the currently connected WiFi network.
@@ -517,10 +942,13 @@ impl NetworkManager {
         current_network(&self.conn).await
     }
 
-    /// Lists all saved connection profiles.
+    /// Lists all saved connection profiles with decoded [`SavedConnection`] summaries.
     ///
-    /// Returns the names (IDs) of all saved connection profiles in NetworkManager,
-    /// including WiFi, Ethernet, VPN, and other connection types.
+    /// Secrets are not included; use a [secret agent](crate::agent) with
+    /// `GetSecrets` for passwords and keys.
+    ///
+    /// For a lighter call that only resolves `uuid`, `id`, and `type`, see
+    /// [`Self::list_saved_connections_brief`].
     ///
     /// # Example
     ///
@@ -529,15 +957,64 @@ impl NetworkManager {
     ///
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
-    /// let connections = nm.list_saved_connections().await?;
-    /// for name in connections {
-    ///     println!("Saved connection: {}", name);
+    /// for c in nm.list_saved_connections().await? {
+    ///     println!("{}  {}  {}", c.id, c.connection_type, c.uuid);
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_saved_connections(&self) -> Result<Vec<String>> {
-        list_saved_connections(&self.conn).await
+    pub async fn list_saved_connections(&self) -> Result<Vec<SavedConnection>> {
+        saved_profiles::list_saved_connections(&self.conn).await
+    }
+
+    /// Lists saved profiles with only `connection.uuid`, `id`, and `type` (still one
+    /// `GetSettings` per profile, but skips building [`SettingsSummary`](crate::SettingsSummary)).
+    pub async fn list_saved_connections_brief(&self) -> Result<Vec<SavedConnectionBrief>> {
+        saved_profiles::list_saved_connections_brief(&self.conn).await
+    }
+
+    /// Returns the human-visible names (`connection.id`) of all saved profiles.
+    ///
+    /// Convenience over `list_saved_connections().map(|v| v.into_iter().map(|c| c.id).collect())`.
+    pub async fn list_saved_connection_ids(&self) -> Result<Vec<String>> {
+        Ok(saved_profiles::list_saved_connections_brief(&self.conn)
+            .await?
+            .into_iter()
+            .map(|c| c.id)
+            .collect())
+    }
+
+    /// Loads one saved profile by UUID with full [`SavedConnection`] decode.
+    ///
+    /// # Errors
+    ///
+    /// [`SavedConnectionNotFound`](crate::ConnectionError::SavedConnectionNotFound) if
+    /// the UUID does not exist.
+    pub async fn get_saved_connection(&self, uuid: &str) -> Result<SavedConnection> {
+        saved_profiles::get_saved_connection(&self.conn, uuid).await
+    }
+
+    /// Raw `GetSettings` map for advanced consumers.
+    pub async fn get_saved_connection_raw(
+        &self,
+        uuid: &str,
+    ) -> Result<HashMap<String, HashMap<String, OwnedValue>>> {
+        saved_profiles::get_saved_connection_raw(&self.conn, uuid).await
+    }
+
+    /// Deletes a saved profile by UUID (`Settings.Connection.Delete`).
+    pub async fn delete_saved_connection(&self, uuid: &str) -> Result<()> {
+        saved_profiles::delete_saved_connection(&self.conn, uuid).await
+    }
+
+    /// Merges a [`SettingsPatch`] into an existing profile (`Update` / `UpdateUnsaved`).
+    pub async fn update_saved_connection(&self, uuid: &str, patch: SettingsPatch) -> Result<()> {
+        saved_profiles::update_saved_connection(&self.conn, uuid, &patch).await
+    }
+
+    /// Calls `ReloadConnections` so NM re-reads profiles from disk.
+    pub async fn reload_saved_connections(&self) -> Result<()> {
+        saved_profiles::reload_saved_connections(&self.conn).await
     }
 
     /// Finds a device by its interface name (e.g., "wlan0", "eth0").

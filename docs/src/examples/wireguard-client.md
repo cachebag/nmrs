@@ -4,7 +4,7 @@ This example demonstrates a complete WireGuard VPN client that connects, display
 
 ## Features
 
-- Builds VPN credentials with the builder pattern
+- Builds VPN configuration with `WireGuardConfig`
 - Connects and retrieves VPN details
 - Displays IP configuration and DNS
 - Cleanly disconnects on completion
@@ -12,7 +12,7 @@ This example demonstrates a complete WireGuard VPN client that connects, display
 ## Code
 
 ```rust
-use nmrs::{NetworkManager, VpnCredentials, WireGuardPeer};
+use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
 
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
@@ -38,37 +38,30 @@ async fn main() -> nmrs::Result<()> {
     )
     .with_persistent_keepalive(25);
 
-    // Build credentials
-    let creds = VpnCredentials::builder()
-        .name("ExampleVPN")
-        .wireguard()
-        .gateway(
-            std::env::var("WG_ENDPOINT")
-                .unwrap_or_else(|_| "vpn.example.com:51820".into()),
-        )
-        .private_key(
-            std::env::var("WG_PRIVATE_KEY")
-                .expect("Set WG_PRIVATE_KEY"),
-        )
-        .address(
-            std::env::var("WG_ADDRESS")
-                .unwrap_or_else(|_| "10.0.0.2/24".into()),
-        )
-        .add_peer(peer)
-        .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
-        .with_mtu(1420)
-        .build();
+    // Build configuration
+    let config = WireGuardConfig::new(
+        "ExampleVPN",
+        std::env::var("WG_ENDPOINT")
+            .unwrap_or_else(|_| "vpn.example.com:51820".into()),
+        std::env::var("WG_PRIVATE_KEY")
+            .expect("Set WG_PRIVATE_KEY"),
+        std::env::var("WG_ADDRESS")
+            .unwrap_or_else(|_| "10.0.0.2/24".into()),
+        vec![peer],
+    )
+    .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
+    .with_mtu(1420);
 
     // Connect
     println!("Connecting to VPN...");
-    nm.connect_vpn(creds).await?;
+    nm.connect_vpn(config).await?;
     println!("Connected!\n");
 
     // Show VPN details
     let info = nm.get_vpn_info("ExampleVPN").await?;
     println!("VPN Connection Details:");
     println!("  Name:      {}", info.name);
-    println!("  Type:      {:?}", info.vpn_type);
+    println!("  Kind:      {:?}", info.vpn_kind);
     println!("  State:     {:?}", info.state);
     println!("  Interface: {:?}", info.interface);
     println!("  Gateway:   {:?}", info.gateway);
@@ -110,7 +103,7 @@ Connected!
 
 VPN Connection Details:
   Name:      ExampleVPN
-  Type:      WireGuard
+  Kind:      WireGuard
   State:     Activated
   Interface: Some("wg-examplevpn")
   Gateway:   Some("vpn.example.com")
@@ -153,13 +146,11 @@ let peer2 = WireGuardPeer::new(
     vec!["10.2.0.0/16".into()],
 );
 
-let creds = VpnCredentials::builder()
-    .name("MultiPeerVPN")
-    .wireguard()
-    .gateway("us-east.vpn.example.com:51820")
-    .private_key("client_private_key")
-    .address("10.0.0.2/24")
-    .add_peer(peer1)
-    .add_peer(peer2)
-    .build();
+let config = WireGuardConfig::new(
+    "MultiPeerVPN",
+    "us-east.vpn.example.com:51820",
+    "client_private_key",
+    "10.0.0.2/24",
+    vec![peer1, peer2],
+);
 ```

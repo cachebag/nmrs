@@ -56,15 +56,19 @@ When nmrs connects to a network, NetworkManager saves the profile. On subsequent
 
 ### Which VPN protocols are supported?
 
-Currently only WireGuard. OpenVPN support is planned and actively being developed.
+WireGuard and OpenVPN. WireGuard uses NetworkManager's native kernel integration (no plugin needed). OpenVPN requires the `networkmanager-openvpn` plugin.
 
 ### Do I need the WireGuard kernel module?
 
 Yes. WireGuard is built into the Linux kernel since version 5.6. On older kernels, install the `wireguard` module. NetworkManager's WireGuard support requires NM 1.16+.
 
+### Can I import a `.ovpn` file?
+
+Yes. Use `nm.import_ovpn("client.ovpn", Some("user"), Some("pass")).await?` to parse and activate an OpenVPN profile in one call. Inline certificates are extracted and persisted automatically.
+
 ### Can I import a `.conf` WireGuard file?
 
-Not directly. You need to extract the values from the config file and pass them to `VpnCredentials`. Direct `.conf` file import is not yet implemented.
+Not directly. Extract the values from the config file and pass them to `WireGuardConfig::new()`.
 
 ## GUI
 

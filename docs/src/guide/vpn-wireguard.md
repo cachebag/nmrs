@@ -11,7 +11,7 @@
 ## Quick Start
 
 ```rust
-use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
 
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
@@ -23,8 +23,7 @@ async fn main() -> nmrs::Result<()> {
         vec!["0.0.0.0/0".into()],
     ).with_persistent_keepalive(25);
 
-    let creds = VpnCredentials::new(
-        VpnType::WireGuard,
+    let config = WireGuardConfig::new(
         "MyVPN",
         "vpn.example.com:51820",
         "CLIENT_PRIVATE_KEY_BASE64",
@@ -32,7 +31,7 @@ async fn main() -> nmrs::Result<()> {
         vec![peer],
     ).with_dns(vec!["1.1.1.1".into()]);
 
-    nm.connect_vpn(creds).await?;
+    nm.connect_vpn(config).await?;
 
     println!("VPN connected!");
     Ok(())
@@ -51,11 +50,10 @@ async fn main() -> nmrs::Result<()> {
 | **DNS** | DNS servers to use while the VPN is active |
 | **Persistent Keepalive** | Seconds between keepalive packets (helps with NAT traversal) |
 
-## VpnCredentials Fields
+## WireGuardConfig Fields
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `vpn_type` | Yes | Must be `VpnType::WireGuard` |
 | `name` | Yes | Connection profile name |
 | `gateway` | Yes | Server endpoint (`host:port`) |
 | `private_key` | Yes | Client private key (base64) |
@@ -65,12 +63,10 @@ async fn main() -> nmrs::Result<()> {
 | `mtu` | No | MTU size (typical: 1420) |
 | `uuid` | No | Custom UUID (auto-generated if omitted) |
 
-## Building Credentials
-
-### Direct Constructor
+## Building Configuration
 
 ```rust
-use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
+use nmrs::{WireGuardConfig, WireGuardPeer};
 
 let peer = WireGuardPeer::new(
     "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
@@ -79,8 +75,7 @@ let peer = WireGuardPeer::new(
 ).with_persistent_keepalive(25)
  .with_preshared_key("OPTIONAL_PSK_BASE64");
 
-let creds = VpnCredentials::new(
-    VpnType::WireGuard,
+let config = WireGuardConfig::new(
     "HomeVPN",
     "vpn.example.com:51820",
     "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -88,31 +83,6 @@ let creds = VpnCredentials::new(
     vec![peer],
 ).with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
  .with_mtu(1420);
-```
-
-### Builder Pattern
-
-The builder pattern avoids positional parameter confusion:
-
-```rust
-use nmrs::{VpnCredentials, WireGuardPeer};
-
-let peer = WireGuardPeer::new(
-    "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
-    "vpn.example.com:51820",
-    vec!["0.0.0.0/0".into()],
-).with_persistent_keepalive(25);
-
-let creds = VpnCredentials::builder()
-    .name("HomeVPN")
-    .wireguard()
-    .gateway("vpn.example.com:51820")
-    .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
-    .address("10.0.0.2/24")
-    .add_peer(peer)
-    .with_dns(vec!["1.1.1.1".into()])
-    .with_mtu(1420)
-    .build();
 ```
 
 ## WireGuardPeer Configuration
@@ -183,5 +153,6 @@ Invalid parameters produce specific error variants:
 ## Next Steps
 
 - [VPN Management](./vpn-management.md) – list, disconnect, and remove VPN connections
+- [OpenVPN Setup](./vpn-openvpn.md) – set up OpenVPN connections
 - [Custom Timeouts](../advanced/timeouts.md) – adjust VPN connection timeouts
 - [Error Handling](./error-handling.md) – handle VPN-specific errors

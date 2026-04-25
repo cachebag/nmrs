@@ -29,6 +29,7 @@ async fn main() -> nmrs::Result<()> {
     println!("\nConnecting to network...");
     nm.connect(
         "MyNetwork",
+        None,
         WifiSecurity::WpaPsk {
             psk: std::env::var("WIFI_PASSWORD").unwrap_or_else(|_| "password".to_string()),
         },
