@@ -54,8 +54,8 @@ async fn main() -> nmrs::Result<()> {
 
     // Scan and list visible networks
     println!("Scanning for networks...");
-    nm.scan_networks().await?;
-    let visible = nm.list_networks().await?;
+    nm.scan_networks(None).await?;
+    let visible = nm.list_networks(None).await?;
 
     let visible_ssids: HashMap<&str, &nmrs::Network> = visible
         .iter()
@@ -71,7 +71,7 @@ async fn main() -> nmrs::Result<()> {
                 net.strength.unwrap_or(0),
             );
 
-            match nm.connect(&pref.ssid, pref.security.clone()).await {
+            match nm.connect(&pref.ssid, None, pref.security.clone()).await {
                 Ok(_) => {
                     println!("Connected to '{}'!", pref.ssid);
                     return Ok(());

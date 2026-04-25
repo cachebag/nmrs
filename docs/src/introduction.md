@@ -7,7 +7,7 @@ Welcome to the **nmrs** documentation! This guide will help you understand and u
 **nmrs** is a high-level, async Rust API for [NetworkManager](https://networkmanager.dev/) over [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html). It provides:
 
 - **Simple WiFi Management** - Scan, connect, and manage wireless networks
-- **VPN Support** - Full WireGuard VPN integration
+- **VPN Support** - WireGuard and OpenVPN VPN support
 - **Ethernet Control** - Manage wired network connections
 - **Bluetooth** - Connect to Bluetooth network devices
 - **Real-Time Monitoring** - Event-driven network state updates
@@ -52,13 +52,13 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
     // Scan for networks
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     for net in networks {
         println!("{} - {}%", net.ssid, net.strength.unwrap_or(0));
     }
     
     // Connect to a network
-    nm.connect("MyWiFi", WifiSecurity::WpaPsk {
+    nm.connect("MyWiFi", None, WifiSecurity::WpaPsk {
         psk: "password123".into()
     }).await?;
     

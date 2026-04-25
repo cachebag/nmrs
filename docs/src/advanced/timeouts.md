@@ -98,7 +98,7 @@ let config = TimeoutConfig::new()
 
 let nm = NetworkManager::with_config(config).await?;
 
-match nm.connect("SlowNetwork", WifiSecurity::Open).await {
+match nm.connect("SlowNetwork", None, WifiSecurity::Open).await {
     Ok(_) => println!("Connected!"),
     Err(ConnectionError::Timeout) => {
         eprintln!("Connection timed out — try a longer timeout");

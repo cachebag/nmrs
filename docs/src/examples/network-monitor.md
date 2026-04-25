@@ -74,8 +74,8 @@ async fn print_status(nm: &NetworkManager) {
     }
 
     // Wi-Fi state
-    if let Ok(enabled) = nm.wifi_enabled().await {
-        println!("Wi-Fi enabled: {}", enabled);
+    if let Ok(state) = nm.wifi_state().await {
+        println!("Wi-Fi enabled: {}", state.enabled);
     }
 
     // Devices
@@ -90,7 +90,7 @@ async fn print_status(nm: &NetworkManager) {
 }
 
 async fn print_networks(nm: &NetworkManager) {
-    if let Ok(networks) = nm.list_networks().await {
+    if let Ok(networks) = nm.list_networks(None).await {
         println!("Visible networks ({}):", networks.len());
         for net in &networks {
             let security = if net.is_eap {
@@ -125,6 +125,7 @@ cargo run --example network_monitor
 
 Connected to: HomeWiFi
 Wi-Fi enabled: true
+Wi-Fi hardware enabled: true
 
 Devices:
   wlan0 — Wi-Fi [Activated]
@@ -142,6 +143,7 @@ Visible networks (5):
 --- Device state changed ---
 Connected to: HomeWiFi
 Wi-Fi enabled: true
+Wi-Fi hardware enabled: true
 
 Devices:
   wlan0 — Wi-Fi [Activated]

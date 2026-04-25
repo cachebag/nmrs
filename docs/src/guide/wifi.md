@@ -23,10 +23,10 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
     // Scan for networks
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     
     // Connect to WPA-PSK network
-    nm.connect("MyWiFi", WifiSecurity::WpaPsk {
+    nm.connect("MyWiFi", None, WifiSecurity::WpaPsk {
         psk: "password".into()
     }).await?;
     
@@ -36,7 +36,7 @@ async fn main() -> nmrs::Result<()> {
     }
     
     // Disconnect
-    nm.disconnect().await?;
+    nm.disconnect(None).await?;
     
     Ok(())
 }
@@ -51,7 +51,7 @@ nmrs supports all major WiFi security protocols:
 No authentication required:
 
 ```rust
-nm.connect("FreeWiFi", WifiSecurity::Open).await?;
+nm.connect("FreeWiFi", None, WifiSecurity::Open).await?;
 ```
 
 ### WPA-PSK (Personal)
@@ -59,7 +59,7 @@ nm.connect("FreeWiFi", WifiSecurity::Open).await?;
 Password-based authentication:
 
 ```rust
-nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
     psk: "your_password".into()
 }).await?;
 ```
@@ -76,7 +76,7 @@ let eap_opts = EapOptions::new("user@company.com", "password")
     .with_phase2(Phase2::Mschapv2)
     .with_domain_suffix_match("company.com");
 
-nm.connect("CorpWiFi", WifiSecurity::WpaEap {
+nm.connect("CorpWiFi", None, WifiSecurity::WpaEap {
     opts: eap_opts
 }).await?;
 ```
@@ -98,7 +98,7 @@ pub struct Network {
 Example usage:
 
 ```rust
-let networks = nm.list_networks().await?;
+let networks = nm.list_networks(None).await?;
 
 for net in networks {
     println!("SSID: {}", net.ssid);
@@ -144,14 +144,15 @@ Enable or disable WiFi hardware:
 
 ```rust
 // Disable WiFi (airplane mode)
-nm.set_wifi_enabled(false).await?;
+nm.set_wireless_enabled(false).await?;
 
 // Enable WiFi
-nm.set_wifi_enabled(true).await?;
+nm.set_wireless_enabled(true).await?;
 
 // Check WiFi status
-let enabled = nm.is_wifi_enabled().await?;
-println!("WiFi is {}", if enabled { "enabled" } else { "disabled" });
+let state = nm.wifi_state().await?;
+println!("WiFi is {}", if state.enabled { "enabled" } else { "disabled" });
+println!("Hardware switch is {}", if state.hardware_enabled { "on" } else { "off" });
 ```
 
 ## Network Scanning
@@ -160,13 +161,13 @@ Trigger a fresh scan:
 
 ```rust
 // Request a scan (may take a few seconds)
-nm.request_scan().await?;
+nm.scan_networks(None).await?;
 
 // Wait a moment for scan to complete
 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
 // Get updated results
-let networks = nm.list_networks().await?;
+let networks = nm.list_networks(None).await?;
 ```
 
 ## Detecting Connection State
@@ -182,11 +183,9 @@ if let Some(ssid) = nm.current_ssid().await {
 }
 
 // Get detailed network info
-if let Some(info) = nm.current_network_info().await? {
-    println!("SSID: {}", info.ssid);
-    println!("IP: {:?}", info.ip4_address);
-    println!("Gateway: {:?}", info.gateway);
-    println!("DNS: {:?}", info.dns);
+if let Some(network) = nm.current_network().await? {
+    println!("SSID: {}", network.ssid);
+    println!("Signal: {}%", network.strength.unwrap_or(0));
 }
 ```
 
@@ -197,7 +196,7 @@ WiFi operations can fail for various reasons. Handle them gracefully:
 ```rust
 use nmrs::ConnectionError;
 
-match nm.connect("Network", WifiSecurity::WpaPsk {
+match nm.connect("Network", None, WifiSecurity::WpaPsk {
     psk: "pass".into()
 }).await {
     Ok(_) => println!("Connected!"),
@@ -255,6 +254,7 @@ nm.monitor_device_changes(|| {
 - [WPA-EAP (Enterprise)](./wifi-enterprise.md) - Enterprise WiFi
 - [Hidden Networks](./wifi-hidden.md) - Connecting to hidden SSIDs
 - [Error Handling](./error-handling.md) - Comprehensive error guide
+- [Per-Device Scoping](./wifi-per-device.md) - Multi-radio, per-interface operations
 
 ## Best Practices
 
@@ -263,14 +263,14 @@ nm.monitor_device_changes(|| {
 ```rust
 // Good - reuse the same instance
 let nm = NetworkManager::new().await?;
-nm.list_networks().await?;
-nm.connect("WiFi", WifiSecurity::Open).await?;
+nm.list_networks(None).await?;
+nm.connect("WiFi", None, WifiSecurity::Open).await?;
 
 // Avoid - creating multiple instances
 let nm1 = NetworkManager::new().await?;
-nm1.list_networks().await?;
+nm1.list_networks(None).await?;
 let nm2 = NetworkManager::new().await?; // Unnecessary
-nm2.connect("WiFi", WifiSecurity::Open).await?;
+nm2.connect("WiFi", None, WifiSecurity::Open).await?;
 ```
 
 ### 2. Handle Signal Strength
@@ -290,7 +290,7 @@ if let Some(strength) = network.strength {
 use tokio::time::{timeout, Duration};
 
 // Wrap operations in timeouts
-match timeout(Duration::from_secs(30), nm.connect("WiFi", security)).await {
+match timeout(Duration::from_secs(30), nm.connect("WiFi", None, security)).await {
     Ok(Ok(_)) => println!("Connected"),
     Ok(Err(e)) => eprintln!("Connection failed: {}", e),
     Err(_) => eprintln!("Operation timed out"),

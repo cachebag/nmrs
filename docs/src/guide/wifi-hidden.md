@@ -14,10 +14,10 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
     // Hidden open network
-    nm.connect("HiddenCafe", WifiSecurity::Open).await?;
+    nm.connect("HiddenCafe", None, WifiSecurity::Open).await?;
 
     // Hidden WPA-PSK network
-    nm.connect("SecretLab", WifiSecurity::WpaPsk {
+    nm.connect("SecretLab", None, WifiSecurity::WpaPsk {
         psk: "lab_password".into(),
     }).await?;
 
@@ -49,7 +49,7 @@ let eap = EapOptions::new("user@company.com", "password")
     .with_phase2(Phase2::Mschapv2)
     .with_system_ca_certs(true);
 
-nm.connect("HiddenCorpNet", WifiSecurity::WpaEap {
+nm.connect("HiddenCorpNet", None, WifiSecurity::WpaEap {
     opts: eap,
 }).await?;
 ```

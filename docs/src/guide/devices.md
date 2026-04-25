@@ -132,25 +132,24 @@ let bluetooth = nm.list_bluetooth_devices().await?;
 
 ## Wi-Fi Radio Control
 
-Enable or disable the Wi-Fi radio globally:
+Check and control the Wi-Fi radio globally:
 
 ```rust
 let nm = NetworkManager::new().await?;
 
-// Check current state
-let enabled = nm.wifi_enabled().await?;
-println!("Wi-Fi enabled: {}", enabled);
+// Check current state (software + hardware)
+let state = nm.wifi_state().await?;
+println!("Wi-Fi enabled: {}", state.enabled);
+println!("Wi-Fi hardware enabled: {}", state.hardware_enabled);
 
-// Check hardware switch (rfkill)
-let hw_enabled = nm.wifi_hardware_enabled().await?;
-println!("Wi-Fi hardware enabled: {}", hw_enabled);
-
-// Toggle Wi-Fi
-nm.set_wifi_enabled(false).await?; // Disable
-nm.set_wifi_enabled(true).await?;  // Enable
+// Global toggle
+nm.set_wireless_enabled(false).await?;  // Disable
+nm.set_wireless_enabled(true).await?;   // Enable
 ```
 
-> **Note:** `wifi_hardware_enabled()` reflects the rfkill state. If the hardware switch is off, enabling Wi-Fi via software will have no effect.
+> **Note:** `wifi_state().hardware_enabled` reflects the rfkill state. If the hardware switch is off, enabling Wi-Fi via software will have no effect.
+
+For per-device Wi-Fi enable/disable, see [Per-Device Scoping](./wifi-per-device.md).
 
 ## Waiting for Wi-Fi Ready
 
@@ -159,11 +158,11 @@ After enabling Wi-Fi, the device may take a moment to become ready:
 ```rust
 let nm = NetworkManager::new().await?;
 
-nm.set_wifi_enabled(true).await?;
+nm.set_wireless_enabled(true).await?;
 nm.wait_for_wifi_ready().await?;
 
 // Now safe to scan and connect
-nm.scan_networks().await?;
+nm.scan_networks(None).await?;
 ```
 
 ## Finding a Device by Interface Name

@@ -25,15 +25,40 @@ let config = nm.timeout_config();
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `scan_networks()` | `Result<()>` | Trigger active Wi-Fi scan |
-| `list_networks()` | `Result<Vec<Network>>` | List visible networks |
-| `connect(ssid, security)` | `Result<()>` | Connect to a Wi-Fi network |
-| `disconnect()` | `Result<()>` | Disconnect from current network |
+| `scan_networks(interface)` | `Result<()>` | Trigger active Wi-Fi scan (`None` = all devices) |
+| `list_networks(interface)` | `Result<Vec<Network>>` | List visible networks (`None` = all devices) |
+| `list_access_points(interface)` | `Result<Vec<AccessPoint>>` | List individual APs by BSSID |
+| `connect(ssid, interface, security)` | `Result<()>` | Connect to a Wi-Fi network |
+| `connect_to_bssid(ssid, bssid, interface, security)` | `Result<()>` | Connect to a specific AP |
+| `disconnect(interface)` | `Result<()>` | Disconnect from current network (`None` = first Wi-Fi device) |
 | `current_network()` | `Result<Option<Network>>` | Get current Wi-Fi network |
 | `current_ssid()` | `Option<String>` | Get current SSID |
 | `current_connection_info()` | `Option<(String, Option<u32>)>` | Get SSID + frequency |
 | `is_connected(ssid)` | `Result<bool>` | Check if connected to a specific network |
 | `show_details(network)` | `Result<NetworkInfo>` | Get detailed network info |
+
+## Per-Device Wi-Fi Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `list_wifi_devices()` | `Result<Vec<WifiDevice>>` | List all Wi-Fi devices |
+| `wifi_device_by_interface(name)` | `Result<WifiDevice>` | Look up a Wi-Fi device by name |
+| `wifi(interface)` | `WifiScope` | Build a scope pinned to one interface |
+| `set_wifi_enabled(interface, bool)` | `Result<()>` | Enable/disable one Wi-Fi radio |
+
+## Radio / Airplane-Mode Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `wifi_state()` | `Result<RadioState>` | Software + hardware Wi-Fi state |
+| `wwan_state()` | `Result<RadioState>` | Software + hardware WWAN state |
+| `bluetooth_radio_state()` | `Result<RadioState>` | Software + hardware Bluetooth state |
+| `airplane_mode_state()` | `Result<AirplaneModeState>` | Aggregated across all radios |
+| `set_wireless_enabled(bool)` | `Result<()>` | Global Wi-Fi software toggle |
+| `set_wwan_enabled(bool)` | `Result<()>` | Global WWAN toggle |
+| `set_bluetooth_radio_enabled(bool)` | `Result<()>` | Toggle all BlueZ adapters |
+| `set_airplane_mode(bool)` | `Result<()>` | Toggle all three radios |
+| `wait_for_wifi_ready()` | `Result<()>` | Wait for Wi-Fi device to become ready |
 
 ## Ethernet Methods
 
@@ -45,11 +70,25 @@ let config = nm.timeout_config();
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `connect_vpn(creds)` | `Result<()>` | Connect to a VPN |
+| `connect_vpn(config)` | `Result<()>` | Connect with a `WireGuardConfig` or `OpenVpnConfig` |
+| `import_ovpn(path, user, pass)` | `Result<()>` | Import `.ovpn` file and connect |
+| `connect_vpn_by_uuid(uuid)` | `Result<()>` | Activate a saved VPN by UUID |
+| `connect_vpn_by_id(id)` | `Result<()>` | Activate a saved VPN by display name |
 | `disconnect_vpn(name)` | `Result<()>` | Disconnect a VPN by name |
+| `disconnect_vpn_by_uuid(uuid)` | `Result<()>` | Disconnect a VPN by UUID |
 | `list_vpn_connections()` | `Result<Vec<VpnConnection>>` | List all saved VPNs |
+| `active_vpn_connections()` | `Result<Vec<VpnConnection>>` | List only active VPNs |
 | `forget_vpn(name)` | `Result<()>` | Delete a saved VPN profile |
 | `get_vpn_info(name)` | `Result<VpnConnectionInfo>` | Get active VPN details |
+
+## Connectivity Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `connectivity()` | `Result<ConnectivityState>` | Current NM connectivity state |
+| `check_connectivity()` | `Result<ConnectivityState>` | Force a connectivity re-check |
+| `connectivity_report()` | `Result<ConnectivityReport>` | Full report with captive portal URL |
+| `captive_portal_url()` | `Result<Option<String>>` | Captive portal URL if in Portal state |
 
 ## Bluetooth Methods
 
@@ -69,21 +108,19 @@ let config = nm.timeout_config();
 | `get_device_by_interface(name)` | `Result<OwnedObjectPath>` | Find device by interface name |
 | `is_connecting()` | `Result<bool>` | Check if any device is connecting |
 
-## Wi-Fi Control Methods
-
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `wifi_enabled()` | `Result<bool>` | Check if Wi-Fi is enabled |
-| `set_wifi_enabled(bool)` | `Result<()>` | Enable/disable Wi-Fi |
-| `wifi_hardware_enabled()` | `Result<bool>` | Check hardware radio state (rfkill) |
-| `wait_for_wifi_ready()` | `Result<()>` | Wait for Wi-Fi device to become ready |
-
 ## Connection Profile Methods
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `list_saved_connections()` | `Result<Vec<String>>` | List all saved profiles |
-| `has_saved_connection(ssid)` | `Result<bool>` | Check if a profile exists |
+| `list_saved_connections()` | `Result<Vec<SavedConnection>>` | Full decode of all saved profiles |
+| `list_saved_connections_brief()` | `Result<Vec<SavedConnectionBrief>>` | Lightweight profile listing |
+| `list_saved_connection_ids()` | `Result<Vec<String>>` | Just the profile names |
+| `get_saved_connection(uuid)` | `Result<SavedConnection>` | Load one profile by UUID |
+| `get_saved_connection_raw(uuid)` | `Result<HashMap<...>>` | Raw `GetSettings` map |
+| `delete_saved_connection(uuid)` | `Result<()>` | Delete a profile by UUID |
+| `update_saved_connection(uuid, patch)` | `Result<()>` | Merge a `SettingsPatch` into a profile |
+| `reload_saved_connections()` | `Result<()>` | Re-read profiles from disk |
+| `has_saved_connection(ssid)` | `Result<bool>` | Check if a Wi-Fi profile exists |
 | `get_saved_connection_path(ssid)` | `Result<Option<OwnedObjectPath>>` | Get profile D-Bus path |
 | `forget(ssid)` | `Result<()>` | Delete a Wi-Fi profile |
 

@@ -36,14 +36,31 @@ pub enum ConnectionError {
     DeviceFailed(StateReason),
     ActivationFailed(ConnectionStateReason),
 
+    // Per-device errors
+    WifiInterfaceNotFound { interface: String },
+    NotAWifiDevice { interface: String },
+
+    // Radio errors
+    HardwareRadioKilled,
+    BluezUnavailable,
+
     // VPN errors
     NoVpnConnection,
     VpnFailed(String),
+    VpnIdAmbiguous { id: String },
+    IncompleteBuilder(String),
     InvalidPrivateKey(String),
     InvalidPublicKey(String),
     InvalidAddress(String),
     InvalidGateway(String),
     InvalidPeers(String),
+
+    // Connectivity
+    ConnectivityCheckDisabled,
+
+    // BSSID
+    ApBssidNotFound { ssid: String, bssid: String },
+    InvalidBssid(String),
 
     // Other
     InvalidUtf8(Utf8Error),
@@ -127,7 +144,7 @@ pub enum ActiveConnectionState {
 ```rust
 async fn connect() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
-    nm.connect("MyWiFi", WifiSecurity::Open).await?;
+    nm.connect("MyWiFi", None, WifiSecurity::Open).await?;
     Ok(())
 }
 ```
@@ -135,7 +152,7 @@ async fn connect() -> nmrs::Result<()> {
 ### Specific Error Handling
 
 ```rust
-match nm.connect("MyWiFi", security).await {
+match nm.connect("MyWiFi", None, security).await {
     Ok(_) => println!("Connected"),
     Err(ConnectionError::AuthFailed) => eprintln!("Wrong password"),
     Err(ConnectionError::NotFound) => eprintln!("Network not found"),
@@ -151,7 +168,7 @@ use anyhow::{Context, Result};
 async fn connect() -> Result<()> {
     let nm = NetworkManager::new().await
         .context("Failed to connect to NetworkManager")?;
-    nm.connect("MyWiFi", WifiSecurity::Open).await
+    nm.connect("MyWiFi", None, WifiSecurity::Open).await
         .context("Failed to connect to MyWiFi")?;
     Ok(())
 }
