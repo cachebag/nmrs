@@ -1,3 +1,4 @@
+pub(crate) mod access_point;
 mod bluetooth;
 mod config;
 mod connection_state;
@@ -14,6 +15,7 @@ mod wireguard;
 #[path = "tests.rs"]
 mod tests;
 
+pub use access_point::*;
 pub use bluetooth::*;
 pub use config::*;
 pub use connection_state::*;
