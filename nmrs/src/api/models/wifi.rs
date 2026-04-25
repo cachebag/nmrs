@@ -15,9 +15,9 @@ use super::access_point::SecurityFeatures;
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// // Scan for networks
-/// nm.scan_networks().await?;
-/// let networks = nm.list_networks().await?;
+/// // Scan for networks (None = all Wi-Fi devices)
+/// nm.scan_networks(None).await?;
+/// let networks = nm.list_networks(None).await?;
 ///
 /// for net in networks {
 ///     println!("SSID: {}", net.ssid);
@@ -86,7 +86,7 @@ pub struct Network {
 ///
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
-/// let networks = nm.list_networks().await?;
+/// let networks = nm.list_networks(None).await?;
 ///
 /// if let Some(network) = networks.first() {
 ///     let info = nm.show_details(network).await?;
@@ -564,7 +564,7 @@ impl EapOptionsBuilder {
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+/// nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
 ///     psk: "my_secure_password".into()
 /// }).await?;
 /// # Ok(())
@@ -585,7 +585,7 @@ impl EapOptionsBuilder {
 ///     .with_method(EapMethod::Peap)
 ///     .with_phase2(Phase2::Mschapv2);
 ///
-/// nm.connect("CorpWiFi", WifiSecurity::WpaEap {
+/// nm.connect("CorpWiFi", None, WifiSecurity::WpaEap {
 ///     opts: eap_opts
 /// }).await?;
 /// # Ok(())
