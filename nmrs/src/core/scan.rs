@@ -7,13 +7,14 @@ use std::collections::HashMap;
 use zbus::Connection;
 
 use crate::Result;
-use crate::api::models::{ConnectionError, Network};
+use crate::api::models::access_point::{AccessPoint, ApMode, decode_security};
+use crate::api::models::{ConnectionError, DeviceState, Network};
+use crate::core::connection_settings::has_saved_connection;
 use crate::dbus::{NMAccessPointProxy, NMDeviceProxy, NMProxy, NMWirelessProxy};
 use crate::monitoring::info::current_ssid;
 use crate::types::constants::{device_type, security_flags, wifi_mode};
 use crate::util::utils::{
-    decode_ssid_or_empty, decode_ssid_or_hidden, for_each_access_point,
-    get_ip_addresses_from_active_connection,
+    decode_ssid_or_empty, decode_ssid_or_hidden, get_ip_addresses_from_active_connection,
 };
 
 /// Triggers a Wi-Fi scan on all wireless devices.
@@ -62,72 +63,186 @@ pub(crate) async fn scan_networks(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Lists all visible Wi-Fi networks.
+/// Lists all visible access points, one entry per BSSID.
 ///
-/// Enumerates access points from all Wi-Fi devices and returns a deduplicated
-/// list of networks. Networks are keyed by (SSID, frequency) to distinguish
-/// 2.4GHz and 5GHz bands of the same network.
+/// When `interface` is `Some`, only APs from that wireless device are returned.
+/// When `None`, APs from all wireless devices are returned.
 ///
-/// When multiple access points share the same SSID and frequency (e.g., mesh
-/// networks), the one with the strongest signal is returned.
-///
-/// For the access point that matches the device's active connection, the result
-/// includes the interface name and assigned IPv4/IPv6 addresses (CIDR), consistent
-/// with `current_network`.
-pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
-    let mut networks: HashMap<(String, u32), Network> = HashMap::new();
+/// The returned list is ordered per-device then NM's native order (no explicit
+/// strength sort — consumers can sort as needed).
+pub(crate) async fn list_access_points(
+    conn: &Connection,
+    interface: Option<&str>,
+) -> Result<Vec<AccessPoint>> {
+    let nm = NMProxy::new(conn).await?;
+    let devices = nm.get_devices().await?;
 
-    let all_networks = for_each_access_point(conn, |_dev, active_ap, ap_path, ap, on_device| {
-        let is_this_ap = active_ap.as_str() != "/" && active_ap == &ap_path;
-        Box::pin(async move {
+    let mut results = Vec::new();
+
+    for dp in devices {
+        let dev = NMDeviceProxy::builder(conn)
+            .path(dp.clone())?
+            .build()
+            .await?;
+
+        if dev.device_type().await? != device_type::WIFI {
+            continue;
+        }
+
+        let iface = dev.interface().await.unwrap_or_default();
+
+        if let Some(target) = interface
+            && iface != target
+        {
+            continue;
+        }
+
+        let raw_state = dev.state().await?;
+        let device_state: DeviceState = raw_state.into();
+
+        let wifi = NMWirelessProxy::builder(conn)
+            .path(dp.clone())?
+            .build()
+            .await?;
+
+        let active_ap = wifi.active_access_point().await?;
+        let is_active_ap = |path: &zvariant::OwnedObjectPath| -> bool {
+            active_ap.as_str() != "/" && &active_ap == path
+        };
+
+        for ap_path in wifi.access_points().await? {
+            let ap = NMAccessPointProxy::builder(conn)
+                .path(ap_path.clone())?
+                .build()
+                .await?;
+
             let ssid_bytes = ap.ssid().await?;
             let ssid = decode_ssid_or_hidden(&ssid_bytes);
-            let strength = ap.strength().await?;
             let bssid = ap.hw_address().await?;
             let flags = ap.flags().await?;
             let wpa = ap.wpa_flags().await?;
             let rsn = ap.rsn_flags().await?;
-            let frequency = ap.frequency().await?;
-
-            let secured = (flags & security_flags::WEP) != 0 || wpa != 0 || rsn != 0;
-            let is_psk = (wpa & security_flags::PSK) != 0 || (rsn & security_flags::PSK) != 0;
-            let is_eap = (wpa & security_flags::EAP) != 0 || (rsn & security_flags::EAP) != 0;
-            let is_hotspot = ap.mode().await.unwrap_or(0) == wifi_mode::AP;
-
-            let (device, ip4_address, ip6_address) = if is_this_ap {
-                on_device
+            let frequency_mhz = ap.frequency().await?;
+            let max_bitrate_kbps = ap.max_bitrate().await.unwrap_or(0);
+            let strength = ap.strength().await?;
+            let mode_raw = ap.mode().await.unwrap_or(0);
+            let last_seen_raw = ap.last_seen().await.unwrap_or(-1);
+            let last_seen_secs = if last_seen_raw < 0 {
+                None
             } else {
-                (String::new(), None, None)
+                Some(i64::from(last_seen_raw))
             };
 
-            let network = Network {
-                device,
+            results.push(AccessPoint {
+                path: ap_path.clone(),
+                device_path: dp.clone(),
+                interface: iface.clone(),
                 ssid: ssid.to_string(),
-                bssid: Some(bssid),
-                strength: Some(strength),
-                frequency: Some(frequency),
-                secured,
-                is_psk,
-                is_eap,
-                is_hotspot,
-                ip4_address,
-                ip6_address,
-            };
-
-            Ok(Some((ssid, frequency, network)))
-        })
-    })
-    .await?;
-
-    // Deduplicate: use (SSID, frequency) as key, keep strongest signal
-    for (ssid, frequency, new_net) in all_networks {
-        networks
-            .entry((ssid.to_string(), frequency))
-            .and_modify(|n| n.merge_ap(&new_net))
-            .or_insert(new_net);
+                ssid_bytes: ssid_bytes.clone(),
+                bssid,
+                frequency_mhz,
+                max_bitrate_kbps,
+                strength,
+                mode: ApMode::from(mode_raw),
+                security: decode_security(flags, wpa, rsn),
+                last_seen_secs,
+                is_active: is_active_ap(&ap_path),
+                device_state: device_state.clone(),
+            });
+        }
     }
 
-    Ok(networks.into_values().collect())
+    Ok(results)
+}
+
+/// Lists all visible Wi-Fi networks.
+///
+/// Enumerates access points from all Wi-Fi devices and returns a deduplicated
+/// list of networks. Networks are keyed by (SSID, device interface) and groups
+/// APs by SSID, picking the strongest signal as the representative.
+///
+/// Each returned [`Network`] carries the `best_bssid`, `bssids` list, and
+/// `security_features` from the underlying access points.
+pub(crate) async fn list_networks(conn: &Connection) -> Result<Vec<Network>> {
+    let aps = list_access_points(conn, None).await?;
+
+    let mut groups: HashMap<(String, String), Network> = HashMap::new();
+
+    for ap in &aps {
+        let key = (ap.interface.clone(), ap.ssid.clone());
+        let sec_flags = ap.security;
+        let secured = !sec_flags.is_open();
+        let is_psk = sec_flags.psk;
+        let is_eap = sec_flags.eap || sec_flags.eap_suite_b_192;
+        let is_hotspot = ap.mode == ApMode::Ap;
+
+        let (ip4_address, ip6_address) = if ap.is_active {
+            active_ip_addresses(conn, &ap.device_path).await
+        } else {
+            (None, None)
+        };
+
+        let net = Network {
+            device: if ap.is_active {
+                ap.interface.clone()
+            } else {
+                String::new()
+            },
+            ssid: ap.ssid.clone(),
+            bssid: Some(ap.bssid.clone()),
+            strength: Some(ap.strength),
+            frequency: Some(ap.frequency_mhz),
+            secured,
+            is_psk,
+            is_eap,
+            is_hotspot,
+            ip4_address,
+            ip6_address,
+            best_bssid: ap.bssid.clone(),
+            bssids: vec![ap.bssid.clone()],
+            is_active: ap.is_active,
+            known: false,
+            security_features: sec_flags,
+        };
+
+        groups
+            .entry(key)
+            .and_modify(|n| n.merge_ap(&net))
+            .or_insert(net);
+    }
+
+    // Populate `known` by checking saved connections
+    for net in groups.values_mut() {
+        net.known = has_saved_connection(conn, &net.ssid).await.unwrap_or(false);
+        if net.device.is_empty()
+            && net.is_active
+            && let Some(ap) = aps.iter().find(|a| a.ssid == net.ssid && a.is_active)
+        {
+            net.device.clone_from(&ap.interface);
+        }
+    }
+
+    Ok(groups.into_values().collect())
+}
+
+/// Helper to get IP addresses from the active connection on a device.
+async fn active_ip_addresses(
+    conn: &Connection,
+    device_path: &zvariant::OwnedObjectPath,
+) -> (Option<String>, Option<String>) {
+    let builder = match NMDeviceProxy::builder(conn).path(device_path.clone()) {
+        Ok(b) => b,
+        Err(_) => return (None, None),
+    };
+    let dev = match builder.build().await {
+        Ok(d) => d,
+        Err(_) => return (None, None),
+    };
+
+    match dev.active_connection().await {
+        Ok(ac) if ac.as_str() != "/" => get_ip_addresses_from_active_connection(conn, &ac).await,
+        _ => (None, None),
+    }
 }
 
 /// Returns the full Network object for the currently connected WiFi network.
@@ -203,10 +318,12 @@ pub(crate) async fn current_network(conn: &Connection) -> Result<Option<Network>
             (None, None)
         };
 
+        let sec_features = decode_security(flags, wpa, rsn);
+
         return Ok(Some(Network {
             device: interface,
             ssid: ssid.to_string(),
-            bssid: Some(bssid),
+            bssid: Some(bssid.clone()),
             strength: Some(strength),
             frequency: Some(frequency),
             secured,
@@ -215,6 +332,11 @@ pub(crate) async fn current_network(conn: &Connection) -> Result<Option<Network>
             is_hotspot,
             ip4_address,
             ip6_address,
+            best_bssid: bssid.clone(),
+            bssids: vec![bssid],
+            is_active: true,
+            known: true,
+            security_features: sec_features,
         }));
     }
 
