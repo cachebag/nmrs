@@ -62,7 +62,38 @@ pub trait NM {
     #[zbus(signal, name = "DeviceRemoved")]
     fn device_removed(&self, device: OwnedObjectPath);
 
+    /// Whether WWAN (mobile broadband) is globally enabled.
+    #[zbus(property)]
+    fn wwan_enabled(&self) -> zbus::Result<bool>;
+
+    /// Enable or disable WWAN globally.
+    #[zbus(property)]
+    fn set_wwan_enabled(&self, value: bool) -> zbus::Result<()>;
+
+    /// Whether WWAN hardware is enabled (rfkill state).
+    #[zbus(property)]
+    fn wwan_hardware_enabled(&self) -> zbus::Result<bool>;
+
     /// Signal emitted when any device changes state.
     #[zbus(signal, name = "StateChanged")]
     fn state_changed(&self, state: u32);
+
+    /// Current connectivity state (`0`–`4`).
+    #[zbus(property)]
+    fn connectivity(&self) -> zbus::Result<u32>;
+
+    /// Whether NM is allowed to probe for connectivity.
+    #[zbus(property)]
+    fn connectivity_check_enabled(&self) -> zbus::Result<bool>;
+
+    /// URL NM probes when checking connectivity.
+    #[zbus(property)]
+    fn connectivity_check_uri(&self) -> zbus::Result<String>;
+
+    /// Primary active connection path (`/` when none).
+    #[zbus(property)]
+    fn primary_connection(&self) -> zbus::Result<OwnedObjectPath>;
+
+    /// Forces a fresh connectivity check; blocks until done.
+    fn check_connectivity(&self) -> zbus::Result<u32>;
 }

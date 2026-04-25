@@ -48,7 +48,7 @@ async fn main() -> nmrs::Result<()> {
 
     println!("Connecting to enterprise network '{}'...", ssid);
 
-    match nm.connect(&ssid, WifiSecurity::WpaEap { opts: eap }).await {
+    match nm.connect(&ssid, None, WifiSecurity::WpaEap { opts: eap }).await {
         Ok(_) => {
             println!("Connected!");
 

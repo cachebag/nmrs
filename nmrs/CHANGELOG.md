@@ -3,21 +3,40 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+
+## [3.0.0] - 2026-04-24
 ### Added
-- `nmrs::agent` module: NetworkManager secret agent for credential prompting over D-Bus (`SecretAgent`, `SecretAgentBuilder`, `SecretAgentHandle`, `SecretRequest`, `SecretResponder`, `SecretSetting`, `SecretAgentFlags`, `SecretAgentCapabilities`, `CancelReason`, `SecretStoreEvent`)
-- `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
+- `ConnectionError::IncompleteBuilder` for builders missing required fields ([#350](https://github.com/cachebag/nmrs/issues/350))
+- `nmrs::agent` module: NetworkManager secret agent for credential prompting over D-Bus (`SecretAgent`, `SecretAgentBuilder`, `SecretAgentHandle`, `SecretRequest`, `SecretResponder`, `SecretSetting`, `SecretAgentFlags`, `SecretAgentCapabilities`, `CancelReason`, `SecretStoreEvent`) ([#370](https://github.com/cachebag/nmrs/pull/370))
+- `AccessPoint` model preserving per-AP BSSID, frequency, security flags, and device state; `list_access_points(interface)` for full AP enumeration ([#373](https://github.com/cachebag/nmrs/pull/373))
+- Airplane-mode surface: `RadioState`, `AirplaneModeState`, `wifi_state()`, `wwan_state()`, `bluetooth_radio_state()`, `airplane_mode_state()`, `set_wireless_enabled()`, `set_wwan_enabled()`, `set_bluetooth_radio_enabled()`, `set_airplane_mode()` ([#372](https://github.com/cachebag/nmrs/pull/372))
+- Kernel rfkill awareness: hardware kill switch state via `/sys/class/rfkill` ([#372](https://github.com/cachebag/nmrs/pull/372))
+- `HardwareRadioKilled` and `BluezUnavailable` error variants ([#372](https://github.com/cachebag/nmrs/pull/372))
+- Per-Wi-Fi-device scoping: `WifiDevice` model, `list_wifi_devices()`, `wifi_device_by_interface()`, `WifiScope` builder via `nm.wifi("wlan1")`, `set_wifi_enabled(interface, bool)` for per-radio enable/disable ([#375](https://github.com/cachebag/nmrs/pull/375))
+- `WifiInterfaceNotFound` and `NotAWifiDevice` error variants ([#375](https://github.com/cachebag/nmrs/pull/375))
+- Saved profile enumeration: `SavedConnection`, `SavedConnectionBrief`, `SettingsSummary`, `SettingsPatch`, `WifiSecuritySummary`, `WifiKeyMgmt`, `VpnSecretFlags`; `list_saved_connections()`, `list_saved_connections_brief()`, `list_saved_connection_ids()`, `get_saved_connection()`, `get_saved_connection_raw()`, `delete_saved_connection()`, `update_saved_connection()`, `reload_saved_connections()`; D-Bus proxies `NMSettingsProxy` / `NMSettingsConnectionProxy`; example `saved_list` ([#376](https://github.com/cachebag/nmrs/pull/376))
+- Connectivity state surface: `ConnectivityState`, `ConnectivityReport`, `connectivity()`, `check_connectivity()`, `connectivity_report()`, `captive_portal_url()`; `ConnectivityCheckDisabled` error variant ([#377](https://github.com/cachebag/nmrs/pull/377))
+- Generic VPN support: `VpnType` now carries protocol-specific metadata for OpenVPN, OpenConnect, strongSwan, PPTP, L2TP, and a `Generic` catch-all; `VpnKind` (Plugin vs WireGuard); `VpnConnection` enriched with `uuid`, `active`, `user_name`, `password_flags`, `service_type`; `connect_vpn_by_uuid()`, `connect_vpn_by_id()`, `disconnect_vpn_by_uuid()`, `active_vpn_connections()` ([#378](https://github.com/cachebag/nmrs/pull/378))
 
 ### Changed
+- `VpnCredentialsBuilder::build()` and `EapOptionsBuilder::build()` return `Result` (no panics on missing fields); `VpnCredentialsBuilder` may return `ConnectionError::InvalidPeers` when no peers are set ([#350](https://github.com/cachebag/nmrs/issues/350))
+- `VpnType` is now a data-carrying enum; the old tag enum is renamed to `VpnKind`. `VpnConfig::vpn_type()` renamed to `vpn_kind()`. `VpnConnectionInfo.vpn_type` renamed to `vpn_kind`. ([#378](https://github.com/cachebag/nmrs/pull/378))
+- `list_saved_connections()` now returns `Vec<SavedConnection>` (full decode + summaries). Use `list_saved_connection_ids()` for the previous `Vec<String>` behavior (connection `id` names only). ([#376](https://github.com/cachebag/nmrs/pull/376))
+- `connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`. ([#375](https://github.com/cachebag/nmrs/pull/375))
+- `set_wifi_enabled` now requires an `interface: &str` argument and toggles only that radio (via `Device.Autoconnect` + `Device.Disconnect()`). For the global wireless killswitch use `set_wireless_enabled(bool)`. ([#375](https://github.com/cachebag/nmrs/pull/375))
+- `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
 - Introduce `VpnConfig` trait and refactor `connect_vpn` signature ([#303](https://github.com/cachebag/nmrs/pull/303))
 - OpenVPN connection settings model expansion ([#309](https://github.com/cachebag/nmrs/pull/309))
 - Multi-VPN plumbing: `detect_vpn_type()`, `VpnType::OpenVpn`, and shared detection across connect, disconnect, and list VPN flows ([#311](https://github.com/cachebag/nmrs/pull/311))
-- `.ovpn` profile lexer and parser for translating OpenVPN configs toward NetworkManager ([#314](https://github.com/cachebag/nmrs/pull/314))
+- `.ovpn` profile lexer/parser and auth-user-pass inference for translating OpenVPN configs toward NetworkManager ([#314](https://github.com/cachebag/nmrs/pull/314), [#340](https://github.com/cachebag/nmrs/pull/340))
 - Unit tests and parser refactors for `.ovpn` parsing ([#316](https://github.com/cachebag/nmrs/pull/316))
-- OpenVPN builder: compression, proxy, and `build_openvpn_connection()` ([#315](https://github.com/cachebag/nmrs/pull/315))
+- OpenVPN builder, validation, compression, proxy, routing, resilience, TLS hardening, import, cert-store, and `VpnDetails` support ([#315](https://github.com/cachebag/nmrs/pull/315), [#323](https://github.com/cachebag/nmrs/pull/323), [#326](https://github.com/cachebag/nmrs/pull/326), [#345](https://github.com/cachebag/nmrs/pull/345), [#346](https://github.com/cachebag/nmrs/pull/346), [#347](https://github.com/cachebag/nmrs/pull/347), [#348](https://github.com/cachebag/nmrs/pull/348), [#349](https://github.com/cachebag/nmrs/pull/349))
 - `VpnConfiguration` to dispatch WireGuard vs OpenVPN; `connect_vpn` wired to the OpenVPN builder ([#322](https://github.com/cachebag/nmrs/pull/322))
 - Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
 
 ### Fixed
+- Wi-Fi `ensure_disconnected` no longer deactivates every active connection (VPN, wired, other radios); only the target Wi-Fi device is torn down. VPN disconnect, Wi-Fi/Bluetooth `Device::Disconnect` D-Bus failures propagate instead of being swallowed ([#351](https://github.com/cachebag/nmrs/issues/351))
+- OpenVPN settings decoding now uses D-Bus `Dict` values for `vpn.data` / `vpn.secrets` and extracts gateways from `vpn.data` correctly ([#337](https://github.com/cachebag/nmrs/pull/337), [#344](https://github.com/cachebag/nmrs/pull/344))
 - Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
 - `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
 
@@ -212,7 +231,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [2.2.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.2.0
 [2.3.0]: https://github.com/cachebag/nmrs/compare/nmrs-v2.2.0...nmrs-v2.3.0
 [2.4.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.4.0
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v2.4.0...HEAD
+[3.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v3.0.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v3.0.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0

@@ -36,6 +36,7 @@ use crate::api::models::{ConnectionError, ConnectionOptions, WireGuardPeer};
 ///     .build()
 ///     .expect("Failed to build WireGuard connection");
 /// ```
+#[non_exhaustive]
 pub struct WireGuardBuilder {
     inner: ConnectionBuilder,
     name: String,
@@ -185,6 +186,7 @@ impl WireGuardBuilder {
     /// - `ConnectionError::InvalidAddress` if address is missing or invalid
     /// - `ConnectionError::InvalidPeers` if no peers are configured or peer validation fails
     /// - `ConnectionError::InvalidGateway` if any peer gateway is invalid
+    #[must_use = "the connection settings must be passed to NetworkManager"]
     pub fn build(
         mut self,
     ) -> Result<HashMap<&'static str, HashMap<&'static str, Value<'static>>>, ConnectionError> {

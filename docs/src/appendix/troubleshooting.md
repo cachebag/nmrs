@@ -33,8 +33,8 @@ busctl list | grep NetworkManager
 
 **Solutions:**
 - Verify the SSID is spelled correctly (case-sensitive)
-- Trigger a scan first: `nm.scan_networks().await?`
-- Check if Wi-Fi is enabled: `nm.wifi_enabled().await?`
+- Trigger a scan first: `nm.scan_networks(None).await?`
+- Check if Wi-Fi is enabled: `nm.wifi_state().await?` returns a `RadioState` with `.enabled` and `.hardware_enabled` fields
 - Check if the network is in range
 - For hidden networks, the network won't appear in scans but should still connect
 

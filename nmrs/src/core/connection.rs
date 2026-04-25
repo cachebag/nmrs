@@ -15,7 +15,7 @@ use crate::monitoring::transport::ActiveTransport;
 use crate::monitoring::wifi::Wifi;
 use crate::types::constants::{device_state, device_type, timeouts};
 use crate::util::utils::{decode_ssid_or_empty, nm_proxy};
-use crate::util::validation::{validate_ssid, validate_wifi_security};
+use crate::util::validation::{validate_bssid, validate_ssid, validate_wifi_security};
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
 enum SavedDecision {
@@ -40,6 +40,7 @@ pub(crate) async fn connect(
     conn: &Connection,
     ssid: &str,
     creds: WifiSecurity,
+    interface: Option<&str>,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     // Validate inputs before attempting connection
@@ -47,8 +48,9 @@ pub(crate) async fn connect(
     validate_wifi_security(&creds)?;
 
     debug!(
-        "Connecting to '{}' | secured={} is_psk={} is_eap={}",
+        "Connecting to '{}' on {:?} | secured={} is_psk={} is_eap={}",
         ssid,
+        interface,
         creds.secured(),
         creds.is_psk(),
         creds.is_eap()
@@ -59,8 +61,8 @@ pub(crate) async fn connect(
     let saved_raw = get_saved_connection_path(conn, ssid).await?;
     let decision = decide_saved_connection(saved_raw, &creds)?;
 
-    let wifi_device = find_wifi_device(conn, &nm).await?;
-    debug!("Found WiFi device: {}", wifi_device.as_str());
+    let wifi_device = resolve_wifi_device(conn, &nm, interface).await?;
+    debug!("Resolved WiFi device: {}", wifi_device.as_str());
 
     let wifi = NMWirelessProxy::builder(conn)
         .path(wifi_device.clone())?
@@ -81,7 +83,7 @@ pub(crate) async fn connect(
 
     match decision {
         SavedDecision::UseSaved(saved) => {
-            ensure_disconnected(conn, &nm, &wifi_device, timeout_config).await?;
+            ensure_disconnected(conn, &wifi_device, timeout_config).await?;
             connect_via_saved(
                 conn,
                 &nm,
@@ -445,13 +447,8 @@ pub(crate) async fn disconnect_wifi_and_wait(
     .await?;
 
     debug!("Sending disconnect request");
-    match raw.call_method("Disconnect", &()).await {
-        Ok(_) => debug!("Disconnect method called successfully"),
-        Err(e) => warn!(
-            "Disconnect method call failed (device may already be disconnected): {}",
-            e
-        ),
-    }
+    raw.call_method("Disconnect", &()).await?;
+    debug!("Disconnect method called successfully");
 
     // Wait for disconnect using signal-based monitoring
     let timeout = timeout_config.map(|c| c.disconnect_timeout);
@@ -503,6 +500,45 @@ async fn find_wifi_device(conn: &Connection, nm: &NMProxy<'_>) -> Result<OwnedOb
     find_device_by_type(conn, nm, device_type::WIFI).await
 }
 
+/// Resolves a Wi-Fi device path from an optional interface name.
+///
+/// `None` returns the first Wi-Fi device NM reports (back-compat behavior).
+/// `Some(name)` looks up the device by interface and verifies it is Wi-Fi:
+/// returns [`WifiInterfaceNotFound`] or [`NotAWifiDevice`] if not.
+///
+/// [`WifiInterfaceNotFound`]: ConnectionError::WifiInterfaceNotFound
+/// [`NotAWifiDevice`]: ConnectionError::NotAWifiDevice
+pub(crate) async fn resolve_wifi_device(
+    conn: &Connection,
+    nm: &NMProxy<'_>,
+    interface: Option<&str>,
+) -> Result<OwnedObjectPath> {
+    match interface {
+        None => find_wifi_device(conn, nm).await,
+        Some(name) => {
+            let path = match get_device_by_interface(conn, name).await {
+                Ok(p) => p,
+                Err(ConnectionError::NotFound) => {
+                    return Err(ConnectionError::WifiInterfaceNotFound {
+                        interface: name.to_string(),
+                    });
+                }
+                Err(e) => return Err(e),
+            };
+            let dev = NMDeviceProxy::builder(conn)
+                .path(path.clone())?
+                .build()
+                .await?;
+            if dev.device_type().await? != device_type::WIFI {
+                return Err(ConnectionError::NotAWifiDevice {
+                    interface: name.to_string(),
+                });
+            }
+            Ok(path)
+        }
+    }
+}
+
 /// Finds an access point by SSID.
 ///
 /// Searches through all visible access points on the wireless device
@@ -532,32 +568,133 @@ async fn find_ap(
     Err(ConnectionError::NotFound)
 }
 
-/// Ensures the Wi-Fi device is disconnected before attempting a new connection.
+/// Finds an access point matching both SSID and BSSID.
+async fn find_ap_by_bssid(
+    conn: &Connection,
+    wifi: &NMWirelessProxy<'_>,
+    target_ssid: &str,
+    target_bssid: &str,
+) -> Result<OwnedObjectPath> {
+    let access_points = wifi.access_points().await?;
+
+    for ap_path in access_points {
+        let ap = NMAccessPointProxy::builder(conn)
+            .path(ap_path.clone())?
+            .build()
+            .await?;
+
+        let ssid_bytes = ap.ssid().await?;
+        let ssid = decode_ssid_or_empty(&ssid_bytes);
+
+        if ssid != target_ssid {
+            continue;
+        }
+
+        let bssid = ap.hw_address().await?;
+        if bssid.eq_ignore_ascii_case(target_bssid) {
+            return Ok(ap_path);
+        }
+    }
+
+    Err(ConnectionError::ApBssidNotFound {
+        ssid: target_ssid.to_string(),
+        bssid: target_bssid.to_string(),
+    })
+}
+
+/// Connects to a specific access point identified by SSID and optionally BSSID.
 ///
-/// If currently connected to any network, deactivates all active connections
-/// and waits for the device to reach disconnected state.
+/// If `bssid` is `Some`, the connection targets that specific AP.
+/// If `None`, falls through to the existing best-match behavior.
+pub(crate) async fn connect_to_bssid(
+    conn: &Connection,
+    ssid: &str,
+    bssid: Option<&str>,
+    creds: WifiSecurity,
+    interface: Option<&str>,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
+    if let Some(b) = bssid {
+        validate_bssid(b)?;
+    }
+
+    match bssid {
+        None => connect(conn, ssid, creds, interface, timeout_config).await,
+        Some(target_bssid) => {
+            validate_ssid(ssid)?;
+            validate_wifi_security(&creds)?;
+
+            debug!(
+                "Connecting to '{}' BSSID={} on {:?} | secured={} is_psk={} is_eap={}",
+                ssid,
+                target_bssid,
+                interface,
+                creds.secured(),
+                creds.is_psk(),
+                creds.is_eap()
+            );
+
+            let nm = NMProxy::new(conn).await?;
+            let saved_raw = get_saved_connection_path(conn, ssid).await?;
+            let decision = decide_saved_connection(saved_raw, &creds)?;
+            let wifi_device = resolve_wifi_device(conn, &nm, interface).await?;
+            let wifi = NMWirelessProxy::builder(conn)
+                .path(wifi_device.clone())?
+                .build()
+                .await?;
+
+            match wifi.request_scan(HashMap::new()).await {
+                Ok(_) => debug!("Scan requested successfully"),
+                Err(e) => warn!("Scan request failed: {e}"),
+            }
+            futures_timer::Delay::new(timeouts::scan_wait()).await;
+
+            let specific_object = find_ap_by_bssid(conn, &wifi, ssid, target_bssid).await?;
+
+            match decision {
+                SavedDecision::UseSaved(saved) => {
+                    ensure_disconnected(conn, &wifi_device, timeout_config).await?;
+                    connect_via_saved(
+                        conn,
+                        &nm,
+                        &wifi_device,
+                        &specific_object,
+                        &creds,
+                        saved,
+                        timeout_config,
+                    )
+                    .await?;
+                }
+                SavedDecision::RebuildFresh => {
+                    build_and_activate_new(
+                        conn,
+                        &nm,
+                        &wifi_device,
+                        &specific_object,
+                        ssid,
+                        creds,
+                        timeout_config,
+                    )
+                    .await?;
+                }
+            }
+
+            info!("Successfully connected to '{ssid}' (BSSID: {target_bssid})");
+            Ok(())
+        }
+    }
+}
+
+/// Ensures the target Wi-Fi device is torn down before attempting a new connection.
+///
+/// Only the given `wifi_device` is affected. Other interfaces (e.g. VPN, wired,
+/// a second Wi-Fi radio) are not deactivated.
 async fn ensure_disconnected(
     conn: &Connection,
-    nm: &NMProxy<'_>,
     wifi_device: &OwnedObjectPath,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
-    if let Some(active) = Wifi::current(conn).await {
-        debug!("Disconnecting from {active}");
-
-        if let Ok(conns) = nm.active_connections().await {
-            for conn_path in conns {
-                match nm.deactivate_connection(conn_path.clone()).await {
-                    Ok(_) => debug!("Connection deactivated during cleanup"),
-                    Err(e) => warn!("Failed to deactivate connection during cleanup: {}", e),
-                }
-            }
-        }
-
-        disconnect_wifi_and_wait(conn, wifi_device, timeout_config).await?;
-    }
-
-    Ok(())
+    disconnect_wifi_and_wait(conn, wifi_device, timeout_config).await
 }
 
 /// Attempts to connect using a saved connection profile.
@@ -691,7 +828,7 @@ async fn build_and_activate_new(
 
     debug!("Creating new connection, settings: \n{settings:#?}");
 
-    ensure_disconnected(conn, nm, wifi_device, timeout_config).await?;
+    ensure_disconnected(conn, wifi_device, timeout_config).await?;
 
     let (_, active_conn) = match nm
         .add_and_activate_connection(settings, wifi_device.clone(), ap.clone())
@@ -799,11 +936,12 @@ pub(crate) async fn is_connected(conn: &Connection, ssid: &str) -> Result<bool> 
 /// Returns `Ok(())` if disconnected successfully or if no active connection exists.
 pub(crate) async fn disconnect(
     conn: &Connection,
+    interface: Option<&str>,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     let nm = NMProxy::new(conn).await?;
 
-    let wifi_device = match find_wifi_device(conn, &nm).await {
+    let wifi_device = match resolve_wifi_device(conn, &nm, interface).await {
         Ok(dev) => dev,
         Err(ConnectionError::NoWifiDevice) => {
             debug!("No WiFi device found");
@@ -825,6 +963,24 @@ pub(crate) async fn disconnect(
 
     if let Ok(conns) = nm.active_connections().await {
         for conn_path in conns {
+            let active = match crate::dbus::NMActiveConnectionProxy::builder(conn)
+                .path(conn_path.clone())?
+                .build()
+                .await
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!("Failed to build active connection proxy: {}", e);
+                    continue;
+                }
+            };
+            let owns_device = match active.devices().await {
+                Ok(devs) => devs.iter().any(|d| d == &wifi_device),
+                Err(_) => false,
+            };
+            if !owns_device {
+                continue;
+            }
             match nm.deactivate_connection(conn_path.clone()).await {
                 Ok(_) => debug!("Connection deactivated"),
                 Err(e) => warn!("Failed to deactivate connection: {}", e),

@@ -12,7 +12,7 @@ use nmrs::NetworkManager;
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     println!("{} networks found", networks.len());
     Ok(())
 }
@@ -49,7 +49,7 @@ use nmrs::NetworkManager;
 #[async_std::main]
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     println!("{} networks found", networks.len());
     Ok(())
 }
@@ -69,7 +69,7 @@ use nmrs::NetworkManager;
 fn main() -> nmrs::Result<()> {
     smol::block_on(async {
         let nm = NetworkManager::new().await?;
-        let networks = nm.list_networks().await?;
+        let networks = nm.list_networks(None).await?;
         println!("{} networks found", networks.len());
         Ok(())
     })
@@ -93,7 +93,7 @@ use nmrs::NetworkManager;
 glib::MainContext::default().spawn_local(async {
     let nm = NetworkManager::new().await.unwrap();
 
-    let networks = nm.list_networks().await.unwrap();
+    let networks = nm.list_networks(None).await.unwrap();
     for net in &networks {
         println!("{}: {}%", net.ssid, net.strength.unwrap_or(0));
     }

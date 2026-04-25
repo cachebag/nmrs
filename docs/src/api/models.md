@@ -82,6 +82,40 @@ pub struct Network {
 }
 ```
 
+### AccessPoint
+
+A single AP with per-BSSID details.
+
+```rust
+pub struct AccessPoint {
+    pub ssid: String,
+    pub bssid: String,
+    pub strength: u8,
+    pub frequency_mhz: u32,
+    pub device: String,
+    // ... security flags and device state
+}
+```
+
+### WifiDevice
+
+A Wi-Fi device discovered by `list_wifi_devices()`.
+
+```rust
+pub struct WifiDevice {
+    pub interface: String,
+    pub mac: String,
+    pub state: DeviceState,
+    pub active_ssid: Option<String>,
+}
+```
+
+### WifiScope
+
+Per-interface operations scope returned by `nm.wifi("wlan1")`.
+
+Methods: `interface()`, `scan()`, `list_networks()`, `list_access_points()`, `connect(ssid, creds)`, `connect_to_bssid(ssid, bssid, creds)`, `disconnect()`, `set_enabled(bool)`, `forget(ssid)`
+
 ### NetworkInfo
 
 Detailed network information from `show_details()`.
@@ -141,13 +175,29 @@ pub enum EapMethod { Peap, Ttls }
 pub enum Phase2 { Mschapv2, Pap }
 ```
 
-## VPN Models
+## Radio / Airplane-Mode Models
 
-### VpnCredentials
+### RadioState
 
 ```rust
-pub struct VpnCredentials {
-    pub vpn_type: VpnType,
+pub struct RadioState {
+    pub enabled: bool,           // software toggle
+    pub hardware_enabled: bool,  // rfkill state
+}
+```
+
+### AirplaneModeState
+
+Aggregated state across Wi-Fi, WWAN, and Bluetooth radios. Methods: `is_airplane_mode()`.
+
+## VPN Models
+
+### WireGuardConfig
+
+WireGuard VPN configuration (replaces the deprecated `VpnCredentials`).
+
+```rust
+pub struct WireGuardConfig {
     pub name: String,
     pub gateway: String,
     pub private_key: String,
@@ -159,7 +209,67 @@ pub struct VpnCredentials {
 }
 ```
 
-Constructors: `new(...)`, `builder()`
+Constructor: `new(name, gateway, private_key, address, peers)`
+Builder methods: `.with_dns(vec)`, `.with_mtu(u32)`, `.with_uuid(uuid)`
+
+### OpenVpnConfig
+
+OpenVPN configuration.
+
+```rust
+pub struct OpenVpnConfig {
+    pub name: String,
+    pub remote: String,
+    pub port: u16,
+    pub tcp: bool,
+    pub auth_type: Option<OpenVpnAuthType>,
+    pub ca_cert: Option<String>,
+    pub client_cert: Option<String>,
+    pub client_key: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub compression: Option<OpenVpnCompression>,
+    pub proxy: Option<OpenVpnProxy>,
+    // ... many more TLS and routing fields
+}
+```
+
+Constructor: `new(name, remote, port, tcp)`
+Builder methods: `.with_auth_type()`, `.with_username()`, `.with_password()`, `.with_ca_cert()`, `.with_client_cert()`, `.with_client_key()`, `.with_dns()`, `.with_mtu()`, `.with_compression()`, `.with_proxy()`, `.with_tls_auth()`, `.with_tls_crypt()`, `.with_redirect_gateway()`, `.with_routes()`, and many more.
+
+### OpenVpnAuthType
+
+```rust
+pub enum OpenVpnAuthType { Password, Tls, PasswordTls, StaticKey }
+```
+
+### OpenVpnCompression
+
+```rust
+pub enum OpenVpnCompression { No, Lzo, Lz4, Lz4V2, Yes }
+```
+
+### OpenVpnProxy
+
+```rust
+pub enum OpenVpnProxy {
+    Http { server, port, username, password, retry },
+    Socks { server, port, retry },
+}
+```
+
+### VpnRoute
+
+```rust
+pub struct VpnRoute {
+    pub dest: String,
+    pub prefix: u32,
+    pub next_hop: Option<String>,
+    pub metric: Option<u32>,
+}
+```
+
+Constructor: `new(dest, prefix)`. Builder methods: `.next_hop(gw)`, `.metric(m)`.
 
 ### WireGuardPeer
 
@@ -173,25 +283,107 @@ pub struct WireGuardPeer {
 }
 ```
 
-### VpnConnection / VpnConnectionInfo
+### VpnType
+
+Protocol-specific metadata decoded from NM settings (data-carrying enum):
+
+```rust
+pub enum VpnType {
+    WireGuard { private_key, peer_public_key, endpoint, allowed_ips, ... },
+    OpenVpn { remote, connection_type, user_name, ca, cert, key, ... },
+    OpenConnect { gateway, user_name, protocol, ... },
+    StrongSwan { address, method, user_name, ... },
+    Pptp { gateway, user_name, ... },
+    L2tp { gateway, user_name, ipsec_enabled, ... },
+    Generic { service_type, data, secrets, ... },
+}
+```
+
+### VpnKind
+
+```rust
+pub enum VpnKind { Plugin, WireGuard }
+```
+
+### VpnConnection
+
+A saved or active VPN connection with rich metadata.
 
 ```rust
 pub struct VpnConnection {
+    pub uuid: String,
+    pub id: String,
     pub name: String,
     pub vpn_type: VpnType,
     pub state: DeviceState,
     pub interface: Option<String>,
+    pub active: bool,
+    pub user_name: Option<String>,
+    pub password_flags: VpnSecretFlags,
+    pub service_type: String,
+    pub kind: VpnKind,
 }
+```
 
+### VpnConnectionInfo
+
+Detailed active VPN information.
+
+```rust
 pub struct VpnConnectionInfo {
     pub name: String,
-    pub vpn_type: VpnType,
+    pub vpn_kind: VpnKind,
     pub state: DeviceState,
     pub interface: Option<String>,
     pub gateway: Option<String>,
     pub ip4_address: Option<String>,
     pub ip6_address: Option<String>,
     pub dns_servers: Vec<String>,
+    pub details: Option<VpnDetails>,
+}
+```
+
+### VpnDetails
+
+```rust
+pub enum VpnDetails {
+    WireGuard { public_key, endpoint },
+    OpenVpn { remote, port, protocol, cipher, auth, compression },
+}
+```
+
+## Saved Connection Models
+
+### SavedConnection
+
+Full decoded saved profile from `list_saved_connections()`.
+
+Fields: `uuid`, `id`, `connection_type`, `interface_name`, `autoconnect`, `timestamp`, `settings`.
+
+### SavedConnectionBrief
+
+Lightweight: `uuid`, `id`, `connection_type`.
+
+### SettingsPatch
+
+Partial update for `update_saved_connection`.
+
+## Connectivity Models
+
+### ConnectivityState
+
+```rust
+pub enum ConnectivityState { Unknown, None, Portal, Limited, Full }
+```
+
+### ConnectivityReport
+
+```rust
+pub struct ConnectivityReport {
+    pub state: ConnectivityState,
+    pub check_enabled: bool,
+    pub check_uri: Option<String>,
+    pub captive_portal_url: Option<String>,
 }
 ```
 

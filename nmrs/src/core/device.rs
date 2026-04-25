@@ -208,7 +208,7 @@ pub(crate) async fn list_bluetooth_devices(conn: &Connection) -> Result<Vec<Blue
         let raw_state = d_proxy.state().await?;
         let state = raw_state.into();
 
-        let bluez_info = populate_bluez_info(conn, &bdaddr).await?;
+        let bluez_info = populate_bluez_info(conn, &bdaddr, None).await?;
 
         devices.push(BluetoothDevice::new(
             bdaddr,
@@ -260,28 +260,6 @@ pub(crate) async fn wait_for_wifi_ready(conn: &Connection) -> Result<()> {
     }
 
     Err(ConnectionError::NoWifiDevice)
-}
-
-/// Enables or disables Wi-Fi globally.
-///
-/// This is equivalent to the Wi-Fi toggle in system settings.
-/// When disabled, all Wi-Fi connections are terminated and
-/// no scanning occurs.
-pub(crate) async fn set_wifi_enabled(conn: &Connection, value: bool) -> Result<()> {
-    let nm = NMProxy::new(conn).await?;
-    Ok(nm.set_wireless_enabled(value).await?)
-}
-
-/// Returns whether Wi-Fi is currently enabled.
-pub(crate) async fn wifi_enabled(conn: &Connection) -> Result<bool> {
-    let nm = NMProxy::new(conn).await?;
-    Ok(nm.wireless_enabled().await?)
-}
-
-/// Returns whether wireless hardware is enabled.
-pub(crate) async fn wifi_hardware_enabled(conn: &Connection) -> Result<bool> {
-    let nm = NMProxy::new(conn).await?;
-    Ok(nm.wireless_hardware_enabled().await?)
 }
 
 #[cfg(test)]

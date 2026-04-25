@@ -15,7 +15,7 @@ async fn main() -> nmrs::Result<()> {
         .with_method(EapMethod::Peap)
         .with_phase2(Phase2::Mschapv2);
 
-    nm.connect("CorpWiFi", WifiSecurity::WpaEap { opts: eap }).await?;
+    nm.connect("CorpWiFi", None, WifiSecurity::WpaEap { opts: eap }).await?;
 
     println!("Connected to enterprise WiFi!");
     Ok(())
@@ -165,7 +165,7 @@ async fn main() -> nmrs::Result<()> {
         .system_ca_certs(true)
         .build();
 
-    nm.connect("CorpNetwork", WifiSecurity::WpaEap {
+    nm.connect("CorpNetwork", None, WifiSecurity::WpaEap {
         opts: eap,
     }).await?;
 

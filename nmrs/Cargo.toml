@@ -1,6 +1,6 @@
 [package]
 name = "nmrs"
-version = "2.4.0"
+version = "3.0.0"
 authors = ["Akrm Al-Hakimi <alhakimiakrmj@gmail.com>"]
 edition.workspace = true
 rust-version = "1.94.0"
@@ -47,3 +47,27 @@ path = "examples/vpn_connect.rs"
 [[example]]
 name = "secret_agent"
 path = "examples/secret_agent.rs"
+
+[[example]]
+name = "airplane_mode"
+path = "examples/airplane_mode.rs"
+
+[[example]]
+name = "ap_list"
+path = "examples/ap_list.rs"
+
+[[example]]
+name = "multi_wifi"
+path = "examples/multi_wifi.rs"
+
+[[example]]
+name = "saved_list"
+path = "examples/saved_list.rs"
+
+[[example]]
+name = "connectivity"
+path = "examples/connectivity.rs"
+
+[[example]]
+name = "vpn_list"
+path = "examples/vpn_list.rs"

@@ -30,7 +30,7 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
     // List all available networks
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     
     // Print network information
     for network in networks {
@@ -72,7 +72,7 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
     // Connect to a WPA-PSK protected network
-    nm.connect("MyHomeNetwork", WifiSecurity::WpaPsk {
+    nm.connect("MyHomeNetwork", None, WifiSecurity::WpaPsk {
         psk: "your_password_here".into()
     }).await?;
     
@@ -98,7 +98,7 @@ use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
-    match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+    match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
         psk: "password123".into()
     }).await {
         Ok(_) => println!("✓ Connected successfully"),
@@ -158,7 +158,7 @@ use nmrs::NetworkManager;
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
-    let profiles = nm.list_connections().await?;
+    let profiles = nm.list_saved_connection_ids().await?;
     
     println!("Saved connections:");
     for profile in profiles {
@@ -207,7 +207,7 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
     println!("Scanning for networks...\n");
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     
     // Display networks with numbering
     for (i, net) in networks.iter().enumerate() {
@@ -252,7 +252,7 @@ async fn main() -> nmrs::Result<()> {
     
     // Connect
     println!("Connecting to {}...", selected.ssid);
-    nm.connect(&selected.ssid, security).await?;
+    nm.connect(&selected.ssid, None, security).await?;
     
     println!("✓ Connected successfully!");
     

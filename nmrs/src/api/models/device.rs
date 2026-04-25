@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 
+use zvariant::OwnedObjectPath;
+
 /// Represents a network device managed by NetworkManager.
 ///
 /// A device can be a WiFi adapter, Ethernet interface, or other network hardware.
@@ -57,6 +59,39 @@ pub struct Device {
     pub ip6_address: Option<String>,
     // Link speed in Mb/s (wired devices)
     // pub speed: Option<u32>,
+}
+
+/// A Wi-Fi device summary returned by
+/// [`list_wifi_devices`](crate::NetworkManager::list_wifi_devices).
+///
+/// Use this on multi-radio machines (laptops with USB dongles, docks with a
+/// second wireless adapter, etc.) to discover the available interfaces and
+/// pick one to scope subsequent operations to. Pair with
+/// [`NetworkManager::wifi`](crate::NetworkManager::wifi) for ergonomic
+/// per-interface calls.
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct WifiDevice {
+    /// D-Bus object path of the device.
+    pub path: OwnedObjectPath,
+    /// Interface name (e.g. `"wlan0"`).
+    pub interface: String,
+    /// Current MAC address (may be randomized).
+    pub hw_address: String,
+    /// Permanent (factory-burned) MAC, if NM exposes it.
+    pub permanent_hw_address: Option<String>,
+    /// Kernel driver name, if available.
+    pub driver: Option<String>,
+    /// Current device state.
+    pub state: DeviceState,
+    /// Whether NetworkManager manages this device.
+    pub managed: bool,
+    /// Whether NM will autoconnect known networks on this device.
+    pub autoconnect: bool,
+    /// `true` if the device currently has an active access point.
+    pub is_active: bool,
+    /// SSID of the currently active AP, if any.
+    pub active_ssid: Option<String>,
 }
 
 /// Represents the hardware identity of a network device.

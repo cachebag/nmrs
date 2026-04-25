@@ -128,17 +128,14 @@ The `build()` method validates all fields and returns `Result<Settings, Connecti
 Convenience functions that wrap the builders:
 
 ```rust
-use nmrs::builders::{build_wifi_connection, build_ethernet_connection, build_wireguard_connection};
-use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials};
+use nmrs::builders::{build_wifi_connection, build_ethernet_connection};
+use nmrs::{WifiSecurity, ConnectionOptions};
 
 // Wi-Fi
 let wifi = build_wifi_connection("MyNetwork", &WifiSecurity::Open, &ConnectionOptions::default());
 
 // Ethernet
 let eth = build_ethernet_connection("eth0", &ConnectionOptions::default());
-
-// WireGuard (returns Result)
-let wg = build_wireguard_connection(&creds, &ConnectionOptions::default())?;
 ```
 
 ## When to Use Builders
@@ -150,6 +147,42 @@ Use the builders when you need:
 - Fine-grained control over the settings dictionary
 
 For standard connections, the `NetworkManager` API handles everything automatically.
+
+## OpenVpnBuilder
+
+Builds OpenVPN connection settings from an `OpenVpnConfig` or by importing a `.ovpn` file.
+
+### From Configuration
+
+```rust
+use nmrs::{OpenVpnConfig, OpenVpnAuthType};
+
+let config = OpenVpnConfig::new("CorpVPN", "vpn.example.com", 1194, false)
+    .with_auth_type(OpenVpnAuthType::PasswordTls)
+    .with_username("user")
+    .with_password("secret")
+    .with_ca_cert("/etc/openvpn/ca.crt")
+    .with_client_cert("/etc/openvpn/client.crt")
+    .with_client_key("/etc/openvpn/client.key");
+```
+
+### From .ovpn File
+
+```rust
+use nmrs::builders::OpenVpnBuilder;
+
+let config = OpenVpnBuilder::from_ovpn_file("client.ovpn")?
+    .username("user")
+    .password("secret")
+    .build()?;
+```
+
+Or use the high-level API directly:
+
+```rust
+let nm = NetworkManager::new().await?;
+nm.import_ovpn("client.ovpn", Some("user"), Some("secret")).await?;
+```
 
 ## Full API Reference
 

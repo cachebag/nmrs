@@ -31,7 +31,7 @@ async fn main() -> nmrs::Result<()> {
         print!("\x1B[2J\x1B[1;1H");
         
         // Get networks
-        let mut networks = nm.list_networks().await?;
+        let mut networks = nm.list_networks(None).await?;
         
         // Sort by signal strength (strongest first)
         networks.sort_by(|a, b| {
@@ -199,7 +199,7 @@ if let Ok(choice) = input.trim().parse::<usize>() {
         // Get password if needed
         match &selected.security {
             nmrs::WifiSecurity::Open => {
-                nm.connect(&selected.ssid, nmrs::WifiSecurity::Open).await?;
+                nm.connect(&selected.ssid, None, nmrs::WifiSecurity::Open).await?;
                 println!("Connected to {}", selected.ssid);
             }
             _ => {
@@ -208,7 +208,7 @@ if let Ok(choice) = input.trim().parse::<usize>() {
                 let mut password = String::new();
                 io::stdin().read_line(&mut password)?;
                 
-                nm.connect(&selected.ssid, nmrs::WifiSecurity::WpaPsk {
+                nm.connect(&selected.ssid, None, nmrs::WifiSecurity::WpaPsk {
                     psk: password.trim().to_string()
                 }).await?;
                 println!("Connected to {}", selected.ssid);

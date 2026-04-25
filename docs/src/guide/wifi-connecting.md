@@ -14,10 +14,10 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
     // Open network (no password)
-    nm.connect("CafeWiFi", WifiSecurity::Open).await?;
+    nm.connect("CafeWiFi", None, WifiSecurity::Open).await?;
 
     // WPA-PSK network (password)
-    nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+    nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
         psk: "my_password".into(),
     }).await?;
 
@@ -83,7 +83,7 @@ if nm.is_connecting().await? {
     return Ok(());
 }
 
-nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
+nm.connect("HomeWiFi", None, WifiSecurity::WpaPsk {
     psk: "password".into(),
 }).await?;
 ```
@@ -94,7 +94,7 @@ nm.connect("HomeWiFi", WifiSecurity::WpaPsk {
 let nm = NetworkManager::new().await?;
 
 // Disconnect from the current Wi-Fi network
-nm.disconnect().await?;
+nm.disconnect(None).await?;
 ```
 
 `disconnect()` deactivates the current wireless connection and waits for the device to reach the `Disconnected` state. If no connection is active, it returns `Ok(())`.
@@ -112,7 +112,7 @@ if nm.has_saved_connection("HomeWiFi").await? {
 }
 
 // Connect using saved profile (WifiSecurity value is ignored if profile exists)
-nm.connect("HomeWiFi", WifiSecurity::Open).await?;
+nm.connect("HomeWiFi", None, WifiSecurity::Open).await?;
 ```
 
 See [Connection Profiles](./profiles.md) for more on managing saved connections.
@@ -126,7 +126,7 @@ use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 
 let nm = NetworkManager::new().await?;
 
-match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
     psk: "password".into(),
 }).await {
     Ok(_) => println!("Connected!"),
