@@ -64,6 +64,17 @@ pub trait NMDevice {
     #[zbus(property)]
     fn active_connection(&self) -> Result<OwnedObjectPath>;
 
+    /// Whether NM automatically activates known connections on this device.
+    #[zbus(property)]
+    fn autoconnect(&self) -> Result<bool>;
+
+    /// Set the per-device autoconnect flag.
+    #[zbus(property)]
+    fn set_autoconnect(&self, value: bool) -> Result<()>;
+
+    /// Disconnect the active connection on this device, if any.
+    fn disconnect(&self) -> Result<()>;
+
     /// Signal emitted when device state changes.
     ///
     /// The method is named `device_state_changed` to avoid conflicts with the
