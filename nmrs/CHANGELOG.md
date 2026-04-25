@@ -12,6 +12,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Per-Wi-Fi-device scoping: `WifiDevice` model, `list_wifi_devices()`, `wifi_device_by_interface()`, `WifiScope` builder via `nm.wifi("wlan1")`, `set_wifi_enabled(interface, bool)` for per-radio enable/disable
 - `WifiInterfaceNotFound` and `NotAWifiDevice` error variants
 - Saved profile enumeration: `SavedConnection`, `SavedConnectionBrief`, `SettingsSummary`, `SettingsPatch`, `WifiSecuritySummary`, `WifiKeyMgmt`, `VpnSecretFlags`; `list_saved_connections()`, `list_saved_connections_brief()`, `list_saved_connection_ids()`, `get_saved_connection()`, `get_saved_connection_raw()`, `delete_saved_connection()`, `update_saved_connection()`, `reload_saved_connections()`; D-Bus proxies `NMSettingsProxy` / `NMSettingsConnectionProxy`; example `saved_list`
+- Connectivity state surface: `ConnectivityState`, `ConnectivityReport`, `connectivity()`, `check_connectivity()`, `connectivity_report()`, `captive_portal_url()`; `ConnectivityCheckDisabled` error variant
 
 ### Changed
 -`list_saved_connections()` now returns `Vec<SavedConnection>` (full decode + summaries). Use `list_saved_connection_ids()` for the previous `Vec<String>` behavior (connection `id` names only).
