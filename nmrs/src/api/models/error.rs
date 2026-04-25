@@ -20,7 +20,7 @@ use super::state_reason::StateReason;
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+/// match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 ///     psk: "password".into()
 /// }).await {
 ///     Ok(_) => println!("Connected!"),
@@ -48,7 +48,7 @@ use super::state_reason::StateReason;
 /// let nm = NetworkManager::new().await?;
 ///
 /// for attempt in 1..=3 {
-///     match nm.connect("MyNetwork", WifiSecurity::Open).await {
+///     match nm.connect("MyNetwork", None, WifiSecurity::Open).await {
 ///         Ok(_) => {
 ///             println!("Connected on attempt {}", attempt);
 ///             break;
@@ -201,6 +201,20 @@ pub enum ConnectionError {
     /// Invalid BSSID format.
     #[error("invalid BSSID format: '{0}' (expected XX:XX:XX:XX:XX:XX)")]
     InvalidBssid(String),
+
+    /// Interface exists but is not a Wi-Fi device.
+    #[error("interface '{interface}' is not a Wi-Fi device")]
+    NotAWifiDevice {
+        /// The interface name that was checked.
+        interface: String,
+    },
+
+    /// No Wi-Fi device with the given interface name.
+    #[error("no Wi-Fi device named '{interface}'")]
+    WifiInterfaceNotFound {
+        /// The interface name that was searched for.
+        interface: String,
+    },
 
     /// A radio is hardware-disabled via rfkill.
     #[error("radio is hardware-disabled (rfkill)")]
