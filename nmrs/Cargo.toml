@@ -1,6 +1,6 @@
 [package]
 name = "nmrs"
-version = "2.5.0"
+version = "3.0.0"
 authors = ["Akrm Al-Hakimi <alhakimiakrmj@gmail.com>"]
 edition.workspace = true
 rust-version = "1.94.0"
@@ -55,3 +55,7 @@ path = "examples/airplane_mode.rs"
 [[example]]
 name = "ap_list"
 path = "examples/ap_list.rs"
+
+[[example]]
+name = "multi_wifi"
+path = "examples/multi_wifi.rs"
