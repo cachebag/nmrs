@@ -109,7 +109,8 @@
 //! - [`Network`] - Represents a discovered WiFi network
 //! - [`WifiSecurity`] - Security types (Open, WPA-PSK, WPA-EAP)
 //! - [`VpnCredentials`] - Legacy VPN connection credentials
-//! - [`VpnType`] - Supported VPN types (WireGuard, OpenVPN)
+//! - [`VpnType`] - Protocol-specific VPN metadata (WireGuard, OpenVPN, strongSwan, etc.)
+//! - [`VpnKind`] - Plugin-based vs kernel WireGuard distinction
 //! - [`VpnConnection`] - VPN connection information
 //! - [`VpnDetails`] - Protocol-specific VPN details (WireGuard / OpenVPN)
 //! - [`WireGuardConfig`] - WireGuard connection configuration
@@ -351,11 +352,12 @@ pub use api::models::{
     BluetoothIdentity, BluetoothNetworkRole, ConnectType, ConnectionError, ConnectionOptions,
     ConnectionStateReason, ConnectivityReport, ConnectivityState, Device, DeviceState, DeviceType,
     EapMethod, EapOptions, Network, NetworkInfo, OpenVpnAuthType, OpenVpnCompression,
-    OpenVpnConfig, OpenVpnProxy, Phase2, RadioState, SavedConnection, SavedConnectionBrief,
-    SecurityFeatures, SettingsPatch, SettingsSummary, StateReason, TimeoutConfig, VpnConfig,
-    VpnConfiguration, VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnRoute,
-    VpnSecretFlags, VpnType, WifiDevice, WifiKeyMgmt, WifiSecurity, WifiSecuritySummary,
-    WireGuardConfig, WireGuardPeer, connection_state_reason_to_error, reason_to_error,
+    OpenVpnConfig, OpenVpnConnectionType, OpenVpnProxy, Phase2, RadioState, SavedConnection,
+    SavedConnectionBrief, SecurityFeatures, SettingsPatch, SettingsSummary, StateReason,
+    TimeoutConfig, VpnConfig, VpnConfiguration, VpnConnection, VpnConnectionInfo, VpnCredentials,
+    VpnDetails, VpnKind, VpnRoute, VpnSecretFlags, VpnType, WifiDevice, WifiKeyMgmt, WifiSecurity,
+    WifiSecuritySummary, WireGuardConfig, WireGuardPeer, connection_state_reason_to_error,
+    reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
 pub use api::wifi_scope::WifiScope;
