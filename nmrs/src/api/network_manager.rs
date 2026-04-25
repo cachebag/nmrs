@@ -1,13 +1,12 @@
-#![allow(deprecated)]
-
 use tokio::sync::watch;
 use zbus::Connection;
 
 use crate::Result;
 use crate::api::models::access_point::AccessPoint;
 use crate::api::models::{
-    AirplaneModeState, Device, Network, NetworkInfo, RadioState, WifiSecurity,
+    AirplaneModeState, Device, Network, NetworkInfo, RadioState, WifiDevice, WifiSecurity,
 };
+use crate::api::wifi_scope::WifiScope;
 use crate::core::airplane;
 use crate::core::bluetooth::connect_bluetooth;
 use crate::core::connection::{
@@ -22,6 +21,7 @@ use crate::core::device::{
 };
 use crate::core::scan::{current_network, list_access_points, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
+use crate::core::wifi_device::{list_wifi_devices, set_wifi_enabled_for_interface};
 use crate::models::{
     BluetoothDevice, BluetoothIdentity, VpnConfig, VpnConfiguration, VpnConnection,
     VpnConnectionInfo,
@@ -66,14 +66,14 @@ use crate::types::constants::device_type;
 /// # async fn example() -> nmrs::Result<()> {
 /// let nm = NetworkManager::new().await?;
 ///
-/// // Scan and list networks
-/// let networks = nm.list_networks().await?;
+/// // Scan and list networks (None = all Wi-Fi devices)
+/// let networks = nm.list_networks(None).await?;
 /// for net in &networks {
 ///     println!("{}: {}%", net.ssid, net.strength.unwrap_or(0));
 /// }
 ///
-/// // Connect to a network
-/// nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+/// // Connect to a network on the first Wi-Fi device
+/// nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
 ///     psk: "password".into()
 /// }).await?;
 /// # Ok(())
@@ -227,8 +227,67 @@ impl NetworkManager {
     /// Networks sharing an SSID on the same device are grouped, keeping the
     /// strongest AP as the representative. Each returned [`Network`] carries
     /// `best_bssid`, `bssids`, and `security_features` from the underlying APs.
-    pub async fn list_networks(&self) -> Result<Vec<Network>> {
-        list_networks(&self.conn).await
+    ///
+    /// Pass `interface = Some("wlan0")` to scope to a single Wi-Fi device,
+    /// or `None` to enumerate across every Wi-Fi device.
+    ///
+    /// **3.0 break:** added the `interface` parameter. For old behavior,
+    /// pass `None`.
+    pub async fn list_networks(&self, interface: Option<&str>) -> Result<Vec<Network>> {
+        list_networks(&self.conn, interface).await
+    }
+
+    /// Lists every managed Wi-Fi device on the system.
+    ///
+    /// Each [`WifiDevice`] includes its interface name, MAC, current state,
+    /// and the SSID of any active connection.
+    pub async fn list_wifi_devices(&self) -> Result<Vec<WifiDevice>> {
+        list_wifi_devices(&self.conn).await
+    }
+
+    /// Look up a single Wi-Fi device by interface name.
+    ///
+    /// Returns
+    /// [`WifiInterfaceNotFound`](crate::ConnectionError::WifiInterfaceNotFound)
+    /// if no device matches, or
+    /// [`NotAWifiDevice`](crate::ConnectionError::NotAWifiDevice) if the
+    /// interface exists but isn't a Wi-Fi device.
+    pub async fn wifi_device_by_interface(&self, name: &str) -> Result<WifiDevice> {
+        let all = list_wifi_devices(&self.conn).await?;
+        all.into_iter()
+            .find(|d| d.interface == name)
+            .ok_or_else(|| crate::ConnectionError::WifiInterfaceNotFound {
+                interface: name.to_string(),
+            })
+    }
+
+    /// Build a [`WifiScope`] pinned to the given interface.
+    ///
+    /// All operations on the returned scope target only that one Wi-Fi
+    /// device. Useful on multi-radio systems (laptops with USB dongles,
+    /// docks with a second wireless adapter).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nmrs::{NetworkManager, WifiSecurity};
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.wifi("wlan1").connect(
+    ///     "Guest",
+    ///     WifiSecurity::WpaPsk { psk: "guestpass".into() },
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn wifi(&self, interface: impl Into<String>) -> WifiScope {
+        WifiScope {
+            conn: self.conn.clone(),
+            interface: interface.into(),
+            timeout_config: self.timeout_config,
+        }
     }
 
     /// Lists all visible access points, one entry per BSSID.
@@ -266,12 +325,22 @@ impl NetworkManager {
     /// than the strongest match for the SSID. If `None`, behaves identically
     /// to [`connect`](Self::connect).
     ///
+    /// **3.0 break:** added the `interface` parameter (3rd argument). Pass
+    /// `None` for the previous behavior of using the first available Wi-Fi
+    /// device, or `Some("wlan1")` to pin the connection to a specific
+    /// interface. For an ergonomic per-interface API, see
+    /// [`wifi`](Self::wifi).
+    ///
     /// # Errors
     ///
     /// Returns [`ApBssidNotFound`](crate::ConnectionError::ApBssidNotFound) if
     /// no AP matching both the SSID and BSSID is visible.
     /// Returns [`InvalidBssid`](crate::ConnectionError::InvalidBssid) if the
     /// BSSID format is invalid.
+    /// Returns
+    /// [`WifiInterfaceNotFound`](crate::ConnectionError::WifiInterfaceNotFound)
+    /// or [`NotAWifiDevice`](crate::ConnectionError::NotAWifiDevice) if the
+    /// supplied interface name is bad.
     ///
     /// # Examples
     ///
@@ -283,6 +352,7 @@ impl NetworkManager {
     /// nm.connect_to_bssid(
     ///     "HomeWiFi",
     ///     Some("AA:BB:CC:DD:EE:FF"),
+    ///     None,
     ///     WifiSecurity::WpaPsk { psk: "password".into() },
     /// ).await?;
     /// # Ok(())
@@ -292,20 +362,46 @@ impl NetworkManager {
         &self,
         ssid: &str,
         bssid: Option<&str>,
+        interface: Option<&str>,
         creds: WifiSecurity,
     ) -> Result<()> {
-        connect_to_bssid(&self.conn, ssid, bssid, creds, Some(self.timeout_config)).await
+        connect_to_bssid(
+            &self.conn,
+            ssid,
+            bssid,
+            creds,
+            interface,
+            Some(self.timeout_config),
+        )
+        .await
     }
 
     /// Connects to a Wi-Fi network with the given credentials.
+    ///
+    /// **3.0 break:** added the `interface` parameter (3rd argument). Pass
+    /// `None` for the previous behavior of using the first available Wi-Fi
+    /// device, or `Some("wlan1")` to pin the connection to a specific
+    /// interface.
     ///
     /// # Errors
     ///
     /// Returns `ConnectionError::NotFound` if the network is not visible,
     /// `ConnectionError::AuthFailed` if authentication fails, or other
     /// variants for specific failure reasons.
-    pub async fn connect(&self, ssid: &str, creds: WifiSecurity) -> Result<()> {
-        connect(&self.conn, ssid, creds, Some(self.timeout_config)).await
+    pub async fn connect(
+        &self,
+        ssid: &str,
+        interface: Option<&str>,
+        creds: WifiSecurity,
+    ) -> Result<()> {
+        connect(
+            &self.conn,
+            ssid,
+            creds,
+            interface,
+            Some(self.timeout_config),
+        )
+        .await
     }
 
     /// Connects to a wired (Ethernet) device.
@@ -632,22 +728,22 @@ impl NetworkManager {
         airplane::set_airplane_mode(&self.conn, enabled).await
     }
 
-    /// Returns whether Wi-Fi is currently enabled.
-    #[deprecated(since = "2.5.0", note = "use `wifi_state()` instead")]
-    pub async fn wifi_enabled(&self) -> Result<bool> {
-        Ok(self.wifi_state().await?.enabled)
-    }
-
-    /// Enables or disables Wi-Fi.
-    #[deprecated(since = "2.5.0", note = "use `set_wireless_enabled()` instead")]
-    pub async fn set_wifi_enabled(&self, value: bool) -> Result<()> {
-        self.set_wireless_enabled(value).await
-    }
-
-    /// Returns whether wireless hardware is currently enabled.
-    #[deprecated(since = "2.5.0", note = "use `wifi_state()` instead")]
-    pub async fn wifi_hardware_enabled(&self) -> Result<bool> {
-        Ok(self.wifi_state().await?.hardware_enabled)
+    /// Disable or re-enable a single Wi-Fi interface.
+    ///
+    /// Sets `Device.Autoconnect = enabled` and, when disabling, calls
+    /// `Device.Disconnect()`. This is independent of the global wireless
+    /// killswitch ([`set_wireless_enabled`](Self::set_wireless_enabled)) and
+    /// safe to use on multi-radio systems.
+    ///
+    /// # Errors
+    ///
+    /// Returns
+    /// [`WifiInterfaceNotFound`](crate::ConnectionError::WifiInterfaceNotFound)
+    /// if no device with that name exists, or
+    /// [`NotAWifiDevice`](crate::ConnectionError::NotAWifiDevice) if the
+    /// interface isn't a Wi-Fi device.
+    pub async fn set_wifi_enabled(&self, interface: &str, enabled: bool) -> Result<()> {
+        set_wifi_enabled_for_interface(&self.conn, interface, enabled).await
     }
 
     /// Waits for a Wi-Fi device to become ready (disconnected or activated).
@@ -655,9 +751,13 @@ impl NetworkManager {
         wait_for_wifi_ready(&self.conn).await
     }
 
-    /// Triggers a Wi-Fi scan on all wireless devices.
-    pub async fn scan_networks(&self) -> Result<()> {
-        scan_networks(&self.conn).await
+    /// Triggers a Wi-Fi scan.
+    ///
+    /// **3.0 break:** added the `interface` parameter. Pass `None` to scan
+    /// every Wi-Fi device, or `Some("wlan0")` to scan one. See
+    /// [`wifi`](Self::wifi) for an ergonomic per-interface API.
+    pub async fn scan_networks(&self, interface: Option<&str>) -> Result<()> {
+        scan_networks(&self.conn, interface).await
     }
 
     /// Returns whether any network device is currently in a transitional state.
@@ -691,12 +791,18 @@ impl NetworkManager {
         is_connected(&self.conn, ssid).await
     }
 
-    /// Disconnects from the current network.
+    /// Disconnects from the current Wi-Fi network.
     ///
-    /// If currently connected to a WiFi network, this will deactivate
-    /// the connection and wait for the device to reach disconnected state.
+    /// If currently connected to a Wi-Fi network, this deactivates the
+    /// active connection on the targeted device and waits for it to reach
+    /// the disconnected state.
     ///
-    /// Returns `Ok(())` if disconnected successfully or if no active connection exists.
+    /// **3.0 break:** added the `interface` parameter. Pass `None` for the
+    /// previous behavior (first Wi-Fi device), or `Some("wlan1")` to target
+    /// a specific interface.
+    ///
+    /// Returns `Ok(())` if disconnected successfully or if no active
+    /// connection exists.
     ///
     /// # Example
     ///
@@ -705,12 +811,13 @@ impl NetworkManager {
     ///
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
-    /// nm.disconnect().await?;
+    /// nm.disconnect(None).await?;
+    /// nm.disconnect(Some("wlan1")).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn disconnect(&self) -> Result<()> {
-        disconnect(&self.conn, Some(self.timeout_config)).await
+    pub async fn disconnect(&self, interface: Option<&str>) -> Result<()> {
+        disconnect(&self.conn, interface, Some(self.timeout_config)).await
     }
 
     /// Returns the full `Network` object for the currently connected WiFi network.
