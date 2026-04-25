@@ -347,13 +347,13 @@ pub mod models {
 // Re-export commonly used types at crate root for convenience
 #[allow(deprecated)]
 pub use api::models::{
-    ActiveConnectionState, AirplaneModeState, BluetoothDevice, BluetoothIdentity,
-    BluetoothNetworkRole, ConnectionError, ConnectionOptions, ConnectionStateReason, Device,
-    DeviceState, DeviceType, EapMethod, EapOptions, Network, NetworkInfo, OpenVpnAuthType,
-    OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, Phase2, RadioState, StateReason,
-    TimeoutConfig, VpnConfig, VpnConfiguration, VpnConnection, VpnConnectionInfo, VpnCredentials,
-    VpnDetails, VpnRoute, VpnType, WifiSecurity, WireGuardConfig, WireGuardPeer,
-    connection_state_reason_to_error, reason_to_error,
+    AccessPoint, ActiveConnectionState, AirplaneModeState, ApMode, BluetoothDevice,
+    BluetoothIdentity, BluetoothNetworkRole, ConnectType, ConnectionError, ConnectionOptions,
+    ConnectionStateReason, Device, DeviceState, DeviceType, EapMethod, EapOptions, Network,
+    NetworkInfo, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, Phase2,
+    RadioState, SecurityFeatures, StateReason, TimeoutConfig, VpnConfig, VpnConfiguration,
+    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnRoute, VpnType, WifiSecurity,
+    WireGuardConfig, WireGuardPeer, connection_state_reason_to_error, reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
 
