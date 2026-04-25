@@ -23,7 +23,10 @@ use crate::core::device::{
 };
 use crate::core::saved_connection as saved_profiles;
 use crate::core::scan::{current_network, list_access_points, list_networks, scan_networks};
-use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
+use crate::core::vpn::{
+    active_vpn_connections, connect_vpn, connect_vpn_by_id, connect_vpn_by_uuid, disconnect_vpn,
+    disconnect_vpn_by_uuid, get_vpn_info, list_vpn_connections,
+};
 use crate::core::wifi_device::{list_wifi_devices, set_wifi_enabled_for_interface};
 use crate::models::{
     BluetoothDevice, BluetoothIdentity, VpnConfig, VpnConfiguration, VpnConnection,
@@ -607,6 +610,41 @@ impl NetworkManager {
     /// ```
     pub async fn list_vpn_connections(&self) -> Result<Vec<VpnConnection>> {
         list_vpn_connections(&self.conn).await
+    }
+
+    /// Only active VPNs (subset of `list_vpn_connections` with `active = true`).
+    pub async fn active_vpn_connections(&self) -> Result<Vec<VpnConnection>> {
+        active_vpn_connections(&self.conn).await
+    }
+
+    /// Activate a saved VPN by UUID.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// nm.connect_vpn_by_uuid("2c3f1234-abcd-5678-ef01-234567890abc").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connect_vpn_by_uuid(&self, uuid: &str) -> Result<()> {
+        connect_vpn_by_uuid(&self.conn, uuid, Some(self.timeout_config)).await
+    }
+
+    /// Activate a saved VPN by connection display name.
+    ///
+    /// Fails with [`VpnIdAmbiguous`](crate::ConnectionError::VpnIdAmbiguous)
+    /// if multiple VPNs share the same name.
+    pub async fn connect_vpn_by_id(&self, id: &str) -> Result<()> {
+        connect_vpn_by_id(&self.conn, id, Some(self.timeout_config)).await
+    }
+
+    /// Disconnect a VPN by UUID.
+    pub async fn disconnect_vpn_by_uuid(&self, uuid: &str) -> Result<()> {
+        disconnect_vpn_by_uuid(&self.conn, uuid).await
     }
 
     /// Forgets (deletes) a saved VPN connection by name.
