@@ -1,6 +1,6 @@
 use nmrs::{
     ConnectionError, DeviceState, DeviceType, NetworkManager, OpenVpnAuthType, StateReason,
-    VpnType, WifiSecurity, WireGuardConfig, WireGuardPeer, reason_to_error,
+    VpnKind, WifiSecurity, WireGuardConfig, WireGuardPeer, reason_to_error,
 };
 use std::time::Duration;
 use tokio::time::sleep;
@@ -1046,7 +1046,7 @@ async fn test_get_nonexistent_vpn_info() {
 #[tokio::test]
 async fn test_vpn_type() {
     // Verify VPN types are properly defined
-    let wg = VpnType::WireGuard;
+    let wg = VpnKind::WireGuard;
     assert_eq!(format!("{:?}", wg), "WireGuard");
 }
 
