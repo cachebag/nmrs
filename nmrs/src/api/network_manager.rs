@@ -731,6 +731,63 @@ impl NetworkManager {
         airplane::set_airplane_mode(&self.conn, enabled).await
     }
 
+    /// Current connectivity state as NM sees it (single property read).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let state = nm.connectivity().await?;
+    /// println!("{state:?}");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connectivity(&self) -> Result<crate::ConnectivityState> {
+        crate::core::connectivity::connectivity(&self.conn).await
+    }
+
+    /// Forces NM to re-check connectivity by probing the configured URI.
+    ///
+    /// Returns the new state once the check completes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConnectivityCheckDisabled`](crate::ConnectionError::ConnectivityCheckDisabled)
+    /// if NM's connectivity checks are turned off.
+    pub async fn check_connectivity(&self) -> Result<crate::ConnectivityState> {
+        crate::core::connectivity::check_connectivity(&self.conn).await
+    }
+
+    /// Full connectivity report including check URI and captive-portal URL.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nmrs::NetworkManager;
+    ///
+    /// # async fn example() -> nmrs::Result<()> {
+    /// let nm = NetworkManager::new().await?;
+    /// let report = nm.connectivity_report().await?;
+    /// println!("{:?} portal={:?}", report.state, report.captive_portal_url);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connectivity_report(&self) -> Result<crate::ConnectivityReport> {
+        crate::core::connectivity::connectivity_report(&self.conn).await
+    }
+
+    /// Captive-portal URL detected by NM, if state is `Portal`.
+    ///
+    /// Returns `None` if NM is not in `Portal` state or if this NM version
+    /// does not expose the URL.
+    pub async fn captive_portal_url(&self) -> Result<Option<String>> {
+        let report = crate::core::connectivity::connectivity_report(&self.conn).await?;
+        Ok(report.captive_portal_url)
+    }
+
     /// Disable or re-enable a single Wi-Fi interface.
     ///
     /// Sets `Device.Autoconnect = enabled` and, when disabling, calls
