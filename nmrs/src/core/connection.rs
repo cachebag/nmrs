@@ -83,7 +83,7 @@ pub(crate) async fn connect(
 
     match decision {
         SavedDecision::UseSaved(saved) => {
-            ensure_disconnected(conn, &nm, &wifi_device, timeout_config).await?;
+            ensure_disconnected(conn, &wifi_device, timeout_config).await?;
             connect_via_saved(
                 conn,
                 &nm,
@@ -447,13 +447,8 @@ pub(crate) async fn disconnect_wifi_and_wait(
     .await?;
 
     debug!("Sending disconnect request");
-    match raw.call_method("Disconnect", &()).await {
-        Ok(_) => debug!("Disconnect method called successfully"),
-        Err(e) => warn!(
-            "Disconnect method call failed (device may already be disconnected): {}",
-            e
-        ),
-    }
+    raw.call_method("Disconnect", &()).await?;
+    debug!("Disconnect method called successfully");
 
     // Wait for disconnect using signal-based monitoring
     let timeout = timeout_config.map(|c| c.disconnect_timeout);
@@ -658,7 +653,7 @@ pub(crate) async fn connect_to_bssid(
 
             match decision {
                 SavedDecision::UseSaved(saved) => {
-                    ensure_disconnected(conn, &nm, &wifi_device, timeout_config).await?;
+                    ensure_disconnected(conn, &wifi_device, timeout_config).await?;
                     connect_via_saved(
                         conn,
                         &nm,
@@ -690,32 +685,16 @@ pub(crate) async fn connect_to_bssid(
     }
 }
 
-/// Ensures the Wi-Fi device is disconnected before attempting a new connection.
+/// Ensures the target Wi-Fi device is torn down before attempting a new connection.
 ///
-/// If currently connected to any network, deactivates all active connections
-/// and waits for the device to reach disconnected state.
+/// Only the given `wifi_device` is affected. Other interfaces (e.g. VPN, wired,
+/// a second Wi-Fi radio) are not deactivated.
 async fn ensure_disconnected(
     conn: &Connection,
-    nm: &NMProxy<'_>,
     wifi_device: &OwnedObjectPath,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
-    if let Some(active) = Wifi::current(conn).await {
-        debug!("Disconnecting from {active}");
-
-        if let Ok(conns) = nm.active_connections().await {
-            for conn_path in conns {
-                match nm.deactivate_connection(conn_path.clone()).await {
-                    Ok(_) => debug!("Connection deactivated during cleanup"),
-                    Err(e) => warn!("Failed to deactivate connection during cleanup: {}", e),
-                }
-            }
-        }
-
-        disconnect_wifi_and_wait(conn, wifi_device, timeout_config).await?;
-    }
-
-    Ok(())
+    disconnect_wifi_and_wait(conn, wifi_device, timeout_config).await
 }
 
 /// Attempts to connect using a saved connection profile.
@@ -849,7 +828,7 @@ async fn build_and_activate_new(
 
     debug!("Creating new connection, settings: \n{settings:#?}");
 
-    ensure_disconnected(conn, nm, wifi_device, timeout_config).await?;
+    ensure_disconnected(conn, wifi_device, timeout_config).await?;
 
     let (_, active_conn) = match nm
         .add_and_activate_connection(settings, wifi_device.clone(), ap.clone())

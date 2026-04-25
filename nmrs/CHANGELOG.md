@@ -35,6 +35,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Support for specifying Bluetooth adapter in `BluetoothIdentity` ([#267](https://github.com/cachebag/nmrs/pull/267))
 
 ### Fixed
+- Wi-Fi `ensure_disconnected` no longer deactivates every active connection (VPN, wired, other radios); only the target Wi-Fi device is torn down. VPN disconnect, Wi-Fi/Bluetooth `Device::Disconnect` D-Bus failures propagate instead of being swallowed ([#351](https://github.com/cachebag/nmrs/issues/351))
 - Line-accurate source locations for `.ovpn` directives and blocks ([#318](https://github.com/cachebag/nmrs/pull/318))
 - `key_direction` when nested under `tls_auth` and as a standalone directive ([#320](https://github.com/cachebag/nmrs/pull/320))
 

@@ -224,7 +224,7 @@ pub(crate) async fn disconnect_bluetooth_and_wait(
         .await?;
 
     debug!("Sending disconnect request to Bluetooth device");
-    let _ = raw.call_method("Disconnect", &()).await;
+    raw.call_method("Disconnect", &()).await?;
 
     // Wait for disconnect using signal-based monitoring
     let timeout = timeout_config.map(|c| c.disconnect_timeout);

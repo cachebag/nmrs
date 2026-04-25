@@ -733,14 +733,7 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
     debug!("Disconnecting VPN: {name}");
 
     let nm = NMProxy::new(conn).await?;
-    let active_conns = match nm.active_connections().await {
-        Ok(conns) => conns,
-        Err(e) => {
-            debug!("Failed to get active connections: {}", e);
-            info!("Disconnected VPN: {name} (could not verify active state)");
-            return Ok(());
-        }
-    };
+    let active_conns = nm.active_connections().await?;
 
     for ac_path in active_conns {
         let ac_proxy = match nm_proxy(
@@ -789,10 +782,8 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
 
         if id_match && is_vpn {
             debug!("Found active VPN connection, deactivating: {name}");
-            match nm.deactivate_connection(ac_path.clone()).await {
-                Ok(_) => info!("Successfully disconnected VPN: {name}"),
-                Err(e) => warn!("Failed to deactivate connection {}: {}", ac_path, e),
-            }
+            nm.deactivate_connection(ac_path.clone()).await?;
+            info!("Successfully disconnected VPN: {name}");
             return Ok(());
         }
     }
