@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 
-use super::vpn::{VpnConfig, VpnType};
+use super::vpn::{VpnConfig, VpnKind};
 use crate::api::models::error::ConnectionError;
 use std::convert::TryFrom;
 use std::net::Ipv4Addr;
@@ -612,8 +612,8 @@ impl TryFrom<crate::core::ovpn_parser::parser::OvpnFile> for OpenVpnConfig {
 impl super::vpn::sealed::Sealed for OpenVpnConfig {}
 
 impl VpnConfig for OpenVpnConfig {
-    fn vpn_type(&self) -> VpnType {
-        VpnType::OpenVpn
+    fn vpn_kind(&self) -> VpnKind {
+        VpnKind::Plugin
     }
 
     fn name(&self) -> &str {
