@@ -13,3 +13,4 @@ pub(crate) mod rfkill;
 pub(crate) mod scan;
 pub(crate) mod state_wait;
 pub(crate) mod vpn;
+pub(crate) mod wifi_device;
