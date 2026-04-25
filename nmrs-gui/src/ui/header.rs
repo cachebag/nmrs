@@ -1,11 +1,11 @@
 use glib::clone;
-use gtk::STYLE_PROVIDER_PRIORITY_USER;
 use gtk::prelude::*;
 use gtk::{Align, Box as GtkBox, HeaderBar, Label, ListBox, Orientation, Switch, glib};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use nmrs::ConnectivityState;
 use nmrs::models;
 
 use crate::ui::networks;
@@ -50,65 +50,49 @@ pub fn build_header(
     ctx: Rc<NetworksContext>,
     list_container: &GtkBox,
     is_scanning: Rc<Cell<bool>>,
-    window: &gtk::ApplicationWindow,
 ) -> HeaderBar {
     let header = HeaderBar::new();
     header.set_show_title_buttons(false);
 
     let list_container = list_container.clone();
 
-    let wifi_box = GtkBox::new(Orientation::Horizontal, 6);
-    let wifi_label = Label::new(Some("Wi-Fi"));
-    wifi_label.set_halign(gtk::Align::Start);
-    wifi_label.add_css_class("wifi-label");
+    // Left side: status label
+    ctx.status.set_hexpand(true);
+    ctx.status.set_halign(Align::Start);
+    header.pack_start(&ctx.status);
 
-    let names: Vec<&str> = THEMES.iter().map(|t| t.name).collect();
-    let dropdown = gtk::DropDown::from_strings(&names);
-
-    if let Some(saved) = crate::theme_config::load_theme()
-        && let Some(idx) = THEMES.iter().position(|t| t.key == saved.as_str())
+    // Right side: settings gear
+    let settings_btn = gtk::Button::from_icon_name("emblem-system-symbolic");
+    settings_btn.set_has_frame(false);
+    settings_btn.set_valign(Align::Center);
+    settings_btn.set_tooltip_text(Some("Settings"));
+    settings_btn.add_css_class("settings-btn");
     {
-        dropdown.set_selected(idx as u32);
+        let stack = ctx.stack.clone();
+        settings_btn.connect_clicked(move |_| {
+            stack.set_visible_child_name("settings");
+        });
     }
+    header.pack_end(&settings_btn);
 
-    dropdown.set_valign(gtk::Align::Center);
-    dropdown.add_css_class("dropdown");
+    // Right side: radio controls (airplane + wifi switch)
+    let airplane_btn = gtk::Button::new();
+    airplane_btn.set_valign(Align::Center);
+    airplane_btn.set_has_frame(false);
+    airplane_btn.set_icon_name("airplane-mode-symbolic");
+    airplane_btn.set_tooltip_text(Some("Toggle Airplane Mode"));
+    airplane_btn.add_css_class("airplane-btn");
+    header.pack_end(&airplane_btn);
 
-    let window_weak = window.downgrade();
+    let wifi_switch = Switch::new();
+    wifi_switch.set_valign(Align::Center);
+    wifi_switch.set_size_request(24, 24);
+    header.pack_end(&wifi_switch);
 
-    dropdown.connect_selected_notify(move |dd| {
-        let idx = dd.selected() as usize;
-        if idx >= THEMES.len() {
-            return;
-        }
-
-        let theme = &THEMES[idx];
-
-        if let Some(window) = window_weak.upgrade() {
-            let provider = gtk::CssProvider::new();
-            provider.load_from_data(theme.css);
-
-            let display = gtk::prelude::RootExt::display(&window);
-
-            gtk::style_context_add_provider_for_display(
-                &display,
-                &provider,
-                STYLE_PROVIDER_PRIORITY_USER,
-            );
-
-            crate::theme_config::save_theme(theme.key);
-
-            // Re-register user CSS after the new theme so it keeps priority.
-            crate::style::load_user_css();
-        }
-    });
-
-    wifi_box.append(&wifi_label);
-    wifi_box.append(&dropdown);
-    header.pack_start(&wifi_box);
-
+    // Right side: refresh
     let refresh_btn = gtk::Button::from_icon_name("view-refresh-symbolic");
     refresh_btn.add_css_class("refresh-btn");
+    refresh_btn.set_has_frame(false);
     refresh_btn.set_tooltip_text(Some("Refresh networks and devices"));
     header.pack_end(&refresh_btn);
     refresh_btn.connect_clicked(clone!(
@@ -129,56 +113,19 @@ pub fn build_header(
         }
     ));
 
-    let theme_btn = gtk::Button::new();
-    theme_btn.add_css_class("theme-toggle-btn");
-    theme_btn.set_valign(gtk::Align::Center);
-    theme_btn.set_has_frame(false);
-
-    let is_light = window.has_css_class("light-theme");
-    let initial_icon = if is_light {
-        "weather-clear-night-symbolic"
-    } else {
-        "weather-clear-symbolic"
-    };
-    theme_btn.set_icon_name(initial_icon);
-
-    let window_weak = window.downgrade();
-    theme_btn.connect_clicked(move |btn| {
-        if let Some(window) = window_weak.upgrade() {
-            let is_light = window.has_css_class("light-theme");
-
-            if is_light {
-                window.remove_css_class("light-theme");
-                window.add_css_class("dark-theme");
-                btn.set_icon_name("weather-clear-symbolic");
-                crate::theme_config::save_theme("light");
-            } else {
-                window.remove_css_class("dark-theme");
-                window.add_css_class("light-theme");
-                btn.set_icon_name("weather-clear-night-symbolic");
-                crate::theme_config::save_theme("dark");
-            }
-        }
-    });
-
-    header.pack_end(&theme_btn);
-
-    let wifi_switch = Switch::new();
-    wifi_switch.set_valign(gtk::Align::Center);
-    header.pack_end(&wifi_switch);
-    wifi_switch.set_size_request(24, 24);
-
-    header.pack_end(&ctx.status);
-
     {
         let list_container = list_container.clone();
         let wifi_switch = wifi_switch.clone();
+        let airplane_btn = airplane_btn.clone();
         let ctx = ctx.clone();
         let is_scanning = is_scanning.clone();
 
         glib::MainContext::default().spawn_local(async move {
             ctx.stack.set_visible_child_name("loading");
             clear_children(&list_container);
+
+            apply_airplane_icon(&airplane_btn, &ctx).await;
+            apply_connectivity_status(&ctx).await;
 
             match ctx.nm.wifi_state().await.map(|s| s.enabled) {
                 Ok(enabled) => {
@@ -194,6 +141,60 @@ pub fn build_header(
             }
         })
     };
+
+    {
+        let ctx = ctx.clone();
+        airplane_btn.connect_clicked(clone!(
+            #[weak]
+            list_container,
+            #[strong]
+            wifi_switch,
+            #[strong]
+            is_scanning,
+            move |btn| {
+                let ctx = ctx.clone();
+                let list_container = list_container.clone();
+                let is_scanning = is_scanning.clone();
+                let wifi_switch = wifi_switch.clone();
+                let btn = btn.clone();
+
+                glib::MainContext::default().spawn_local(async move {
+                    let currently_airplane = ctx
+                        .nm
+                        .airplane_mode_state()
+                        .await
+                        .map(|s| s.is_airplane_mode())
+                        .unwrap_or(false);
+
+                    let new_state = !currently_airplane;
+
+                    if let Err(err) = ctx.nm.set_airplane_mode(new_state).await {
+                        ctx.status.set_text(&format!("Airplane mode error: {err}"));
+                        return;
+                    }
+
+                    apply_airplane_icon(&btn, &ctx).await;
+
+                    if new_state {
+                        wifi_switch.set_active(false);
+                        clear_children(&list_container);
+                        ctx.status.set_text("Airplane mode on");
+                    } else {
+                        let wifi_on = ctx
+                            .nm
+                            .wifi_state()
+                            .await
+                            .map(|s| s.enabled)
+                            .unwrap_or(false);
+                        wifi_switch.set_active(wifi_on);
+                        if wifi_on && ctx.nm.wait_for_wifi_ready().await.is_ok() {
+                            refresh_networks(ctx, &list_container, &is_scanning).await;
+                        }
+                    }
+                });
+            }
+        ));
+    }
 
     {
         let ctx = ctx.clone();
@@ -224,6 +225,54 @@ pub fn build_header(
     }
 
     header
+}
+
+async fn apply_airplane_icon(btn: &gtk::Button, ctx: &NetworksContext) {
+    match ctx.nm.airplane_mode_state().await {
+        Ok(state) => {
+            if state.is_airplane_mode() {
+                btn.set_icon_name("airplane-mode-symbolic");
+                btn.set_tooltip_text(Some("Airplane Mode is ON — click to disable"));
+                btn.add_css_class("airplane-active");
+            } else {
+                btn.set_icon_name("network-wireless-symbolic");
+                btn.set_tooltip_text(Some("Airplane Mode is OFF — click to enable"));
+                btn.remove_css_class("airplane-active");
+            }
+
+            if state.any_hardware_killed() {
+                btn.set_tooltip_text(Some("A hardware radio kill switch is active"));
+            }
+        }
+        Err(_) => {
+            btn.set_icon_name("airplane-mode-symbolic");
+            btn.set_sensitive(false);
+            btn.set_tooltip_text(Some("Airplane mode unavailable"));
+        }
+    }
+}
+
+async fn apply_connectivity_status(ctx: &NetworksContext) {
+    if let Ok(report) = ctx.nm.connectivity_report().await {
+        let text = connectivity_label(&report.state, report.captive_portal_url.as_deref());
+        if !text.is_empty() {
+            ctx.status.set_text(&text);
+        }
+    }
+}
+
+fn connectivity_label(state: &ConnectivityState, portal_url: Option<&str>) -> String {
+    match state {
+        ConnectivityState::Full => String::new(),
+        ConnectivityState::Portal => match portal_url {
+            Some(url) => format!("Captive portal: {url}"),
+            None => "Captive portal detected".to_string(),
+        },
+        ConnectivityState::Limited => "Limited connectivity".to_string(),
+        ConnectivityState::None => "No internet".to_string(),
+        ConnectivityState::Unknown => String::new(),
+        _ => String::new(),
+    }
 }
 
 pub async fn refresh_networks(
@@ -326,6 +375,8 @@ pub async fn refresh_networks(
         glib::timeout_future_seconds(1).await;
     }
 
+    let saved_ssids = saved_network_ids(&ctx).await;
+
     match ctx.nm.list_networks(None).await {
         Ok(mut nets) => {
             let current_conn = ctx.nm.current_connection_info().await;
@@ -355,6 +406,7 @@ pub async fn refresh_networks(
                 &nets,
                 current_ssid.as_deref(),
                 current_band.as_deref(),
+                &saved_ssids,
             );
             list_container.append(&list);
             ctx.stack.set_visible_child_name("networks");
@@ -363,6 +415,8 @@ pub async fn refresh_networks(
             .status
             .set_text(&format!("Error fetching networks: {err}")),
     }
+
+    apply_connectivity_status(&ctx).await;
 
     is_scanning.set(false);
 }
@@ -375,6 +429,17 @@ pub fn clear_children(container: &gtk::Box) {
     }
 }
 
+async fn saved_network_ids(ctx: &NetworksContext) -> HashSet<String> {
+    ctx.nm
+        .list_saved_connections_brief()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|c| c.connection_type == "802-11-wireless")
+        .map(|c| c.id)
+        .collect()
+}
+
 /// Refresh the network list WITHOUT triggering a new scan.
 /// This is useful for live updates when the network list changes
 /// (e.g., wired device state changes, AP added/removed).
@@ -384,46 +449,27 @@ pub async fn refresh_networks_no_scan(
     is_scanning: &Rc<Cell<bool>>,
 ) {
     if is_scanning.get() {
-        // Don't interfere with an ongoing scan or refresh
         return;
     }
 
-    // Set flag to prevent concurrent refreshes
     is_scanning.set(true);
 
     clear_children(list_container);
 
-    // Fetch wired devices first
     if let Ok(wired_devices) = ctx.nm.list_wired_devices().await {
-        // eprintln!("Found {} wired devices total", wired_devices.len());
-
-        // Filter out unavailable devices to reduce clutter
         let available_devices: Vec<_> = wired_devices
             .into_iter()
             .filter(|dev| {
-                let show = matches!(
+                matches!(
                     dev.state,
                     models::DeviceState::Activated
                         | models::DeviceState::Disconnected
                         | models::DeviceState::Prepare
                         | models::DeviceState::Config
                         | models::DeviceState::Unmanaged
-                );
-                /* eprintln!(
-                    "  - {} ({}): {} -> {}",
-                    dev.interface,
-                    dev.device_type,
-                    dev.state,
-                    if show { "SHOW" } else { "HIDE" }
-                ); */
-                show
+                )
             })
             .collect();
-
-        /* eprintln!(
-            "Showing {} available wired devices",
-            available_devices.len()
-        );*/
 
         if !available_devices.is_empty() {
             let wired_header = Label::new(Some("Wired"));
@@ -460,6 +506,8 @@ pub async fn refresh_networks_no_scan(
     wireless_header.set_margin_start(12);
     list_container.append(&wireless_header);
 
+    let saved_ssids = saved_network_ids(&ctx).await;
+
     match ctx.nm.list_networks(None).await {
         Ok(mut nets) => {
             let current_conn = ctx.nm.current_connection_info().await;
@@ -487,6 +535,7 @@ pub async fn refresh_networks_no_scan(
                 &nets,
                 current_ssid.as_deref(),
                 current_band.as_deref(),
+                &saved_ssids,
             );
             list_container.append(&list);
             ctx.stack.set_visible_child_name("networks");
@@ -497,6 +546,7 @@ pub async fn refresh_networks_no_scan(
         }
     }
 
-    // Release the lock
+    apply_connectivity_status(&ctx).await;
+
     is_scanning.set(false);
 }

@@ -1,6 +1,7 @@
 use glib::clone;
 use gtk::prelude::*;
 use gtk::{Align, Box, Button, Image, Label, Orientation};
+use nmrs::AccessPoint;
 use nmrs::NetworkManager;
 use nmrs::models::NetworkInfo;
 use std::cell::RefCell;
@@ -22,6 +23,10 @@ pub struct NetworkPage {
     mode: gtk::Label,
     rate: gtk::Label,
     security: gtk::Label,
+
+    interface: gtk::Label,
+    device_state: gtk::Label,
+    last_seen: gtk::Label,
 
     current_ssid: Rc<RefCell<String>>,
     on_success: OnSuccessCallback,
@@ -123,6 +128,9 @@ impl NetworkPage {
         let mode = Label::new(None);
         let rate = Label::new(None);
         let security = Label::new(None);
+        let interface = Label::new(None);
+        let device_state = Label::new(None);
+        let last_seen = Label::new(None);
 
         Self::add_row(&advanced_box, "BSSID", &bssid);
         Self::add_row(&advanced_box, "Frequency", &freq);
@@ -130,6 +138,9 @@ impl NetworkPage {
         Self::add_row(&advanced_box, "Mode", &mode);
         Self::add_row(&advanced_box, "Speed", &rate);
         Self::add_row(&advanced_box, "Security", &security);
+        Self::add_row(&advanced_box, "Interface", &interface);
+        Self::add_row(&advanced_box, "Device State", &device_state);
+        Self::add_row(&advanced_box, "Last Seen", &last_seen);
 
         root.append(&advanced_box);
 
@@ -146,6 +157,9 @@ impl NetworkPage {
             mode,
             rate,
             security,
+            interface,
+            device_state,
+            last_seen,
             current_ssid,
             on_success: on_success_callback,
         }
@@ -199,6 +213,28 @@ impl NetworkPage {
                 .unwrap_or_else(|| "-".into()),
         );
         self.security.set_text(&info.security);
+
+        self.interface.set_text("-");
+        self.device_state.set_text("-");
+        self.last_seen.set_text("-");
+    }
+
+    pub fn enrich_with_ap(&self, ap: &AccessPoint) {
+        self.bssid.set_text(&ap.bssid);
+        self.interface.set_text(&ap.interface);
+        self.device_state
+            .set_text(&format!("{:?}", ap.device_state));
+        self.last_seen.set_text(
+            &ap.last_seen_secs
+                .map(|s| format!("{s}s ago"))
+                .unwrap_or_else(|| "-".into()),
+        );
+        self.freq
+            .set_text(&format!("{:.1} GHz", ap.frequency_mhz as f32 / 1000.0));
+        if ap.max_bitrate_kbps > 0 {
+            self.rate
+                .set_text(&format!("{:.1} Mbps", ap.max_bitrate_kbps as f32 / 1000.0));
+        }
     }
 
     pub fn widget(&self) -> &gtk::Box {

@@ -2,6 +2,7 @@ pub mod connect;
 pub mod header;
 pub mod network_page;
 pub mod networks;
+pub mod settings_page;
 pub mod wired_devices;
 pub mod wired_page;
 
@@ -99,6 +100,12 @@ pub fn build_ui(app: &Application) {
                 wired_details_scroller.set_child(Some(wired_details_page.widget()));
                 stack_clone.add_named(&wired_details_scroller, Some("wired-details"));
 
+                let settings = settings_page::SettingsPage::new(&stack_clone, &win_clone);
+                let settings_scroller = ScrolledWindow::new();
+                settings_scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+                settings_scroller.set_child(Some(settings.widget()));
+                stack_clone.add_named(&settings_scroller, Some("settings"));
+
                 let on_success: Rc<dyn Fn()> = {
                     let list_container = list_container_clone.clone();
                     let is_scanning = is_scanning_clone.clone();
@@ -160,7 +167,6 @@ pub fn build_ui(app: &Application) {
                     ctx.clone(),
                     &list_container_clone,
                     is_scanning_clone.clone(),
-                    &win_clone,
                 );
                 vbox_clone.prepend(&header);
 
