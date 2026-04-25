@@ -1,10 +1,14 @@
+use std::collections::HashMap;
+
 use tokio::sync::watch;
 use zbus::Connection;
+use zvariant::OwnedValue;
 
 use crate::Result;
 use crate::api::models::access_point::AccessPoint;
 use crate::api::models::{
-    AirplaneModeState, Device, Network, NetworkInfo, RadioState, WifiDevice, WifiSecurity,
+    AirplaneModeState, Device, Network, NetworkInfo, RadioState, SavedConnection,
+    SavedConnectionBrief, SettingsPatch, WifiDevice, WifiSecurity,
 };
 use crate::api::wifi_scope::WifiScope;
 use crate::core::airplane;
@@ -13,12 +17,11 @@ use crate::core::connection::{
     connect, connect_to_bssid, connect_wired, disconnect, forget_by_name_and_type,
     get_device_by_interface, is_connected,
 };
-use crate::core::connection_settings::{
-    get_saved_connection_path, has_saved_connection, list_saved_connections,
-};
+use crate::core::connection_settings::{get_saved_connection_path, has_saved_connection};
 use crate::core::device::{
     is_connecting, list_bluetooth_devices, list_devices, wait_for_wifi_ready,
 };
+use crate::core::saved_connection as saved_profiles;
 use crate::core::scan::{current_network, list_access_points, list_networks, scan_networks};
 use crate::core::vpn::{connect_vpn, disconnect_vpn, get_vpn_info, list_vpn_connections};
 use crate::core::wifi_device::{list_wifi_devices, set_wifi_enabled_for_interface};
@@ -844,10 +847,13 @@ impl NetworkManager {
         current_network(&self.conn).await
     }
 
-    /// Lists all saved connection profiles.
+    /// Lists all saved connection profiles with decoded [`SavedConnection`] summaries.
     ///
-    /// Returns the names (IDs) of all saved connection profiles in NetworkManager,
-    /// including WiFi, Ethernet, VPN, and other connection types.
+    /// Secrets are not included; use a [secret agent](crate::agent) with
+    /// `GetSecrets` for passwords and keys.
+    ///
+    /// For a lighter call that only resolves `uuid`, `id`, and `type`, see
+    /// [`Self::list_saved_connections_brief`].
     ///
     /// # Example
     ///
@@ -856,15 +862,64 @@ impl NetworkManager {
     ///
     /// # async fn example() -> nmrs::Result<()> {
     /// let nm = NetworkManager::new().await?;
-    /// let connections = nm.list_saved_connections().await?;
-    /// for name in connections {
-    ///     println!("Saved connection: {}", name);
+    /// for c in nm.list_saved_connections().await? {
+    ///     println!("{}  {}  {}", c.id, c.connection_type, c.uuid);
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_saved_connections(&self) -> Result<Vec<String>> {
-        list_saved_connections(&self.conn).await
+    pub async fn list_saved_connections(&self) -> Result<Vec<SavedConnection>> {
+        saved_profiles::list_saved_connections(&self.conn).await
+    }
+
+    /// Lists saved profiles with only `connection.uuid`, `id`, and `type` (still one
+    /// `GetSettings` per profile, but skips building [`SettingsSummary`](crate::SettingsSummary)).
+    pub async fn list_saved_connections_brief(&self) -> Result<Vec<SavedConnectionBrief>> {
+        saved_profiles::list_saved_connections_brief(&self.conn).await
+    }
+
+    /// Returns the human-visible names (`connection.id`) of all saved profiles.
+    ///
+    /// Convenience over `list_saved_connections().map(|v| v.into_iter().map(|c| c.id).collect())`.
+    pub async fn list_saved_connection_ids(&self) -> Result<Vec<String>> {
+        Ok(saved_profiles::list_saved_connections_brief(&self.conn)
+            .await?
+            .into_iter()
+            .map(|c| c.id)
+            .collect())
+    }
+
+    /// Loads one saved profile by UUID with full [`SavedConnection`] decode.
+    ///
+    /// # Errors
+    ///
+    /// [`SavedConnectionNotFound`](crate::ConnectionError::SavedConnectionNotFound) if
+    /// the UUID does not exist.
+    pub async fn get_saved_connection(&self, uuid: &str) -> Result<SavedConnection> {
+        saved_profiles::get_saved_connection(&self.conn, uuid).await
+    }
+
+    /// Raw `GetSettings` map for advanced consumers.
+    pub async fn get_saved_connection_raw(
+        &self,
+        uuid: &str,
+    ) -> Result<HashMap<String, HashMap<String, OwnedValue>>> {
+        saved_profiles::get_saved_connection_raw(&self.conn, uuid).await
+    }
+
+    /// Deletes a saved profile by UUID (`Settings.Connection.Delete`).
+    pub async fn delete_saved_connection(&self, uuid: &str) -> Result<()> {
+        saved_profiles::delete_saved_connection(&self.conn, uuid).await
+    }
+
+    /// Merges a [`SettingsPatch`] into an existing profile (`Update` / `UpdateUnsaved`).
+    pub async fn update_saved_connection(&self, uuid: &str, patch: SettingsPatch) -> Result<()> {
+        saved_profiles::update_saved_connection(&self.conn, uuid, &patch).await
+    }
+
+    /// Calls `ReloadConnections` so NM re-reads profiles from disk.
+    pub async fn reload_saved_connections(&self) -> Result<()> {
+        saved_profiles::reload_saved_connections(&self.conn).await
     }
 
     /// Finds a device by its interface name (e.g., "wlan0", "eth0").

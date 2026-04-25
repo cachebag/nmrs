@@ -351,10 +351,11 @@ pub use api::models::{
     BluetoothIdentity, BluetoothNetworkRole, ConnectType, ConnectionError, ConnectionOptions,
     ConnectionStateReason, Device, DeviceState, DeviceType, EapMethod, EapOptions, Network,
     NetworkInfo, OpenVpnAuthType, OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, Phase2,
-    RadioState, SecurityFeatures, StateReason, TimeoutConfig, VpnConfig, VpnConfiguration,
-    VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnRoute, VpnType, WifiDevice,
-    WifiSecurity, WireGuardConfig, WireGuardPeer, connection_state_reason_to_error,
-    reason_to_error,
+    RadioState, SavedConnection, SavedConnectionBrief, SecurityFeatures, SettingsPatch,
+    SettingsSummary, StateReason, TimeoutConfig, VpnConfig, VpnConfiguration, VpnConnection,
+    VpnConnectionInfo, VpnCredentials, VpnDetails, VpnRoute, VpnSecretFlags, VpnType, WifiDevice,
+    WifiKeyMgmt, WifiSecurity, WifiSecuritySummary, WireGuardConfig, WireGuardPeer,
+    connection_state_reason_to_error, reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
 pub use api::wifi_scope::WifiScope;
