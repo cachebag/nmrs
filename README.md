@@ -274,6 +274,7 @@ Thank you to everyone who has helped build, test, document, and review `nmrs`.
     <td align="center"><a href="https://github.com/shubhsingh5901"><img src="https://avatars.githubusercontent.com/u/110416544?v=4" width="100px;" alt="shubhsingh5901"/><br /><sub><b>shubhsingh5901</b></sub></a></td>
     <td align="center"><a href="https://github.com/cinnamonstic"><img src="https://avatars.githubusercontent.com/u/182801542?v=4" width="100px;" alt="cinnamonstic"/><br /><sub><b>cinnamonstic</b></sub></a></td>
     <td align="center"><a href="https://github.com/tuned-willow"><img src="https://avatars.githubusercontent.com/u/250158319?v=4" width="100px;" alt="tuned-willow"/><br /><sub><b>tuned-willow</b></sub></a></td>
+    <td align="center"><a href="https://github.com/dandiggas"><img src="https://avatars.githubusercontent.com/u/78769670?v=4" width="100px;" alt="dandiggas"/><br /><sub><b>dandiggas</b></sub></a></td>  
   </tr>
 </table>
 <!-- readme: contributors -end -->
