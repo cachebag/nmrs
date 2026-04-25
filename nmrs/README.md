@@ -77,32 +77,28 @@ async fn main() -> nmrs::Result<()> {
 ### WireGuard VPN
 
 ```rust
-use nmrs::{NetworkManager, VpnCredentials, VpnType, WireGuardPeer};
+use nmrs::{NetworkManager, WireGuardConfig, WireGuardPeer};
 
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
-    let creds = VpnCredentials {
-        vpn_type: VpnType::WireGuard,
-        name: "WorkVPN".into(),
-        gateway: "vpn.example.com:51820".into(),
-        private_key: "your_private_key_here".into(),
-        address: "10.0.0.2/24".into(),
-        peers: vec![WireGuardPeer {
-            public_key: "server_public_key".into(),
-            gateway: "vpn.example.com:51820".into(),
-            allowed_ips: vec!["0.0.0.0/0".into()],
-            preshared_key: None,
-            persistent_keepalive: Some(25),
-        }],
-        dns: Some(vec!["1.1.1.1".into()]),
-        mtu: None,
-        uuid: None,
-    };
+    let peer = WireGuardPeer::new(
+        "server_public_key",
+        "vpn.example.com:51820",
+        vec!["0.0.0.0/0".into()],
+    ).with_persistent_keepalive(25);
+
+    let config = WireGuardConfig::new(
+        "WorkVPN",
+        "vpn.example.com:51820",
+        "your_private_key_here",
+        "10.0.0.2/24",
+        vec![peer],
+    ).with_dns(vec!["1.1.1.1".into()]);
     
     // Connect to VPN
-    nm.connect_vpn(creds).await?;
+    nm.connect_vpn(config).await?;
     
     // Get connection details
     let info = nm.get_vpn_info("WorkVPN").await?;
@@ -158,9 +154,9 @@ async fn main() -> nmrs::Result<()> {
         println!("{}: {} ({})", device.interface, device.device_type, device.state);
     }
     
-    // Control WiFi radio
-    nm.set_wifi_enabled(false).await?;
-    nm.set_wifi_enabled(true).await?;
+    // Control the global Wi-Fi radio
+    nm.set_wireless_enabled(false).await?;
+    nm.set_wireless_enabled(true).await?;
     
     Ok(())
 }
@@ -221,7 +217,7 @@ All operations return `Result<T, ConnectionError>` with specific variants:
 ```rust
 use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 
-match nm.connect("MyNetwork", WifiSecurity::WpaPsk { 
+match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
     psk: "wrong".into() 
 }).await {
     Ok(_) => println!("Connected"),

@@ -19,12 +19,10 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ### Changed
 - `VpnCredentialsBuilder::build()` and `EapOptionsBuilder::build()` return `Result` (no panics on missing fields); `VpnCredentialsBuilder` may return `ConnectionError::InvalidPeers` when no peers are set ([#350](https://github.com/cachebag/nmrs/issues/350))
 - `VpnType` is now a data-carrying enum; the old tag enum is renamed to `VpnKind`. `VpnConfig::vpn_type()` renamed to `vpn_kind()`. `VpnConnectionInfo.vpn_type` renamed to `vpn_kind`.
--`list_saved_connections()` now returns `Vec<SavedConnection>` (full decode + summaries). Use `list_saved_connection_ids()` for the previous `Vec<String>` behavior (connection `id` names only).
--`connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`.
--`set_wifi_enabled` now requires an `interface: &str` argument and toggles only that radio (via `Device.Autoconnect` + `Device.Disconnect()`). For the global wireless killswitch use `set_wireless_enabled(bool)`.
+- `list_saved_connections()` now returns `Vec<SavedConnection>` (full decode + summaries). Use `list_saved_connection_ids()` for the previous `Vec<String>` behavior (connection `id` names only).
+- `connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`.
+- `set_wifi_enabled` now requires an `interface: &str` argument and toggles only that radio (via `Device.Autoconnect` + `Device.Disconnect()`). For the global wireless killswitch use `set_wireless_enabled(bool)`.
 - `VpnConfig` trait and `WireGuardConfig`; `NetworkManager::connect_vpn` accepts `VpnConfig` implementors; `VpnCredentials` deprecated with compatibility bridges ([#303](https://github.com/cachebag/nmrs/pull/303))
-
-### Changed
 - Introduce `VpnConfig` trait and refactor `connect_vpn` signature ([#303](https://github.com/cachebag/nmrs/pull/303))
 - OpenVPN connection settings model expansion ([#309](https://github.com/cachebag/nmrs/pull/309))
 - Multi-VPN plumbing: `detect_vpn_type()`, `VpnType::OpenVpn`, and shared detection across connect, disconnect, and list VPN flows ([#311](https://github.com/cachebag/nmrs/pull/311))

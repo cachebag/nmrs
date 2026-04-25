@@ -43,7 +43,7 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
     // Scan for networks
-    let networks = nm.list_networks().await?;
+    let networks = nm.list_networks(None).await?;
     
     for net in networks {
         println!(
@@ -70,7 +70,7 @@ async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
     // Connect to a network
-    nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+    nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
         psk: "password123".into()
     }).await?;
     
@@ -94,7 +94,7 @@ use nmrs::{NetworkManager, WifiSecurity, ConnectionError};
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
-    match nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+    match nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
         psk: "wrong_password".into()
     }).await {
         Ok(_) => println!("Connected successfully"),
