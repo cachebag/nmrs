@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+use super::error::ConnectionError;
 use super::vpn::{VpnConfig, VpnKind};
 use uuid::Uuid;
 
@@ -327,7 +328,8 @@ impl VpnConfig for VpnCredentials {
 ///     .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
 ///     .address("10.0.0.2/24")
 ///     .add_peer(peer)
-///     .build();
+///     .build()
+///     .expect("all required fields set");
 /// ```
 ///
 /// ## With Optional DNS and MTU
@@ -350,7 +352,8 @@ impl VpnConfig for VpnCredentials {
 ///     .add_peer(peer)
 ///     .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()])
 ///     .with_mtu(1420)
-///     .build();
+///     .build()
+///     .expect("all required fields set");
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Default)]
@@ -478,15 +481,12 @@ impl VpnCredentialsBuilder {
 
     /// Builds the `VpnCredentials` from the configured values.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if any required field is missing:
-    /// - `vpn_type` (use [`wireguard()`](Self::wireguard))
-    /// - `name` (use [`name()`](Self::name))
-    /// - `gateway` (use [`gateway()`](Self::gateway))
-    /// - `private_key` (use [`private_key()`](Self::private_key))
-    /// - `address` (use [`address()`](Self::address))
-    /// - At least one peer must be added (use [`add_peer()`](Self::add_peer))
+    /// Returns [`ConnectionError::IncompleteBuilder`](crate::ConnectionError::IncompleteBuilder)
+    /// if a required string field is missing, or
+    /// [`ConnectionError::InvalidPeers`](crate::ConnectionError::InvalidPeers) if no peers
+    /// were added.
     ///
     /// # Examples
     ///
@@ -506,30 +506,44 @@ impl VpnCredentialsBuilder {
     ///     .private_key("private_key")
     ///     .address("10.0.0.2/24")
     ///     .add_peer(peer)
-    ///     .build();
+    ///     .build()
+    ///     .expect("all required fields set");
     /// ```
-    #[must_use]
-    pub fn build(self) -> VpnCredentials {
-        VpnCredentials {
-            vpn_type: self
-                .vpn_type
-                .expect("vpn_type is required (use .wireguard())"),
-            name: self.name.expect("name is required (use .name())"),
-            gateway: self.gateway.expect("gateway is required (use .gateway())"),
-            private_key: self
-                .private_key
-                .expect("private_key is required (use .private_key())"),
-            address: self.address.expect("address is required (use .address())"),
-            peers: {
-                if self.peers.is_empty() {
-                    panic!("at least one peer is required (use .add_peer())");
-                }
-                self.peers
-            },
+    #[must_use = "the built credentials must be passed to the VPN connect API"]
+    pub fn build(self) -> Result<VpnCredentials, ConnectionError> {
+        let vpn_type = self.vpn_type.ok_or_else(|| {
+            ConnectionError::IncompleteBuilder("VPN type is required (use .wireguard())".into())
+        })?;
+        let name = self.name.ok_or_else(|| {
+            ConnectionError::IncompleteBuilder("connection name is required (use .name())".into())
+        })?;
+        let gateway = self.gateway.ok_or_else(|| {
+            ConnectionError::IncompleteBuilder("gateway is required (use .gateway())".into())
+        })?;
+        let private_key = self.private_key.ok_or_else(|| {
+            ConnectionError::IncompleteBuilder(
+                "private key is required (use .private_key())".into(),
+            )
+        })?;
+        let address = self.address.ok_or_else(|| {
+            ConnectionError::IncompleteBuilder("address is required (use .address())".into())
+        })?;
+        if self.peers.is_empty() {
+            return Err(ConnectionError::InvalidPeers(
+                "at least one peer is required (use .add_peer())".into(),
+            ));
+        }
+        Ok(VpnCredentials {
+            vpn_type,
+            name,
+            gateway,
+            private_key,
+            address,
+            peers: self.peers,
             dns: self.dns,
             mtu: self.mtu,
             uuid: self.uuid,
-        }
+        })
     }
 }
 

@@ -4,6 +4,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- `ConnectionError::IncompleteBuilder` for builders missing required fields
 - `nmrs::agent` module: NetworkManager secret agent for credential prompting over D-Bus (`SecretAgent`, `SecretAgentBuilder`, `SecretAgentHandle`, `SecretRequest`, `SecretResponder`, `SecretSetting`, `SecretAgentFlags`, `SecretAgentCapabilities`, `CancelReason`, `SecretStoreEvent`)
 - `AccessPoint` model preserving per-AP BSSID, frequency, security flags, and device state; `list_access_points(interface)` for full AP enumeration
 - Airplane-mode surface: `RadioState`, `AirplaneModeState`, `wifi_state()`, `wwan_state()`, `bluetooth_radio_state()`, `airplane_mode_state()`, `set_wireless_enabled()`, `set_wwan_enabled()`, `set_bluetooth_radio_enabled()`, `set_airplane_mode()`
@@ -16,6 +17,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Generic VPN support: `VpnType` now carries protocol-specific metadata for OpenVPN, OpenConnect, strongSwan, PPTP, L2TP, and a `Generic` catch-all; `VpnKind` (Plugin vs WireGuard); `VpnConnection` enriched with `uuid`, `active`, `user_name`, `password_flags`, `service_type`; `connect_vpn_by_uuid()`, `connect_vpn_by_id()`, `disconnect_vpn_by_uuid()`, `active_vpn_connections()`
 
 ### Changed
+- `VpnCredentialsBuilder::build()` and `EapOptionsBuilder::build()` return `Result` (no panics on missing fields); `VpnCredentialsBuilder` may return `ConnectionError::InvalidPeers` when no peers are set ([#350](https://github.com/cachebag/nmrs/issues/350))
 - `VpnType` is now a data-carrying enum; the old tag enum is renamed to `VpnKind`. `VpnConfig::vpn_type()` renamed to `vpn_kind()`. `VpnConnectionInfo.vpn_type` renamed to `vpn_kind`.
 -`list_saved_connections()` now returns `Vec<SavedConnection>` (full decode + summaries). Use `list_saved_connection_ids()` for the previous `Vec<String>` behavior (connection `id` names only).
 -`connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`.

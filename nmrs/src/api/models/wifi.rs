@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::access_point::SecurityFeatures;
+use super::error::ConnectionError;
 
 /// Represents a Wi-Fi network discovered during a scan.
 ///
@@ -265,7 +266,8 @@ impl EapOptions {
     ///     .phase2(Phase2::Mschapv2)
     ///     .domain_suffix_match("company.com")
     ///     .system_ca_certs(true)
-    ///     .build();
+    ///     .build()
+    ///     .expect("all required fields set");
     /// ```
     #[must_use]
     pub fn builder() -> EapOptionsBuilder {
@@ -335,7 +337,8 @@ impl EapOptions {
 ///     .anonymous_identity("anonymous@company.com")
 ///     .domain_suffix_match("company.com")
 ///     .system_ca_certs(true)
-///     .build();
+///     .build()
+///     .expect("all required fields set");
 /// ```
 ///
 /// ## TTLS with PAP
@@ -349,7 +352,8 @@ impl EapOptions {
 ///     .method(EapMethod::Ttls)
 ///     .phase2(Phase2::Pap)
 ///     .ca_cert_path("file:///etc/ssl/certs/university-ca.pem")
-///     .build();
+///     .build()
+///     .expect("all required fields set");
 /// ```
 #[derive(Debug, Default)]
 pub struct EapOptionsBuilder {
@@ -497,13 +501,10 @@ impl EapOptionsBuilder {
 
     /// Builds the `EapOptions` from the configured values.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if any required field is missing:
-    /// - `identity` (use [`identity()`](Self::identity))
-    /// - `password` (use [`password()`](Self::password))
-    /// - `method` (use [`method()`](Self::method))
-    /// - `phase2` (use [`phase2()`](Self::phase2))
+    /// Returns [`ConnectionError::IncompleteBuilder`](crate::ConnectionError::IncompleteBuilder)
+    /// if any required field is missing.
     ///
     /// # Examples
     ///
@@ -515,24 +516,35 @@ impl EapOptionsBuilder {
     ///     .password("password")
     ///     .method(EapMethod::Peap)
     ///     .phase2(Phase2::Mschapv2)
-    ///     .build();
+    ///     .build()
+    ///     .expect("all required fields set");
     /// ```
-    #[must_use]
-    pub fn build(self) -> EapOptions {
-        EapOptions {
-            identity: self
-                .identity
-                .expect("identity is required (use .identity())"),
-            password: self
-                .password
-                .expect("password is required (use .password())"),
+    #[must_use = "use the EAP options with WifiSecurity::WpaEap or handle the error"]
+    pub fn build(self) -> Result<EapOptions, ConnectionError> {
+        Ok(EapOptions {
+            identity: self.identity.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder(
+                    "EAP identity is required (use .identity())".into(),
+                )
+            })?,
+            password: self.password.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder(
+                    "EAP password is required (use .password())".into(),
+                )
+            })?,
             anonymous_identity: self.anonymous_identity,
             domain_suffix_match: self.domain_suffix_match,
             ca_cert_path: self.ca_cert_path,
             system_ca_certs: self.system_ca_certs,
-            method: self.method.expect("method is required (use .method())"),
-            phase2: self.phase2.expect("phase2 is required (use .phase2())"),
-        }
+            method: self.method.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder("EAP method is required (use .method())".into())
+            })?,
+            phase2: self.phase2.ok_or_else(|| {
+                ConnectionError::IncompleteBuilder(
+                    "EAP phase 2 method is required (use .phase2())".into(),
+                )
+            })?,
+        })
     }
 }
 

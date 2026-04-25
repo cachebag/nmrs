@@ -17,7 +17,7 @@ async fn main() -> nmrs::Result<()> {
         .anonymous_identity("anonymous@company.com")
         .domain_suffix_match("company.com")
         .system_ca_certs(true)
-        .build();
+        .build()?;
 
     let security = WifiSecurity::WpaEap { opts: eap_opts };
 

@@ -122,6 +122,10 @@ pub enum ConnectionError {
     #[error("saved connection malformed: {0}")]
     MalformedSavedConnection(String),
 
+    /// A public builder was missing a required field.
+    #[error("incomplete builder: {0}")]
+    IncompleteBuilder(String),
+
     /// NM's connectivity checks are disabled; `check_connectivity` cannot run.
     #[error("connectivity checks are disabled in NetworkManager")]
     ConnectivityCheckDisabled,
