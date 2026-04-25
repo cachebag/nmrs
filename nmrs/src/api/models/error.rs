@@ -114,6 +114,14 @@ pub enum ConnectionError {
     #[error("no saved connection for network")]
     NoSavedConnection,
 
+    /// No saved profile with the given UUID.
+    #[error("saved connection '{0}' not found")]
+    SavedConnectionNotFound(String),
+
+    /// Saved profile settings are missing required keys or are inconsistent.
+    #[error("saved connection malformed: {0}")]
+    MalformedSavedConnection(String),
+
     /// An empty password was provided for the requested network.
     #[error("no password was provided")]
     MissingPassword,
