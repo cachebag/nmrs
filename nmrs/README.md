@@ -16,6 +16,7 @@ Rust bindings for NetworkManager via D-Bus.
 - **VPN Support**: WireGuard VPN connections with full configuration
 - **Ethernet**: Wired network connection management
 - **Network Discovery**: Scan and list available access points with per-BSSID detail and security capabilities
+- **Per-Interface Scoping**: Target specific Wi-Fi radios on multi-NIC systems via `nm.wifi("wlan1")` or `Option<&str>` interface arguments
 - **Profile Management**: Create, query, and delete saved connection profiles
 - **Real-Time Monitoring**: Signal-based network and device state change notifications
 - **Secret Agent**: Respond to NetworkManager credential prompts via an async stream API
@@ -27,7 +28,7 @@ Rust bindings for NetworkManager via D-Bus.
 
 ```toml
 [dependencies]
-nmrs = "2.0.0"
+nmrs = "3.0.0"
 ```
 or
 ```bash
@@ -47,16 +48,21 @@ use nmrs::{NetworkManager, WifiSecurity};
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
-    // List networks
-    let networks = nm.list_networks().await?;
+    // List networks (None = all Wi-Fi devices, or pass Some("wlan1") to scope)
+    let networks = nm.list_networks(None).await?;
     for net in &networks {
         println!("{} - Signal: {}%", net.ssid, net.strength.unwrap_or(0));
     }
-    
-    // Connect to WPA-PSK network
-    nm.connect("MyNetwork", WifiSecurity::WpaPsk {
+
+    // Connect to a WPA-PSK network on the first Wi-Fi device
+    nm.connect("MyNetwork", None, WifiSecurity::WpaPsk {
         psk: "password".into()
     }).await?;
+
+    // Or scope every operation to a specific radio
+    let wlan1 = nm.wifi("wlan1");
+    wlan1.scan().await?;
+    wlan1.connect("Guest", WifiSecurity::Open).await?;
     
     // Check current connection
     if let Some(ssid) = nm.current_ssid().await {
@@ -117,7 +123,7 @@ use nmrs::{NetworkManager, WifiSecurity, EapOptions, EapMethod, Phase2};
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
     
-    nm.connect("CorpNetwork", WifiSecurity::WpaEap {
+    nm.connect("CorpNetwork", None, WifiSecurity::WpaEap {
         opts: EapOptions {
             identity: "user@company.com".into(),
             password: "password".into(),
