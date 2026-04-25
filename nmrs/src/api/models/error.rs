@@ -189,6 +189,19 @@ pub enum ConnectionError {
     #[error("error while parsing a configuration: {0}")]
     ParseError(OvpnParseError),
 
+    /// Access point with the given SSID and BSSID was not found.
+    #[error("access point for SSID '{ssid}' with BSSID '{bssid}' not found")]
+    ApBssidNotFound {
+        /// SSID that was searched for.
+        ssid: String,
+        /// BSSID that was searched for.
+        bssid: String,
+    },
+
+    /// Invalid BSSID format.
+    #[error("invalid BSSID format: '{0}' (expected XX:XX:XX:XX:XX:XX)")]
+    InvalidBssid(String),
+
     /// A radio is hardware-disabled via rfkill.
     #[error("radio is hardware-disabled (rfkill)")]
     HardwareRadioKilled,
