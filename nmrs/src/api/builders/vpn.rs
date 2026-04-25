@@ -88,6 +88,7 @@ use crate::api::models::{
 ///
 /// This function is maintained for backward compatibility. For new code,
 /// consider using `WireGuardBuilder` for a more ergonomic API.
+#[must_use = "the connection settings must be passed to NetworkManager"]
 pub fn build_wireguard_connection(
     creds: &VpnCredentials,
     opts: &ConnectionOptions,
@@ -140,6 +141,7 @@ fn string_pairs_to_dict(
 ///
 /// - `ConnectionError::InvalidGateway` if `remote` is empty
 /// - `ConnectionError::InvalidAddress` if a proxy port is zero
+#[must_use = "the connection settings must be passed to NetworkManager"]
 pub fn build_openvpn_connection(
     config: &OpenVpnConfig,
     opts: &ConnectionOptions,

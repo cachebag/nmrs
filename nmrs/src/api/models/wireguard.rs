@@ -352,6 +352,7 @@ impl VpnConfig for VpnCredentials {
 ///     .with_mtu(1420)
 ///     .build();
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct VpnCredentialsBuilder {
     vpn_type: Option<VpnKind>,

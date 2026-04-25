@@ -10,6 +10,7 @@ use super::connection_builder::ConnectionBuilder;
 use crate::api::models::{self, ConnectionOptions, EapMethod};
 
 /// WiFi band selection.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WifiBand {
     /// 2.4 GHz band

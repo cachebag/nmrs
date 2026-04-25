@@ -46,6 +46,7 @@ use crate::util::validation::validate_connection_name;
 ///     .build()
 ///     .expect("Failed to build OpenVPN config");
 /// ```
+#[non_exhaustive]
 #[derive(Debug)]
 pub struct OpenVpnBuilder {
     name: String,
@@ -573,6 +574,7 @@ impl OpenVpnBuilder {
     /// - `ConnectionError::VpnFailed` if `auth_type` is not set
     /// - `ConnectionError::VpnFailed` if `username` is required but missing
     /// - `ConnectionError::VpnFailed` if TLS certs are required but missing
+    #[must_use = "the validated OpenVPN config should be used to build connection settings"]
     pub fn build(self) -> Result<OpenVpnConfig, ConnectionError> {
         validate_connection_name(&self.name)?;
 
