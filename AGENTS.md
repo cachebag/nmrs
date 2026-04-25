@@ -52,7 +52,7 @@ sudo modprobe -r mac80211_hwsim
 
 ## Toolchain
 
-- Edition 2024, resolver 3, stable Rust (MSRV: 1.94.0)
+- Edition 2024, resolver 3, stable Rust (MSRV: 1.90.0)
 - Workspace lints in root `Cargo.toml`: `unused = "warn"`, clippy allows `too_many_arguments` and `type_complexity`
 - CI runs: format, clippy, lib tests, doc tests, semver-checks (`cargo-semver-checks` for `nmrs`), cross-compile for aarch64
 

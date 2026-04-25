@@ -1,9 +1,9 @@
 [package]
 name = "nmrs"
-version = "3.0.0"
+version = "3.0.1"
 authors = ["Akrm Al-Hakimi <alhakimiakrmj@gmail.com>"]
 edition.workspace = true
-rust-version = "1.94.0"
+rust-version = "1.90.0"
 description = "A Rust library for NetworkManager over D-Bus"
 license.workspace = true
 repository.workspace = true
