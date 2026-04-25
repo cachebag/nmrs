@@ -5,6 +5,7 @@ use gtk::prelude::*;
 use gtk::{Box, Image, Label, ListBox, ListBoxRow, Orientation};
 use nmrs::models::WifiSecurity;
 use nmrs::{NetworkManager, models};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::ui::connect;
@@ -90,6 +91,17 @@ impl NetworkRowController {
             glib::MainContext::default().spawn_local(async move {
                 if let Ok(info) = ctx_c.nm.show_details(&net_c).await {
                     page_c.update(&info);
+
+                    if let Ok(aps) = ctx_c.nm.list_access_points(None).await {
+                        let best = aps
+                            .iter()
+                            .filter(|ap| ap.ssid == net_c.ssid)
+                            .max_by_key(|ap| ap.strength);
+                        if let Some(ap) = best {
+                            page_c.enrich_with_ap(ap);
+                        }
+                    }
+
                     stack_c.set_visible_child_name("details");
                 }
             });
@@ -176,6 +188,7 @@ pub fn networks_view(
     networks: &[models::Network],
     current_ssid: Option<&str>,
     current_band: Option<&str>,
+    saved_ssids: &HashSet<String>,
 ) -> ListBox {
     let conn_threshold = 75;
     let list = ListBox::new();
@@ -218,6 +231,10 @@ pub fn networks_view(
             let connected_label = Label::new(Some("Connected"));
             connected_label.add_css_class("connected-label");
             hbox.append(&connected_label);
+        } else if saved_ssids.contains(&net.ssid) {
+            let saved_label = Label::new(Some("Saved"));
+            saved_label.add_css_class("saved-label");
+            hbox.append(&saved_label);
         }
 
         let spacer = Box::new(Orientation::Horizontal, 0);
