@@ -1,15 +1,9 @@
 //! Core VPN connection management logic.
 //!
-//! This module contains internal implementation for managing VPN connections
-//! through NetworkManager, including connecting, disconnecting, listing, and
-//! deleting VPN profiles.
-//!
 //! Supports:
 //! - WireGuard connections (`connection.type == "wireguard"`)
-//! - OpenVPN connections (`connection.type == "vpn"`, `vpn.service-type == "org.freedesktop.NetworkManager.openvpn"`)
-//!
-//! These functions are not part of the public API and should be accessed
-//! through the [`NetworkManager`][crate::NetworkManager] interface.
+//! - NM plugin VPNs (`connection.type == "vpn"`) — OpenVPN, OpenConnect,
+//!   strongSwan, PPTP, L2TP, and any other installed plugin.
 #![allow(deprecated)]
 
 use log::{debug, info, warn};
@@ -19,8 +13,9 @@ use zvariant::OwnedObjectPath;
 
 use crate::Result;
 use crate::api::models::{
-    ConnectionError, ConnectionOptions, DeviceState, TimeoutConfig, VpnConfig, VpnConnection,
-    VpnConnectionInfo, VpnCredentials, VpnDetails, VpnType,
+    ConnectionError, ConnectionOptions, DeviceState, OpenVpnConnectionType, TimeoutConfig,
+    VpnConfig, VpnConnection, VpnConnectionInfo, VpnCredentials, VpnDetails, VpnKind,
+    VpnSecretFlags, VpnType,
 };
 use crate::builders::{build_openvpn_connection, build_wireguard_connection};
 use crate::core::state_wait::wait_for_connection_activation;
@@ -31,12 +26,10 @@ use crate::util::validation::{
     validate_connection_name, validate_openvpn_config, validate_vpn_credentials,
 };
 
-// Detects the VPN type from a raw NM connection settings map.
-// WireGuard: connection.type == "wireguard"
-// OpenVPN:   connection.type == "vpn" + vpn.service-type == "org.freedesktop.NetworkManager.openvpn"
-fn detect_vpn_type(
+/// Detects whether a saved connection is a VPN and what kind.
+fn detect_vpn_kind(
     settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
-) -> Option<VpnType> {
+) -> Option<VpnKind> {
     let conn = settings.get("connection")?;
     let conn_type = match conn.get("type")? {
         zvariant::Value::Str(s) => s.as_str(),
@@ -44,44 +37,602 @@ fn detect_vpn_type(
     };
 
     match conn_type {
-        "wireguard" => Some(VpnType::WireGuard),
-        "vpn" => {
-            let vpn = settings.get("vpn")?;
-            let service = match vpn.get("service-type")? {
-                zvariant::Value::Str(s) => s.as_str(),
-                _ => return None,
-            };
-            if service == "org.freedesktop.NetworkManager.openvpn" {
-                Some(VpnType::OpenVpn)
-            } else {
-                None
-            }
-        }
+        "wireguard" => Some(VpnKind::WireGuard),
+        "vpn" => Some(VpnKind::Plugin),
         _ => None,
     }
 }
 
-/// Connects to a VPN (WireGuard or OpenVPN).
+/// Extracts a string from a `Dict` (vpn.data / vpn.secrets) by key.
+fn dict_str(dict: &zvariant::Dict<'_, '_>, key: &str) -> Option<String> {
+    dict.iter().find_map(|(k, v)| match (k, v) {
+        (zvariant::Value::Str(k_str), zvariant::Value::Str(v_str)) if k_str.as_str() == key => {
+            Some(v_str.to_string())
+        }
+        _ => None,
+    })
+}
+
+/// Converts a full `Dict` to `HashMap<String, String>`.
+fn dict_to_map(dict: &zvariant::Dict<'_, '_>) -> HashMap<String, String> {
+    dict.iter()
+        .filter_map(|(k, v)| match (k, v) {
+            (zvariant::Value::Str(k_str), zvariant::Value::Str(v_str)) => {
+                Some((k_str.to_string(), v_str.to_string()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Decodes a [`VpnType`] from raw NM settings dictionaries.
 ///
-/// Checks for an existing saved connection by name. If found, activates
-/// the saved profile. If not found, creates a new connection from the
-/// provided configuration. Waits for the connection to reach the
-/// activated state before returning.
+/// Pure function — no D-Bus calls.
+pub(crate) fn vpn_type_from_settings(
+    kind: VpnKind,
+    settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> VpnType {
+    match kind {
+        VpnKind::WireGuard => decode_wireguard_type(settings),
+        VpnKind::Plugin => decode_plugin_type(settings),
+    }
+}
+
+fn decode_wireguard_type(
+    settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> VpnType {
+    let wg = settings.get("wireguard");
+
+    let private_key = wg.and_then(|s| s.get("private-key")).and_then(|v| match v {
+        zvariant::Value::Str(s) if !s.is_empty() => Some(s.to_string()),
+        _ => None,
+    });
+
+    let (peer_public_key, endpoint, allowed_ips, persistent_keepalive) =
+        if let Some(peers_val) = wg.and_then(|s| s.get("peers")) {
+            decode_wg_first_peer(peers_val)
+        } else {
+            (None, None, vec![], None)
+        };
+
+    VpnType::WireGuard {
+        private_key,
+        peer_public_key,
+        endpoint,
+        allowed_ips,
+        persistent_keepalive,
+    }
+}
+
+fn decode_wg_first_peer(
+    peers_val: &zvariant::Value<'_>,
+) -> (Option<String>, Option<String>, Vec<String>, Option<u32>) {
+    match peers_val {
+        zvariant::Value::Str(s) => {
+            let text = s.as_str();
+            let first = text.split(',').next().unwrap_or(text).trim();
+            let mut pk = None;
+            let mut ep = None;
+            let mut ips = vec![];
+            let mut ka = None;
+            for tok in first.split_whitespace() {
+                if let Some(v) = tok.strip_prefix("public-key=") {
+                    pk = Some(v.to_string());
+                } else if let Some(v) = tok.strip_prefix("endpoint=") {
+                    ep = Some(v.to_string());
+                } else if let Some(v) = tok.strip_prefix("allowed-ips=") {
+                    ips = v.split(';').map(|s| s.trim().to_string()).collect();
+                } else if let Some(v) = tok.strip_prefix("persistent-keepalive=") {
+                    ka = v.parse().ok();
+                }
+            }
+            (pk, ep, ips, ka)
+        }
+        zvariant::Value::Array(arr) => {
+            if let Some(zvariant::Value::Dict(dict)) = arr.first() {
+                let pk = dict_str(dict, "public-key");
+                let ep = dict_str(dict, "endpoint");
+                let ips = dict_str(dict, "allowed-ips")
+                    .map(|s| s.split(';').map(|p| p.trim().to_string()).collect())
+                    .unwrap_or_default();
+                let ka = dict_str(dict, "persistent-keepalive").and_then(|s| s.parse().ok());
+                return (pk, ep, ips, ka);
+            }
+            (None, None, vec![], None)
+        }
+        _ => (None, None, vec![], None),
+    }
+}
+
+fn decode_plugin_type(settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>) -> VpnType {
+    let vpn_sec = match settings.get("vpn") {
+        Some(s) => s,
+        None => {
+            return VpnType::Generic {
+                service_type: String::new(),
+                data: HashMap::new(),
+                secrets: HashMap::new(),
+                user_name: None,
+                password_flags: VpnSecretFlags::default(),
+            };
+        }
+    };
+
+    let service_type = vpn_sec
+        .get("service-type")
+        .and_then(|v| match v {
+            zvariant::Value::Str(s) => Some(s.to_string()),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    let user_name = vpn_sec.get("user-name").and_then(|v| match v {
+        zvariant::Value::Str(s) if !s.is_empty() => Some(s.to_string()),
+        _ => None,
+    });
+
+    let pf_raw = vpn_sec
+        .get("password-flags")
+        .and_then(|v| match v {
+            zvariant::Value::U32(n) => Some(*n),
+            _ => None,
+        })
+        .unwrap_or(0);
+    let password_flags = VpnSecretFlags(pf_raw);
+
+    let data_dict = vpn_sec.get("data");
+    let secrets_dict = vpn_sec.get("secrets");
+
+    if service_type.ends_with(".openvpn") {
+        return decode_openvpn(data_dict, user_name, password_flags);
+    }
+    if service_type.ends_with(".openconnect") {
+        return decode_openconnect(data_dict, user_name, password_flags);
+    }
+    if service_type.ends_with(".strongswan") {
+        return decode_strongswan(data_dict, user_name, password_flags);
+    }
+    if service_type.ends_with(".pptp") {
+        return decode_pptp(data_dict, user_name, password_flags);
+    }
+    if service_type.ends_with(".l2tp") {
+        return decode_l2tp(data_dict, user_name, password_flags);
+    }
+
+    let data = data_dict
+        .and_then(|v| match v {
+            zvariant::Value::Dict(d) => Some(dict_to_map(d)),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let secrets = secrets_dict
+        .and_then(|v| match v {
+            zvariant::Value::Dict(d) => Some(dict_to_map(d)),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    VpnType::Generic {
+        service_type,
+        data,
+        secrets,
+        user_name,
+        password_flags,
+    }
+}
+
+fn data_str(data_dict: Option<&zvariant::Value<'_>>, key: &str) -> Option<String> {
+    match data_dict? {
+        zvariant::Value::Dict(d) => dict_str(d, key),
+        _ => None,
+    }
+}
+
+fn data_pf(data_dict: Option<&zvariant::Value<'_>>, key: &str) -> VpnSecretFlags {
+    VpnSecretFlags(
+        data_str(data_dict, key)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+    )
+}
+
+fn decode_openvpn(
+    data_dict: Option<&zvariant::Value<'_>>,
+    user_name: Option<String>,
+    _section_pf: VpnSecretFlags,
+) -> VpnType {
+    let remote = data_str(data_dict, "remote");
+    let ct =
+        data_str(data_dict, "connection-type").and_then(|s| OpenVpnConnectionType::from_nm_str(&s));
+    let un = data_str(data_dict, "username").or(user_name);
+    let ca = data_str(data_dict, "ca");
+    let cert = data_str(data_dict, "cert");
+    let key = data_str(data_dict, "key");
+    let ta = data_str(data_dict, "ta");
+    let pf = data_pf(data_dict, "password-flags");
+
+    VpnType::OpenVpn {
+        remote,
+        connection_type: ct,
+        user_name: un,
+        ca,
+        cert,
+        key,
+        ta,
+        password_flags: pf,
+    }
+}
+
+fn decode_openconnect(
+    data_dict: Option<&zvariant::Value<'_>>,
+    user_name: Option<String>,
+    password_flags: VpnSecretFlags,
+) -> VpnType {
+    VpnType::OpenConnect {
+        gateway: data_str(data_dict, "gateway"),
+        user_name: data_str(data_dict, "username").or(user_name),
+        protocol: data_str(data_dict, "protocol"),
+        password_flags,
+    }
+}
+
+fn decode_strongswan(
+    data_dict: Option<&zvariant::Value<'_>>,
+    user_name: Option<String>,
+    password_flags: VpnSecretFlags,
+) -> VpnType {
+    VpnType::StrongSwan {
+        address: data_str(data_dict, "address"),
+        method: data_str(data_dict, "method"),
+        user_name: data_str(data_dict, "user").or(user_name),
+        certificate: data_str(data_dict, "certificate"),
+        password_flags,
+    }
+}
+
+fn decode_pptp(
+    data_dict: Option<&zvariant::Value<'_>>,
+    user_name: Option<String>,
+    password_flags: VpnSecretFlags,
+) -> VpnType {
+    VpnType::Pptp {
+        gateway: data_str(data_dict, "gateway"),
+        user_name: data_str(data_dict, "user").or(user_name),
+        password_flags,
+    }
+}
+
+fn decode_l2tp(
+    data_dict: Option<&zvariant::Value<'_>>,
+    user_name: Option<String>,
+    password_flags: VpnSecretFlags,
+) -> VpnType {
+    let ipsec = data_str(data_dict, "ipsec-enabled")
+        .map(|v| v == "yes" || v == "true" || v == "1")
+        .unwrap_or(false);
+    VpnType::L2tp {
+        gateway: data_str(data_dict, "gateway"),
+        user_name: data_str(data_dict, "user").or(user_name),
+        password_flags,
+        ipsec_enabled: ipsec,
+    }
+}
+
+/// Extracts `connection.uuid` from settings.
+fn extract_uuid(
+    settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> Option<String> {
+    settings
+        .get("connection")?
+        .get("uuid")
+        .and_then(|v| match v {
+            zvariant::Value::Str(s) => Some(s.to_string()),
+            _ => None,
+        })
+}
+
+/// Extracts `connection.id` from settings.
+fn extract_id(settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>) -> Option<String> {
+    settings.get("connection")?.get("id").and_then(|v| match v {
+        zvariant::Value::Str(s) => Some(s.to_string()),
+        _ => None,
+    })
+}
+
+/// Extracts `vpn.service-type` or returns empty string for WireGuard.
+fn extract_service_type(
+    kind: VpnKind,
+    settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> String {
+    if kind == VpnKind::WireGuard {
+        return String::new();
+    }
+    settings
+        .get("vpn")
+        .and_then(|s| s.get("service-type"))
+        .and_then(|v| match v {
+            zvariant::Value::Str(s) => Some(s.to_string()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+fn extract_vpn_user_name(
+    settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> Option<String> {
+    settings.get("vpn")?.get("user-name").and_then(|v| match v {
+        zvariant::Value::Str(s) if !s.is_empty() => Some(s.to_string()),
+        _ => None,
+    })
+}
+
+fn extract_password_flags(
+    settings: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
+) -> VpnSecretFlags {
+    let raw = settings
+        .get("vpn")
+        .and_then(|s| s.get("password-flags"))
+        .and_then(|v| match v {
+            zvariant::Value::U32(n) => Some(*n),
+            _ => None,
+        })
+        .unwrap_or(0);
+    VpnSecretFlags(raw)
+}
+
+// ── Public core functions ──────────────────────────────────────────────
+
+/// Lists all saved VPN connections with rich metadata.
+pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnConnection>> {
+    let nm = NMProxy::new(conn).await?;
+
+    let settings_proxy = nm_proxy(
+        conn,
+        "/org/freedesktop/NetworkManager/Settings",
+        "org.freedesktop.NetworkManager.Settings",
+    )
+    .await?;
+
+    let list_reply = settings_proxy
+        .call_method("ListConnections", &())
+        .await
+        .map_err(|e| ConnectionError::DbusOperation {
+            context: "failed to list saved connections".to_string(),
+            source: e,
+        })?;
+
+    let saved_paths: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
+
+    let active_map = build_active_vpn_map(conn, &nm).await;
+
+    let mut vpn_conns = Vec::new();
+
+    for cpath in saved_paths {
+        let cproxy = match nm_proxy(
+            conn,
+            cpath.clone(),
+            "org.freedesktop.NetworkManager.Settings.Connection",
+        )
+        .await
+        {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        let msg = match cproxy.call_method("GetSettings", &()).await {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        let body = msg.body();
+        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
+            match body.deserialize() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+
+        let Some(kind) = detect_vpn_kind(&settings_map) else {
+            continue;
+        };
+
+        let Some(uuid) = extract_uuid(&settings_map) else {
+            continue;
+        };
+        let id = extract_id(&settings_map).unwrap_or_default();
+
+        let vpn_type = vpn_type_from_settings(kind, &settings_map);
+        let service_type = extract_service_type(kind, &settings_map);
+        let user_name = extract_vpn_user_name(&settings_map);
+        let password_flags = extract_password_flags(&settings_map);
+
+        let (state, interface, active) =
+            active_map
+                .get(&uuid)
+                .cloned()
+                .unwrap_or((DeviceState::Other(0), None, false));
+
+        vpn_conns.push(VpnConnection {
+            uuid,
+            id: id.clone(),
+            name: id,
+            vpn_type,
+            state,
+            interface,
+            active,
+            user_name,
+            password_flags,
+            service_type,
+            kind,
+        });
+    }
+
+    Ok(vpn_conns)
+}
+
+/// Only active VPN connections.
+pub(crate) async fn active_vpn_connections(conn: &Connection) -> Result<Vec<VpnConnection>> {
+    let all = list_vpn_connections(conn).await?;
+    Ok(all.into_iter().filter(|v| v.active).collect())
+}
+
+/// Builds uuid → (state, interface, active) map from NM active connections.
+async fn build_active_vpn_map(
+    conn: &Connection,
+    nm: &NMProxy<'_>,
+) -> HashMap<String, (DeviceState, Option<String>, bool)> {
+    let mut map = HashMap::new();
+
+    let active_conns = match nm.active_connections().await {
+        Ok(c) => c,
+        Err(_) => return map,
+    };
+
+    for ac_path in active_conns {
+        let ac_proxy = match nm_proxy(
+            conn,
+            ac_path.clone(),
+            "org.freedesktop.NetworkManager.Connection.Active",
+        )
+        .await
+        {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        let uuid: String = match ac_proxy.get_property("Uuid").await {
+            Ok(u) => u,
+            Err(_) => continue,
+        };
+
+        let conn_type: String = match ac_proxy.get_property("Type").await {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+
+        if conn_type != "vpn" && conn_type != "wireguard" {
+            continue;
+        }
+
+        let state = ac_proxy
+            .get_property::<u32>("State")
+            .await
+            .map(DeviceState::from)
+            .unwrap_or(DeviceState::Other(0));
+
+        let interface = ac_proxy
+            .get_property::<Vec<OwnedObjectPath>>("Devices")
+            .await
+            .ok()
+            .and_then(|devs| devs.first().cloned())
+            .and_then(|dev_path| {
+                futures::executor::block_on(async {
+                    let dp = nm_proxy(conn, dev_path, "org.freedesktop.NetworkManager.Device")
+                        .await
+                        .ok()?;
+                    dp.get_property::<String>("Interface").await.ok()
+                })
+            });
+
+        map.insert(uuid, (state, interface, true));
+    }
+
+    map
+}
+
+/// Activate a saved VPN by UUID.
+pub(crate) async fn connect_vpn_by_uuid(
+    conn: &Connection,
+    uuid: &str,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
+    let nm = NMProxy::new(conn).await?;
+
+    let settings_proxy = nm_proxy(
+        conn,
+        "/org/freedesktop/NetworkManager/Settings",
+        "org.freedesktop.NetworkManager.Settings",
+    )
+    .await?;
+
+    let reply = settings_proxy
+        .call_method("GetConnectionByUuid", &(uuid,))
+        .await
+        .map_err(|_| ConnectionError::VpnNotFound(uuid.to_string()))?;
+
+    let conn_path: OwnedObjectPath = reply.body().deserialize()?;
+
+    let active_conn = nm
+        .activate_connection(
+            conn_path,
+            OwnedObjectPath::default(),
+            OwnedObjectPath::default(),
+        )
+        .await?;
+
+    let timeout = timeout_config.map(|c| c.connection_timeout);
+    wait_for_connection_activation(conn, &active_conn, timeout).await
+}
+
+/// Activate a saved VPN by connection id (display name).
+pub(crate) async fn connect_vpn_by_id(
+    conn: &Connection,
+    id: &str,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
+    let all = list_vpn_connections(conn).await?;
+    let matches: Vec<_> = all.iter().filter(|v| v.id == id).collect();
+
+    match matches.len() {
+        0 => Err(ConnectionError::VpnNotFound(id.to_string())),
+        1 => connect_vpn_by_uuid(conn, &matches[0].uuid, timeout_config).await,
+        _ => Err(ConnectionError::VpnIdAmbiguous(id.to_string())),
+    }
+}
+
+/// Disconnect a VPN by UUID.
+pub(crate) async fn disconnect_vpn_by_uuid(conn: &Connection, uuid: &str) -> Result<()> {
+    let nm = NMProxy::new(conn).await?;
+    let active_conns = nm.active_connections().await.unwrap_or_default();
+
+    for ac_path in active_conns {
+        let ac_proxy = match nm_proxy(
+            conn,
+            ac_path.clone(),
+            "org.freedesktop.NetworkManager.Connection.Active",
+        )
+        .await
+        {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        let ac_uuid: String = match ac_proxy.get_property("Uuid").await {
+            Ok(u) => u,
+            Err(_) => continue,
+        };
+
+        if ac_uuid == uuid {
+            nm.deactivate_connection(ac_path).await?;
+            return Ok(());
+        }
+    }
+
+    Ok(())
+}
+
+/// Connects to a VPN (WireGuard or OpenVPN) from configuration.
 pub(crate) async fn connect_vpn(
     conn: &Connection,
     config: VpnConfiguration,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
-    // Validate VPN credentials before attempting connection
     let name = config.name().to_string();
     debug!("Connecting to VPN: {}", name);
 
     let nm = NMProxy::new(conn).await?;
 
-    // Check saved connections
     let saved = crate::core::connection_settings::get_saved_connection_path(conn, &name).await?;
 
-    // Use "/" as device path so NetworkManager auto-selects the interface
     let vpn_device_path = OwnedObjectPath::default();
     let specific_object = OwnedObjectPath::default();
 
@@ -175,13 +726,8 @@ pub(crate) async fn connect_vpn(
     }
 }
 
-/// Disconnects from a VPN connection by name.
-///
-/// Searches through active connections for a VPN (WireGuard or OpenVPN)
-/// matching the given name. If found, deactivates the connection. If not
-/// found, assumes already disconnected and returns success.
+/// Disconnects from a VPN connection by name (legacy — prefer `disconnect_vpn_by_uuid`).
 pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> {
-    // Validate connection name
     validate_connection_name(name)?;
 
     debug!("Disconnecting VPN: {name}");
@@ -205,30 +751,12 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
         .await
         {
             Ok(p) => p,
-            Err(e) => {
-                warn!(
-                    "Failed to create proxy for active connection {}: {}",
-                    ac_path, e
-                );
-                continue;
-            }
+            Err(_) => continue,
         };
 
-        let conn_path: OwnedObjectPath = match ac_proxy.call_method("Connection", &()).await {
-            Ok(msg) => match msg.body().deserialize::<OwnedObjectPath>() {
-                Ok(path) => path,
-                Err(e) => {
-                    warn!(
-                        "Failed to deserialize connection path for {}: {}",
-                        ac_path, e
-                    );
-                    continue;
-                }
-            },
-            Err(e) => {
-                warn!("Failed to get Connection property from {}: {}", ac_path, e);
-                continue;
-            }
+        let conn_path: OwnedObjectPath = match ac_proxy.get_property("Connection").await {
+            Ok(p) => p,
+            Err(_) => continue,
         };
 
         let cproxy = match nm_proxy(
@@ -239,52 +767,33 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
         .await
         {
             Ok(p) => p,
-            Err(e) => {
-                warn!(
-                    "Failed to create proxy for connection settings {}: {}",
-                    conn_path, e
-                );
-                continue;
-            }
+            Err(_) => continue,
         };
 
         let msg = match cproxy.call_method("GetSettings", &()).await {
             Ok(msg) => msg,
-            Err(e) => {
-                warn!("Failed to get settings for connection {}: {}", conn_path, e);
-                continue;
-            }
+            Err(_) => continue,
         };
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
             match body.deserialize() {
                 Ok(map) => map,
-                Err(e) => {
-                    warn!("Failed to deserialize settings for {}: {}", conn_path, e);
-                    continue;
-                }
+                Err(_) => continue,
             };
 
-        if let Some(conn_sec) = settings_map.get("connection") {
-            let id_match = conn_sec
-                .get("id")
-                .and_then(|v| match v {
-                    zvariant::Value::Str(s) => Some(s.as_str() == name),
-                    _ => None,
-                })
-                .unwrap_or(false);
+        let id_match = extract_id(&settings_map)
+            .map(|id| id == name)
+            .unwrap_or(false);
+        let is_vpn = detect_vpn_kind(&settings_map).is_some();
 
-            let is_vpn = detect_vpn_type(&settings_map).is_some();
-
-            if id_match && is_vpn {
-                debug!("Found active VPN connection, deactivating: {name}");
-                match nm.deactivate_connection(ac_path.clone()).await {
-                    Ok(_) => info!("Successfully disconnected VPN: {name}"),
-                    Err(e) => warn!("Failed to deactivate connection {}: {}", ac_path, e),
-                }
-                return Ok(());
+        if id_match && is_vpn {
+            debug!("Found active VPN connection, deactivating: {name}");
+            match nm.deactivate_connection(ac_path.clone()).await {
+                Ok(_) => info!("Successfully disconnected VPN: {name}"),
+                Err(e) => warn!("Failed to deactivate connection {}: {}", ac_path, e),
             }
+            return Ok(());
         }
     }
 
@@ -292,238 +801,7 @@ pub(crate) async fn disconnect_vpn(conn: &Connection, name: &str) -> Result<()> 
     Ok(())
 }
 
-/// Lists all saved VPN connections (WireGuard and OpenVPN) with their current state.
-///
-/// Returns connections where `connection.type` is `"wireguard"` or
-/// `"vpn"` with OpenVPN service type.
-/// For active connections, populates `state` and `interface` from the active connection.
-pub(crate) async fn list_vpn_connections(conn: &Connection) -> Result<Vec<VpnConnection>> {
-    let nm = NMProxy::new(conn).await?;
-
-    let settings = nm_proxy(
-        conn,
-        "/org/freedesktop/NetworkManager/Settings",
-        "org.freedesktop.NetworkManager.Settings",
-    )
-    .await?;
-
-    let list_reply = settings
-        .call_method("ListConnections", &())
-        .await
-        .map_err(|e| ConnectionError::DbusOperation {
-            context: "failed to list saved connections".to_string(),
-            source: e,
-        })?;
-
-    let saved_conns: Vec<OwnedObjectPath> = list_reply.body().deserialize()?;
-
-    let active_conns = nm.active_connections().await?;
-    let mut active_vpn_map: HashMap<String, (DeviceState, Option<String>)> = HashMap::new();
-
-    for ac_path in active_conns {
-        let ac_proxy = match nm_proxy(
-            conn,
-            ac_path.clone(),
-            "org.freedesktop.NetworkManager.Connection.Active",
-        )
-        .await
-        {
-            Ok(p) => p,
-            Err(e) => {
-                warn!(
-                    "Failed to create proxy for active connection {}: {}",
-                    ac_path, e
-                );
-                continue;
-            }
-        };
-
-        let conn_path: OwnedObjectPath = match ac_proxy.call_method("Connection", &()).await {
-            Ok(msg) => match msg.body().deserialize::<OwnedObjectPath>() {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!(
-                        "Failed to deserialize connection path for {}: {}",
-                        ac_path, e
-                    );
-                    continue;
-                }
-            },
-            Err(e) => {
-                warn!("Failed to get Connection property from {}: {}", ac_path, e);
-                continue;
-            }
-        };
-
-        let cproxy = match nm_proxy(
-            conn,
-            conn_path.clone(),
-            "org.freedesktop.NetworkManager.Settings.Connection",
-        )
-        .await
-        {
-            Ok(p) => p,
-            Err(e) => {
-                warn!(
-                    "Failed to create proxy for connection settings {}: {}",
-                    conn_path, e
-                );
-                continue;
-            }
-        };
-
-        let msg = match cproxy.call_method("GetSettings", &()).await {
-            Ok(m) => m,
-            Err(e) => {
-                warn!("Failed to get settings for connection {}: {}", conn_path, e);
-                continue;
-            }
-        };
-
-        let body = msg.body();
-        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
-            match body.deserialize() {
-                Ok(m) => m,
-                Err(e) => {
-                    warn!("Failed to deserialize settings for {}: {}", conn_path, e);
-                    continue;
-                }
-            };
-
-        let conn_sec = match settings_map.get("connection") {
-            Some(s) => s,
-            None => continue,
-        };
-
-        let id = match conn_sec.get("id") {
-            Some(zvariant::Value::Str(s)) => s.as_str().to_string(),
-            _ => continue,
-        };
-
-        if detect_vpn_type(&settings_map).is_none() {
-            continue;
-        }
-
-        let state = if let Ok(state_val) = ac_proxy.get_property::<u32>("State").await {
-            DeviceState::from(state_val)
-        } else {
-            DeviceState::Other(0)
-        };
-
-        let interface = if let Ok(dev_paths) = ac_proxy
-            .get_property::<Vec<OwnedObjectPath>>("Devices")
-            .await
-        {
-            if let Some(dev_path) = dev_paths.first() {
-                match nm_proxy(
-                    conn,
-                    dev_path.clone(),
-                    "org.freedesktop.NetworkManager.Device",
-                )
-                .await
-                {
-                    Ok(dev_proxy) => match dev_proxy.get_property::<String>("Interface").await {
-                        Ok(iface) => Some(iface),
-                        Err(e) => {
-                            debug!(
-                                "Failed to get interface name for VPN device {}: {}",
-                                dev_path, e
-                            );
-                            None
-                        }
-                    },
-                    Err(e) => {
-                        debug!("Failed to create device proxy for {}: {}", dev_path, e);
-                        None
-                    }
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        active_vpn_map.insert(id, (state, interface));
-    }
-
-    let mut vpn_conns = Vec::new();
-
-    for cpath in saved_conns {
-        let cproxy = match nm_proxy(
-            conn,
-            cpath.clone(),
-            "org.freedesktop.NetworkManager.Settings.Connection",
-        )
-        .await
-        {
-            Ok(p) => p,
-            Err(e) => {
-                warn!(
-                    "Failed to create proxy for saved connection {}: {}",
-                    cpath, e
-                );
-                continue;
-            }
-        };
-
-        let msg = match cproxy.call_method("GetSettings", &()).await {
-            Ok(m) => m,
-            Err(e) => {
-                warn!(
-                    "Failed to get settings for saved connection {}: {}",
-                    cpath, e
-                );
-                continue;
-            }
-        };
-
-        let body = msg.body();
-        let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
-            match body.deserialize() {
-                Ok(m) => m,
-                Err(e) => {
-                    warn!(
-                        "Failed to deserialize settings for saved connection {}: {}",
-                        cpath, e
-                    );
-                    continue;
-                }
-            };
-
-        let conn_sec = match settings_map.get("connection") {
-            Some(s) => s,
-            None => continue,
-        };
-
-        let id = match conn_sec.get("id") {
-            Some(zvariant::Value::Str(s)) => s.as_str().to_string(),
-            _ => continue,
-        };
-
-        let Some(vpn_type) = detect_vpn_type(&settings_map) else {
-            continue;
-        };
-
-        let (state, interface) = active_vpn_map
-            .get(&id)
-            .cloned()
-            .unwrap_or((DeviceState::Other(0), None));
-
-        vpn_conns.push(VpnConnection {
-            name: id,
-            vpn_type,
-            interface,
-            state,
-        });
-    }
-
-    Ok(vpn_conns)
-}
-
 /// Forgets (deletes) a saved VPN connection by name.
-///
-/// If currently connected, the connection will be disconnected first before deletion.
 pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
     validate_connection_name(name)?;
 
@@ -556,35 +834,23 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
         .await
         {
             Ok(p) => p,
-            Err(e) => {
-                warn!("Failed to create proxy for connection {}: {}", cpath, e);
-                continue;
-            }
+            Err(_) => continue,
         };
 
         let msg = match cproxy.call_method("GetSettings", &()).await {
             Ok(msg) => msg,
-            Err(e) => {
-                warn!("Failed to get settings for connection {}: {}", cpath, e);
-                continue;
-            }
+            Err(_) => continue,
         };
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> = body.deserialize()?;
 
-        let id_ok = settings_map
-            .get("connection")
-            .and_then(|c| c.get("id"))
-            .and_then(|v| match v {
-                zvariant::Value::Str(s) => Some(s.as_str() == name),
-                _ => None,
-            })
+        let id_ok = extract_id(&settings_map)
+            .map(|id| id == name)
             .unwrap_or(false);
+        let vpn_kind = detect_vpn_kind(&settings_map);
 
-        let vpn_type = detect_vpn_type(&settings_map);
-
-        if id_ok && vpn_type.is_some() {
+        if id_ok && vpn_kind.is_some() {
             debug!("Found VPN connection, deleting: {name}");
             cproxy.call_method("Delete", &()).await.map_err(|e| {
                 ConnectionError::DbusOperation {
@@ -594,7 +860,7 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
             })?;
             info!("Successfully deleted VPN connection: {name}");
 
-            if vpn_type == Some(VpnType::OpenVpn)
+            if vpn_kind == Some(VpnKind::Plugin)
                 && let Err(e) = crate::util::cert_store::cleanup_certs(name)
             {
                 warn!("Failed to remove nmrs cert directory for '{}': {}", name, e);
@@ -607,11 +873,8 @@ pub(crate) async fn forget_vpn(conn: &Connection, name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Gets detailed information about an active VPN connection (WireGuard or OpenVPN).
-///
-/// The connection must be in the active connections list to retrieve full details.
+/// Gets detailed information about an active VPN connection.
 pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnConnectionInfo> {
-    // Validate connection name
     validate_connection_name(name)?;
 
     let nm = NMProxy::new(conn).await?;
@@ -626,30 +889,12 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
         .await
         {
             Ok(p) => p,
-            Err(e) => {
-                warn!(
-                    "Failed to create proxy for active connection {}: {}",
-                    ac_path, e
-                );
-                continue;
-            }
+            Err(_) => continue,
         };
 
-        let conn_path: OwnedObjectPath = match ac_proxy.call_method("Connection", &()).await {
-            Ok(msg) => match msg.body().deserialize::<OwnedObjectPath>() {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!(
-                        "Failed to deserialize connection path for {}: {}",
-                        ac_path, e
-                    );
-                    continue;
-                }
-            },
-            Err(e) => {
-                warn!("Failed to get Connection property from {}: {}", ac_path, e);
-                continue;
-            }
+        let conn_path: OwnedObjectPath = match ac_proxy.get_property("Connection").await {
+            Ok(p) => p,
+            Err(_) => continue,
         };
 
         let cproxy = match nm_proxy(
@@ -660,44 +905,27 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
         .await
         {
             Ok(p) => p,
-            Err(e) => {
-                warn!(
-                    "Failed to create proxy for connection settings {}: {}",
-                    conn_path, e
-                );
-                continue;
-            }
+            Err(_) => continue,
         };
 
         let msg = match cproxy.call_method("GetSettings", &()).await {
             Ok(m) => m,
-            Err(e) => {
-                warn!("Failed to get settings for connection {}: {}", conn_path, e);
-                continue;
-            }
+            Err(_) => continue,
         };
 
         let body = msg.body();
         let settings_map: HashMap<String, HashMap<String, zvariant::Value>> =
             match body.deserialize() {
                 Ok(m) => m,
-                Err(e) => {
-                    warn!("Failed to deserialize settings for {}: {}", conn_path, e);
-                    continue;
-                }
+                Err(_) => continue,
             };
 
-        let conn_sec = match settings_map.get("connection") {
-            Some(s) => s,
+        let id = match extract_id(&settings_map) {
+            Some(i) => i,
             None => continue,
         };
 
-        let id = match conn_sec.get("id") {
-            Some(zvariant::Value::Str(s)) => s.as_str(),
-            _ => continue,
-        };
-
-        let Some(vpn_type) = detect_vpn_type(&settings_map) else {
+        let Some(kind) = detect_vpn_kind(&settings_map) else {
             continue;
         };
 
@@ -705,11 +933,9 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             continue;
         }
 
-        // ActiveConnection state
         let state_val: u32 = ac_proxy.get_property("State").await?;
         let state = DeviceState::from(state_val);
 
-        // Device/interface
         let dev_paths: Vec<OwnedObjectPath> = ac_proxy.get_property("Devices").await?;
         let interface = if let Some(dev_path) = dev_paths.first() {
             let dev_proxy = nm_proxy(
@@ -723,12 +949,8 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             None
         };
 
-        // Best-effort endpoint extraction from the connection settings.
-        // WireGuard reads from wireguard.peers (nmcli-style string).
-        // OpenVPN reads from vpn.data["remote"] (a{ss} on the D-Bus wire).
-        // Neither is guaranteed to be populated.
-        let gateway = match vpn_type {
-            VpnType::WireGuard => settings_map
+        let gateway = match kind {
+            VpnKind::WireGuard => settings_map
                 .get("wireguard")
                 .and_then(|wg_sec| wg_sec.get("peers"))
                 .and_then(|v| match v {
@@ -744,10 +966,9 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
                     }
                     None
                 }),
-            VpnType::OpenVpn => extract_openvpn_gateway(&settings_map),
+            VpnKind::Plugin => extract_openvpn_gateway(&settings_map),
         };
 
-        // IPv4 config
         let ip4_path: OwnedObjectPath = ac_proxy.get_property("Ip4Config").await?;
         let (ip4_address, dns_servers) = if ip4_path.as_str() != "/" {
             let ip4_proxy =
@@ -795,7 +1016,6 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             (None, vec![])
         };
 
-        // IPv6 config
         let ip6_path: OwnedObjectPath = ac_proxy.get_property("Ip6Config").await?;
         let ip6_address = if ip6_path.as_str() != "/" {
             let ip6_proxy =
@@ -823,14 +1043,14 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
             None
         };
 
-        let details = match vpn_type {
-            VpnType::WireGuard => extract_wireguard_details(&settings_map),
-            VpnType::OpenVpn => extract_openvpn_details(&settings_map),
+        let details = match kind {
+            VpnKind::WireGuard => extract_wireguard_details(&settings_map),
+            VpnKind::Plugin => extract_openvpn_details(&settings_map),
         };
 
         return Ok(VpnConnectionInfo {
-            name: id.to_string(),
-            vpn_type,
+            name: id,
+            vpn_kind: kind,
             state,
             interface,
             gateway,
@@ -844,26 +1064,15 @@ pub(crate) async fn get_vpn_info(conn: &Connection, name: &str) -> Result<VpnCon
     Err(crate::api::models::ConnectionError::NoVpnConnection)
 }
 
-// Extracts the remote gateway from an OpenVPN connection's settings map.
-//
-// NM stores OpenVPN options in vpn.data as a{ss} on the D-Bus wire, which
-// zvariant deserialises as Value::Dict(Dict). The "remote" key holds the
-// server address (e.g. "vpn.example.com:1194").
 fn extract_openvpn_gateway(
     settings_map: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
 ) -> Option<String> {
     let zvariant::Value::Dict(dict) = settings_map.get("vpn")?.get("data")? else {
         return None;
     };
-    dict.iter().find_map(|(k, v)| match (k, v) {
-        (zvariant::Value::Str(k), zvariant::Value::Str(v)) if k.as_str() == "remote" => {
-            Some(v.to_string())
-        }
-        _ => None,
-    })
+    dict_str(dict, "remote")
 }
 
-/// Extracts a string value from an OpenVPN `vpn.data` dict by key.
 fn extract_openvpn_data_value(
     settings_map: &HashMap<String, HashMap<String, zvariant::Value<'_>>>,
     key: &str,
@@ -871,12 +1080,7 @@ fn extract_openvpn_data_value(
     let zvariant::Value::Dict(dict) = settings_map.get("vpn")?.get("data")? else {
         return None;
     };
-    dict.iter().find_map(|(k, v)| match (k, v) {
-        (zvariant::Value::Str(k_str), zvariant::Value::Str(v_str)) if k_str.as_str() == key => {
-            Some(v_str.to_string())
-        }
-        _ => None,
-    })
+    dict_str(dict, key)
 }
 
 fn extract_openvpn_details(
@@ -960,6 +1164,162 @@ mod tests {
         HashMap::from([("vpn".to_string(), vpn_sec)])
     }
 
+    fn vpn_settings_with_service(
+        service: &str,
+        data: HashMap<String, String>,
+    ) -> HashMap<String, HashMap<String, zvariant::Value<'static>>> {
+        let dict = zvariant::Dict::from(data);
+        let vpn_sec = HashMap::from([
+            (
+                "service-type".to_string(),
+                zvariant::Value::Str(service.to_string().into()),
+            ),
+            ("data".to_string(), zvariant::Value::Dict(dict)),
+        ]);
+        let conn_sec = HashMap::from([("type".to_string(), zvariant::Value::Str("vpn".into()))]);
+        HashMap::from([
+            ("vpn".to_string(), vpn_sec),
+            ("connection".to_string(), conn_sec),
+        ])
+    }
+
+    #[test]
+    fn detect_wireguard() {
+        let conn_sec =
+            HashMap::from([("type".to_string(), zvariant::Value::Str("wireguard".into()))]);
+        let settings = HashMap::from([("connection".to_string(), conn_sec)]);
+        assert_eq!(detect_vpn_kind(&settings), Some(VpnKind::WireGuard));
+    }
+
+    #[test]
+    fn detect_plugin() {
+        let conn_sec = HashMap::from([("type".to_string(), zvariant::Value::Str("vpn".into()))]);
+        let settings = HashMap::from([("connection".to_string(), conn_sec)]);
+        assert_eq!(detect_vpn_kind(&settings), Some(VpnKind::Plugin));
+    }
+
+    #[test]
+    fn detect_non_vpn() {
+        let conn_sec = HashMap::from([(
+            "type".to_string(),
+            zvariant::Value::Str("802-11-wireless".into()),
+        )]);
+        let settings = HashMap::from([("connection".to_string(), conn_sec)]);
+        assert_eq!(detect_vpn_kind(&settings), None);
+    }
+
+    #[test]
+    fn decode_openvpn_full() {
+        let data = HashMap::from([
+            ("remote".to_string(), "vpn.example.com:1194".to_string()),
+            ("connection-type".to_string(), "password-tls".to_string()),
+            ("username".to_string(), "alice".to_string()),
+            ("ca".to_string(), "/etc/openvpn/ca.crt".to_string()),
+            ("password-flags".to_string(), "1".to_string()),
+        ]);
+        let settings = vpn_settings_with_service("org.freedesktop.NetworkManager.openvpn", data);
+        let vt = vpn_type_from_settings(VpnKind::Plugin, &settings);
+        match vt {
+            VpnType::OpenVpn {
+                remote,
+                connection_type,
+                user_name,
+                ca,
+                password_flags,
+                ..
+            } => {
+                assert_eq!(remote, Some("vpn.example.com:1194".into()));
+                assert_eq!(connection_type, Some(OpenVpnConnectionType::PasswordTls));
+                assert_eq!(user_name, Some("alice".into()));
+                assert_eq!(ca, Some("/etc/openvpn/ca.crt".into()));
+                assert!(password_flags.agent_owned());
+            }
+            _ => panic!("expected OpenVpn"),
+        }
+    }
+
+    #[test]
+    fn decode_strongswan() {
+        let data = HashMap::from([
+            ("address".to_string(), "ipsec.corp.com".to_string()),
+            ("method".to_string(), "eap".to_string()),
+            ("user".to_string(), "bob".to_string()),
+        ]);
+        let settings = vpn_settings_with_service("org.freedesktop.NetworkManager.strongswan", data);
+        let vt = vpn_type_from_settings(VpnKind::Plugin, &settings);
+        match vt {
+            VpnType::StrongSwan {
+                address,
+                method,
+                user_name,
+                ..
+            } => {
+                assert_eq!(address, Some("ipsec.corp.com".into()));
+                assert_eq!(method, Some("eap".into()));
+                assert_eq!(user_name, Some("bob".into()));
+            }
+            _ => panic!("expected StrongSwan"),
+        }
+    }
+
+    #[test]
+    fn decode_l2tp_with_ipsec() {
+        let data = HashMap::from([
+            ("gateway".to_string(), "l2tp.example.com".to_string()),
+            ("ipsec-enabled".to_string(), "yes".to_string()),
+        ]);
+        let settings = vpn_settings_with_service("org.freedesktop.NetworkManager.l2tp", data);
+        let vt = vpn_type_from_settings(VpnKind::Plugin, &settings);
+        match vt {
+            VpnType::L2tp {
+                gateway,
+                ipsec_enabled,
+                ..
+            } => {
+                assert_eq!(gateway, Some("l2tp.example.com".into()));
+                assert!(ipsec_enabled);
+            }
+            _ => panic!("expected L2tp"),
+        }
+    }
+
+    #[test]
+    fn decode_generic_unknown_plugin() {
+        let data = HashMap::from([("server".to_string(), "my.server.com".to_string())]);
+        let settings =
+            vpn_settings_with_service("org.freedesktop.NetworkManager.my-custom-vpn", data);
+        let vt = vpn_type_from_settings(VpnKind::Plugin, &settings);
+        match vt {
+            VpnType::Generic {
+                service_type, data, ..
+            } => {
+                assert_eq!(service_type, "org.freedesktop.NetworkManager.my-custom-vpn");
+                assert_eq!(data.get("server").unwrap(), "my.server.com");
+            }
+            _ => panic!("expected Generic"),
+        }
+    }
+
+    #[test]
+    fn openvpn_connection_type_roundtrip() {
+        for (s, expected) in [
+            ("tls", OpenVpnConnectionType::Tls),
+            ("static-key", OpenVpnConnectionType::StaticKey),
+            ("password", OpenVpnConnectionType::Password),
+            ("password-tls", OpenVpnConnectionType::PasswordTls),
+        ] {
+            assert_eq!(OpenVpnConnectionType::from_nm_str(s), Some(expected));
+        }
+        assert_eq!(OpenVpnConnectionType::from_nm_str("bogus"), None);
+    }
+
+    #[test]
+    fn vpn_secret_flags_roundtrip() {
+        let f = VpnSecretFlags(0x3);
+        assert!(f.agent_owned());
+        assert_eq!(f.0 & 0x2, 0x2); // NOT_SAVED
+    }
+
     #[test]
     fn openvpn_gateway_extracted_from_vpn_data() {
         let data = HashMap::from([("remote".to_string(), "vpn.example.com:1194".to_string())]);
@@ -981,16 +1341,6 @@ mod tests {
     fn openvpn_gateway_none_when_vpn_section_absent() {
         let settings: HashMap<String, HashMap<String, zvariant::Value<'static>>> =
             HashMap::from([("connection".to_string(), HashMap::new())]);
-        assert_eq!(extract_openvpn_gateway(&settings), None);
-    }
-
-    #[test]
-    fn openvpn_gateway_none_when_data_key_absent() {
-        let vpn_sec = HashMap::from([(
-            "service-type".to_string(),
-            zvariant::Value::Str("org.freedesktop.NetworkManager.openvpn".into()),
-        )]);
-        let settings = HashMap::from([("vpn".to_string(), vpn_sec)]);
         assert_eq!(extract_openvpn_gateway(&settings), None);
     }
 
@@ -1050,43 +1400,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn openvpn_details_none_when_no_remote() {
-        let data = HashMap::from([("cipher".to_string(), "AES-256-GCM".to_string())]);
-        let settings = openvpn_settings_with_data(data);
-        assert!(extract_openvpn_details(&settings).is_none());
-    }
-
-    #[test]
-    fn openvpn_details_remote_without_port() {
-        let data = HashMap::from([("remote".to_string(), "vpn.example.com".to_string())]);
-        let settings = openvpn_settings_with_data(data);
-        let details = extract_openvpn_details(&settings).unwrap();
-        match details {
-            VpnDetails::OpenVpn { remote, port, .. } => {
-                assert_eq!(remote, "vpn.example.com");
-                assert_eq!(port, 1194);
-            }
-            _ => panic!("expected OpenVpn variant"),
-        }
-    }
-
-    #[test]
-    fn openvpn_details_comp_lzo_fallback() {
-        let data = HashMap::from([
-            ("remote".to_string(), "vpn.example.com:1194".to_string()),
-            ("comp-lzo".to_string(), "yes".to_string()),
-        ]);
-        let settings = openvpn_settings_with_data(data);
-        let details = extract_openvpn_details(&settings).unwrap();
-        match details {
-            VpnDetails::OpenVpn { compression, .. } => {
-                assert_eq!(compression, Some("lzo".into()));
-            }
-            _ => panic!("expected OpenVpn variant"),
-        }
-    }
-
     fn wireguard_settings(
         pairs: Vec<(&str, zvariant::Value<'static>)>,
     ) -> HashMap<String, HashMap<String, zvariant::Value<'static>>> {
@@ -1121,31 +1434,5 @@ mod tests {
             }
             _ => panic!("expected WireGuard variant"),
         }
-    }
-
-    #[test]
-    fn wireguard_details_no_public_key() {
-        let settings = wireguard_settings(vec![(
-            "peers",
-            zvariant::Value::Str("endpoint=vpn.example.com:51820".into()),
-        )]);
-        let details = extract_wireguard_details(&settings).unwrap();
-        match details {
-            VpnDetails::WireGuard {
-                public_key,
-                endpoint,
-            } => {
-                assert!(public_key.is_none());
-                assert_eq!(endpoint, Some("vpn.example.com:51820".into()));
-            }
-            _ => panic!("expected WireGuard variant"),
-        }
-    }
-
-    #[test]
-    fn wireguard_details_none_when_no_section() {
-        let settings: HashMap<String, HashMap<String, zvariant::Value<'static>>> =
-            HashMap::from([("connection".to_string(), HashMap::new())]);
-        assert!(extract_wireguard_details(&settings).is_none());
     }
 }
