@@ -122,6 +122,10 @@ pub enum ConnectionError {
     #[error("saved connection malformed: {0}")]
     MalformedSavedConnection(String),
 
+    /// NM's connectivity checks are disabled; `check_connectivity` cannot run.
+    #[error("connectivity checks are disabled in NetworkManager")]
+    ConnectivityCheckDisabled,
+
     /// An empty password was provided for the requested network.
     #[error("no password was provided")]
     MissingPassword,
