@@ -607,7 +607,7 @@ fn test_vpn_credentials_builder_basic() {
         .build();
 
     assert_eq!(creds.name, "TestVPN");
-    assert_eq!(creds.vpn_type, VpnType::WireGuard);
+    assert_eq!(creds.vpn_type, VpnKind::WireGuard);
     assert_eq!(creds.gateway, "vpn.example.com:51820");
     assert_eq!(
         creds.private_key,
@@ -667,7 +667,7 @@ fn test_wireguard_config_implements_vpn_config() {
 
     let vpn_config: &dyn VpnConfig = &config;
 
-    assert_eq!(vpn_config.vpn_type(), VpnType::WireGuard);
+    assert_eq!(vpn_config.vpn_kind(), VpnKind::WireGuard);
     assert_eq!(vpn_config.name(), "TestVPN");
     assert_eq!(
         vpn_config.dns(),
@@ -942,7 +942,7 @@ fn test_vpn_credentials_builder_equivalence_to_new() {
     );
 
     let creds_new = VpnCredentials::new(
-        VpnType::WireGuard,
+        VpnKind::WireGuard,
         "TestVPN",
         "vpn.example.com:51820",
         "private_key",
