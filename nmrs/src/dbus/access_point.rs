@@ -43,7 +43,11 @@ pub trait NMAccessPoint {
     #[zbus(property)]
     fn max_bitrate(&self) -> Result<u32>;
 
-    /// Wi-Fi mode (1 = adhoc, 2 = infrastructure, 3 = AP).
+    /// Wi-Fi mode (1 = adhoc, 2 = infrastructure, 3 = AP, 4 = mesh).
     #[zbus(property)]
     fn mode(&self) -> Result<u32>;
+
+    /// Monotonic seconds since boot when this AP was last seen, or -1 if never.
+    #[zbus(property)]
+    fn last_seen(&self) -> Result<i32>;
 }
