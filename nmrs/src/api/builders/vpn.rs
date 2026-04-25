@@ -41,7 +41,7 @@
 //!
 //! ```rust
 //! use nmrs::builders::build_wireguard_connection;
-//! use nmrs::{VpnCredentials, VpnType, WireGuardPeer, ConnectionOptions};
+//! use nmrs::{VpnCredentials, VpnKind, WireGuardPeer, ConnectionOptions};
 //!
 //! let peer = WireGuardPeer::new(
 //!     "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
@@ -50,7 +50,7 @@
 //! ).with_persistent_keepalive(25);
 //!
 //! let creds = VpnCredentials::new(
-//!     VpnType::WireGuard,
+//!     VpnKind::WireGuard,
 //!     "MyVPN",
 //!     "vpn.example.com:51820",
 //!     "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",
@@ -398,7 +398,7 @@ pub fn build_openvpn_connection(
 mod tests {
     use super::*;
     use crate::api::models::{
-        OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, VpnType, WireGuardPeer,
+        OpenVpnCompression, OpenVpnConfig, OpenVpnProxy, VpnKind, WireGuardPeer,
     };
 
     fn create_test_credentials() -> VpnCredentials {
@@ -410,7 +410,7 @@ mod tests {
         .with_persistent_keepalive(25);
 
         VpnCredentials::new(
-            VpnType::WireGuard,
+            VpnKind::WireGuard,
             "TestVPN",
             "vpn.example.com:51820",
             "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=",

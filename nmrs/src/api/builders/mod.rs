@@ -20,7 +20,7 @@
 //!
 //! ```ignore
 //! use nmrs::builders::{build_wifi_connection, build_wireguard_connection, build_ethernet_connection};
-//! use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials, VpnType, WireGuardPeer};
+//! use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials, VpnKind, WireGuardPeer};
 //!
 //! let opts = ConnectionOptions {
 //!     autoconnect: true,
@@ -45,7 +45,7 @@
 //! };
 //!
 //! let creds = VpnCredentials {
-//!     vpn_type: VpnType::WireGuard,
+//!     vpn_type: VpnKind::WireGuard,
 //!     name: "MyVPN".into(),
 //!     gateway: "vpn.example.com:51820".into(),
 //!     private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
