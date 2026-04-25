@@ -15,7 +15,7 @@ Rust bindings for NetworkManager via D-Bus.
 - **WiFi Management**: Connect to WPA-PSK, WPA-EAP, and open networks
 - **VPN Support**: WireGuard VPN connections with full configuration
 - **Ethernet**: Wired network connection management
-- **Network Discovery**: Scan and list available access points with signal strength
+- **Network Discovery**: Scan and list available access points with per-BSSID detail and security capabilities
 - **Profile Management**: Create, query, and delete saved connection profiles
 - **Real-Time Monitoring**: Signal-based network and device state change notifications
 - **Secret Agent**: Respond to NetworkManager credential prompts via an async stream API

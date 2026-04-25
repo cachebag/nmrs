@@ -51,3 +51,7 @@ path = "examples/secret_agent.rs"
 [[example]]
 name = "airplane_mode"
 path = "examples/airplane_mode.rs"
+
+[[example]]
+name = "ap_list"
+path = "examples/ap_list.rs"

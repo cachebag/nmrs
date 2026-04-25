@@ -5,6 +5,11 @@ All notable changes to the `nmrs` crate will be documented in this file.
 ## [Unreleased]
 ### Added
 - `nmrs::agent` module: NetworkManager secret agent for credential prompting over D-Bus (`SecretAgent`, `SecretAgentBuilder`, `SecretAgentHandle`, `SecretRequest`, `SecretResponder`, `SecretSetting`, `SecretAgentFlags`, `SecretAgentCapabilities`, `CancelReason`, `SecretStoreEvent`)
+- `AccessPoint` model preserving per-AP BSSID, frequency, security flags, and device state; `list_access_points(interface)` for full AP enumeration
+- `SecurityFeatures`, `ApMode`, `ConnectType` types for decoded NM security capabilities
+- `connect_to_bssid(ssid, bssid, creds)` for BSSID-targeted connections
+- `Network` gains `best_bssid`, `bssids`, `is_active`, `known`, and `security_features` fields
+- `ApBssidNotFound` and `InvalidBssid` error variants
 - Airplane-mode surface: `RadioState`, `AirplaneModeState`, `wifi_state()`, `wwan_state()`, `bluetooth_radio_state()`, `airplane_mode_state()`, `set_wireless_enabled()`, `set_wwan_enabled()`, `set_bluetooth_radio_enabled()`, `set_airplane_mode()`
 - Kernel rfkill awareness: hardware kill switch state via `/sys/class/rfkill`
 - `HardwareRadioKilled` and `BluezUnavailable` error variants
