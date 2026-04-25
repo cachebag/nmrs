@@ -63,3 +63,7 @@ path = "examples/multi_wifi.rs"
 [[example]]
 name = "saved_list"
 path = "examples/saved_list.rs"
+
+[[example]]
+name = "connectivity"
+path = "examples/connectivity.rs"
