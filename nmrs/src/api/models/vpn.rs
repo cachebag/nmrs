@@ -1,5 +1,15 @@
+//! VPN connection types and configuration traits.
+//!
+//! `nmrs` treats both NM plugin-based VPNs (`connection.type = "vpn"`) and
+//! kernel-level WireGuard tunnels (`connection.type = "wireguard"`) as VPN
+//! connections. [`VpnKind`] distinguishes the two, while [`VpnType`] carries
+//! protocol-specific metadata decoded from NM settings.
+
+use std::collections::HashMap;
+
 use super::device::DeviceState;
 use super::openvpn::OpenVpnConfig;
+use super::saved_connection::VpnSecretFlags;
 use super::wireguard::WireGuardConfig;
 use uuid::Uuid;
 
@@ -7,16 +17,141 @@ pub(crate) mod sealed {
     pub trait Sealed {}
 }
 
-/// VPN connection type.
-///
-/// Identifies the VPN protocol/technology used for the connection.
+/// Whether a VPN connection is a NM-plugin VPN or kernel WireGuard.
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VpnType {
-    /// WireGuard - modern, high-performance VPN protocol.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum VpnKind {
+    /// NM VPN plugin (OpenVPN, strongSwan, OpenConnect, PPTP, L2TP, …).
+    Plugin,
+    /// Kernel-level WireGuard tunnel.
     WireGuard,
-    /// OpenVPN - widely-used open-source VPN protocol.
-    OpenVpn,
+}
+
+/// OpenVPN authentication/connection type.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum OpenVpnConnectionType {
+    /// Pure TLS certificate authentication.
+    Tls,
+    /// Static pre-shared key.
+    StaticKey,
+    /// Username/password only.
+    Password,
+    /// Username/password + TLS certificate.
+    PasswordTls,
+}
+
+impl OpenVpnConnectionType {
+    /// Parse from NM's `data.connection-type` string.
+    #[must_use]
+    pub fn from_nm_str(s: &str) -> Option<Self> {
+        match s {
+            "tls" => Some(Self::Tls),
+            "static-key" => Some(Self::StaticKey),
+            "password" => Some(Self::Password),
+            "password-tls" => Some(Self::PasswordTls),
+            _ => None,
+        }
+    }
+}
+
+/// Protocol-specific VPN metadata decoded from NM saved settings.
+///
+/// Returned by [`VpnConnection::vpn_type`] to describe a saved VPN profile.
+/// Each variant carries the fields an applet typically needs to render a VPN
+/// list entry.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub enum VpnType {
+    /// Kernel WireGuard tunnel.
+    WireGuard {
+        /// Interface private key (often agent-owned and absent).
+        private_key: Option<String>,
+        /// First peer's public key.
+        peer_public_key: Option<String>,
+        /// First peer's `endpoint` (e.g. `"vpn.example.com:51820"`).
+        endpoint: Option<String>,
+        /// First peer's allowed-ips list.
+        allowed_ips: Vec<String>,
+        /// First peer's persistent keepalive (seconds).
+        persistent_keepalive: Option<u32>,
+    },
+    /// OpenVPN (NM plugin `org.freedesktop.NetworkManager.openvpn`).
+    OpenVpn {
+        /// Remote server address.
+        remote: Option<String>,
+        /// Authentication/connection type.
+        connection_type: Option<OpenVpnConnectionType>,
+        /// VPN-level user name.
+        user_name: Option<String>,
+        /// CA certificate path.
+        ca: Option<String>,
+        /// Client certificate path.
+        cert: Option<String>,
+        /// Client key path.
+        key: Option<String>,
+        /// TLS-auth key path.
+        ta: Option<String>,
+        /// Password secret flags.
+        password_flags: VpnSecretFlags,
+    },
+    /// OpenConnect (Cisco AnyConnect / Juniper / GlobalProtect / Pulse).
+    OpenConnect {
+        /// Gateway hostname.
+        gateway: Option<String>,
+        /// VPN-level user name.
+        user_name: Option<String>,
+        /// Protocol variant (`"anyconnect"`, `"nc"`, `"gp"`, `"pulse"`).
+        protocol: Option<String>,
+        /// Password secret flags.
+        password_flags: VpnSecretFlags,
+    },
+    /// strongSwan (IPSec/IKEv2).
+    StrongSwan {
+        /// Gateway address.
+        address: Option<String>,
+        /// Auth method (`"eap"`, `"key"`, `"agent"`, `"smartcard"`).
+        method: Option<String>,
+        /// VPN-level user name.
+        user_name: Option<String>,
+        /// Certificate path.
+        certificate: Option<String>,
+        /// Password secret flags.
+        password_flags: VpnSecretFlags,
+    },
+    /// PPTP VPN.
+    Pptp {
+        /// Gateway hostname.
+        gateway: Option<String>,
+        /// VPN-level user name.
+        user_name: Option<String>,
+        /// Password secret flags.
+        password_flags: VpnSecretFlags,
+    },
+    /// L2TP VPN.
+    L2tp {
+        /// Gateway hostname.
+        gateway: Option<String>,
+        /// VPN-level user name.
+        user_name: Option<String>,
+        /// Password secret flags.
+        password_flags: VpnSecretFlags,
+        /// Whether IPSec encapsulation is enabled.
+        ipsec_enabled: bool,
+    },
+    /// Catch-all for VPN plugins nmrs doesn't model first-class.
+    Generic {
+        /// NM VPN plugin D-Bus service name.
+        service_type: String,
+        /// Raw `vpn.data` key-value pairs.
+        data: HashMap<String, String>,
+        /// Raw `vpn.secrets` key-value pairs (often empty without agent).
+        secrets: HashMap<String, String>,
+        /// VPN-level user name.
+        user_name: Option<String>,
+        /// Password secret flags.
+        password_flags: VpnSecretFlags,
+    },
 }
 
 /// VPN connection configuration
@@ -46,10 +181,10 @@ impl From<OpenVpnConfig> for VpnConfiguration {
 impl sealed::Sealed for VpnConfiguration {}
 
 impl VpnConfig for VpnConfiguration {
-    fn vpn_type(&self) -> VpnType {
+    fn vpn_kind(&self) -> VpnKind {
         match self {
-            Self::WireGuard(_) => VpnType::WireGuard,
-            Self::OpenVpn(_) => VpnType::OpenVpn,
+            Self::WireGuard(_) => VpnKind::WireGuard,
+            Self::OpenVpn(_) => VpnKind::Plugin,
         }
     }
 
@@ -87,8 +222,8 @@ impl VpnConfig for VpnConfiguration {
 /// This trait is sealed and cannot be implemented outside of this crate.
 /// Use [`WireGuardConfig`], [`OpenVpnConfig`], or [`VpnConfiguration`] instead.
 pub trait VpnConfig: sealed::Sealed + Send + Sync + std::fmt::Debug {
-    /// Returns the VPN protocol used by this configuration.
-    fn vpn_type(&self) -> VpnType;
+    /// Returns whether this is a plugin VPN or kernel WireGuard.
+    fn vpn_kind(&self) -> VpnKind;
 
     /// Returns the connection name.
     fn name(&self) -> &str;
@@ -103,37 +238,42 @@ pub trait VpnConfig: sealed::Sealed + Send + Sync + std::fmt::Debug {
     fn uuid(&self) -> Option<Uuid>;
 }
 
-/// VPN Connection information.
+/// A saved or active VPN connection with rich metadata.
 ///
-/// Represents a VPN connection managed by NetworkManager, including both
-/// saved and active connections.
-///
-/// # Fields
-///
-/// - `name`: The connection name/identifier
-/// - `vpn_type`: The type of VPN (WireGuard, OpenVPN)
-/// - `state`: Current connection state (for active connections)
-/// - `interface`: Network interface name when active
+/// Returned by [`crate::NetworkManager::list_vpn_connections`].
 ///
 /// # Example
 ///
 /// ```no_run
-/// # use nmrs::{VpnConnection, VpnType, DeviceState};
-/// # // This struct is returned by the library, not constructed directly
+/// # use nmrs::{VpnConnection, VpnKind};
 /// # let vpn: VpnConnection = todo!();
-/// println!("VPN: {}, State: {:?}", vpn.name, vpn.state);
+/// println!("{} ({:?}) active={}", vpn.id, vpn.kind, vpn.active);
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct VpnConnection {
-    /// The connection name/identifier.
+    /// NM connection UUID.
+    pub uuid: String,
+    /// Connection display name (`connection.id`).
+    pub id: String,
+    /// Alias for `id` (backward compat).
     pub name: String,
-    /// The type of VPN (WireGuard, OpenVPN).
+    /// Protocol-specific decoded settings.
     pub vpn_type: VpnType,
-    /// Current connection state.
+    /// Current device/active-connection state.
     pub state: DeviceState,
     /// Network interface name when active.
     pub interface: Option<String>,
+    /// Whether this VPN is currently activated.
+    pub active: bool,
+    /// VPN-level user name (from `vpn.user-name`).
+    pub user_name: Option<String>,
+    /// Password secret flags.
+    pub password_flags: VpnSecretFlags,
+    /// Raw NM `vpn.service-type` string (empty for WireGuard).
+    pub service_type: String,
+    /// Plugin-based vs kernel WireGuard.
+    pub kind: VpnKind,
 }
 
 /// Protocol-specific details for an active VPN connection.
@@ -175,14 +315,10 @@ pub enum VpnDetails {
 /// # Example
 ///
 /// ```no_run
-/// # use nmrs::{VpnConnectionInfo, VpnType, DeviceState};
-/// # // This struct is returned by the library, not constructed directly
+/// # use nmrs::{VpnConnectionInfo, VpnKind, DeviceState};
 /// # let info: VpnConnectionInfo = todo!();
 /// if let Some(ip) = &info.ip4_address {
 ///     println!("VPN IPv4: {}", ip);
-/// }
-/// if let Some(ip) = &info.ip6_address {
-///     println!("VPN IPv6: {}", ip);
 /// }
 /// ```
 #[non_exhaustive]
@@ -190,8 +326,8 @@ pub enum VpnDetails {
 pub struct VpnConnectionInfo {
     /// The connection name/identifier.
     pub name: String,
-    /// The type of VPN (WireGuard, etc.).
-    pub vpn_type: VpnType,
+    /// Plugin vs WireGuard.
+    pub vpn_kind: VpnKind,
     /// Current connection state.
     pub state: DeviceState,
     /// Network interface name when active (e.g., "wg0").
