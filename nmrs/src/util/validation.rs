@@ -716,6 +716,29 @@ pub fn validate_bluetooth_address(bdaddr: &str) -> Result<(), ConnectionError> {
     Ok(())
 }
 
+/// Validates a BSSID (MAC address) in `XX:XX:XX:XX:XX:XX` format.
+///
+/// Both uppercase and lowercase hex digits are accepted.
+///
+/// # Errors
+///
+/// Returns [`ConnectionError::InvalidBssid`] if the format is invalid.
+pub fn validate_bssid(bssid: &str) -> Result<(), ConnectionError> {
+    let parts: Vec<&str> = bssid.split(':').collect();
+
+    if parts.len() != 6 {
+        return Err(ConnectionError::InvalidBssid(bssid.to_string()));
+    }
+
+    for part in parts {
+        if part.len() != 2 || !part.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(ConnectionError::InvalidBssid(bssid.to_string()));
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1141,5 +1164,40 @@ mod tests {
         let config = base_openvpn_config();
         assert!(config.auth_type.is_none());
         assert!(validate_openvpn_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_bssid_valid_uppercase() {
+        assert!(validate_bssid("AA:BB:CC:DD:EE:FF").is_ok());
+    }
+
+    #[test]
+    fn test_validate_bssid_valid_lowercase() {
+        assert!(validate_bssid("aa:bb:cc:dd:ee:ff").is_ok());
+    }
+
+    #[test]
+    fn test_validate_bssid_valid_mixed() {
+        assert!(validate_bssid("aA:Bb:cC:Dd:eE:fF").is_ok());
+    }
+
+    #[test]
+    fn test_validate_bssid_too_short() {
+        assert!(validate_bssid("AA:BB:CC:DD:EE").is_err());
+    }
+
+    #[test]
+    fn test_validate_bssid_empty() {
+        assert!(validate_bssid("").is_err());
+    }
+
+    #[test]
+    fn test_validate_bssid_unicode() {
+        assert!(validate_bssid("AA:BB:CC:DD:EE:ÀÀ").is_err());
+    }
+
+    #[test]
+    fn test_validate_bssid_invalid_segment() {
+        assert!(validate_bssid("GG:BB:CC:DD:EE:FF").is_err());
     }
 }
