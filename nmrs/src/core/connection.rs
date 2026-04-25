@@ -15,7 +15,7 @@ use crate::monitoring::transport::ActiveTransport;
 use crate::monitoring::wifi::Wifi;
 use crate::types::constants::{device_state, device_type, timeouts};
 use crate::util::utils::{decode_ssid_or_empty, nm_proxy};
-use crate::util::validation::{validate_ssid, validate_wifi_security};
+use crate::util::validation::{validate_bssid, validate_ssid, validate_wifi_security};
 
 /// Decision on whether to reuse a saved connection or create a fresh one.
 enum SavedDecision {
@@ -530,6 +530,121 @@ async fn find_ap(
     }
 
     Err(ConnectionError::NotFound)
+}
+
+/// Finds an access point matching both SSID and BSSID.
+async fn find_ap_by_bssid(
+    conn: &Connection,
+    wifi: &NMWirelessProxy<'_>,
+    target_ssid: &str,
+    target_bssid: &str,
+) -> Result<OwnedObjectPath> {
+    let access_points = wifi.access_points().await?;
+
+    for ap_path in access_points {
+        let ap = NMAccessPointProxy::builder(conn)
+            .path(ap_path.clone())?
+            .build()
+            .await?;
+
+        let ssid_bytes = ap.ssid().await?;
+        let ssid = decode_ssid_or_empty(&ssid_bytes);
+
+        if ssid != target_ssid {
+            continue;
+        }
+
+        let bssid = ap.hw_address().await?;
+        if bssid.eq_ignore_ascii_case(target_bssid) {
+            return Ok(ap_path);
+        }
+    }
+
+    Err(ConnectionError::ApBssidNotFound {
+        ssid: target_ssid.to_string(),
+        bssid: target_bssid.to_string(),
+    })
+}
+
+/// Connects to a specific access point identified by SSID and optionally BSSID.
+///
+/// If `bssid` is `Some`, the connection targets that specific AP.
+/// If `None`, falls through to the existing best-match behavior.
+pub(crate) async fn connect_to_bssid(
+    conn: &Connection,
+    ssid: &str,
+    bssid: Option<&str>,
+    creds: WifiSecurity,
+    timeout_config: Option<TimeoutConfig>,
+) -> Result<()> {
+    if let Some(b) = bssid {
+        validate_bssid(b)?;
+    }
+
+    match bssid {
+        None => connect(conn, ssid, creds, timeout_config).await,
+        Some(target_bssid) => {
+            validate_ssid(ssid)?;
+            validate_wifi_security(&creds)?;
+
+            debug!(
+                "Connecting to '{}' BSSID={} | secured={} is_psk={} is_eap={}",
+                ssid,
+                target_bssid,
+                creds.secured(),
+                creds.is_psk(),
+                creds.is_eap()
+            );
+
+            let nm = NMProxy::new(conn).await?;
+            let saved_raw = get_saved_connection_path(conn, ssid).await?;
+            let decision = decide_saved_connection(saved_raw, &creds)?;
+            let wifi_device = find_wifi_device(conn, &nm).await?;
+            let wifi = NMWirelessProxy::builder(conn)
+                .path(wifi_device.clone())?
+                .build()
+                .await?;
+
+            match wifi.request_scan(HashMap::new()).await {
+                Ok(_) => debug!("Scan requested successfully"),
+                Err(e) => warn!("Scan request failed: {e}"),
+            }
+            futures_timer::Delay::new(timeouts::scan_wait()).await;
+
+            let specific_object = find_ap_by_bssid(conn, &wifi, ssid, target_bssid).await?;
+
+            match decision {
+                SavedDecision::UseSaved(saved) => {
+                    ensure_disconnected(conn, &nm, &wifi_device, timeout_config).await?;
+                    connect_via_saved(
+                        conn,
+                        &nm,
+                        &wifi_device,
+                        &specific_object,
+                        &creds,
+                        saved,
+                        timeout_config,
+                    )
+                    .await?;
+                }
+                SavedDecision::RebuildFresh => {
+                    build_and_activate_new(
+                        conn,
+                        &nm,
+                        &wifi_device,
+                        &specific_object,
+                        ssid,
+                        creds,
+                        timeout_config,
+                    )
+                    .await?;
+                }
+            }
+
+            info!("Successfully connected to '{ssid}' (BSSID: {target_bssid})");
+            Ok(())
+        }
+    }
 }
 
 /// Ensures the Wi-Fi device is disconnected before attempting a new connection.
