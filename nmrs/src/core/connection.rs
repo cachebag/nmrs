@@ -40,6 +40,7 @@ pub(crate) async fn connect(
     conn: &Connection,
     ssid: &str,
     creds: WifiSecurity,
+    interface: Option<&str>,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     // Validate inputs before attempting connection
@@ -47,8 +48,9 @@ pub(crate) async fn connect(
     validate_wifi_security(&creds)?;
 
     debug!(
-        "Connecting to '{}' | secured={} is_psk={} is_eap={}",
+        "Connecting to '{}' on {:?} | secured={} is_psk={} is_eap={}",
         ssid,
+        interface,
         creds.secured(),
         creds.is_psk(),
         creds.is_eap()
@@ -59,8 +61,8 @@ pub(crate) async fn connect(
     let saved_raw = get_saved_connection_path(conn, ssid).await?;
     let decision = decide_saved_connection(saved_raw, &creds)?;
 
-    let wifi_device = find_wifi_device(conn, &nm).await?;
-    debug!("Found WiFi device: {}", wifi_device.as_str());
+    let wifi_device = resolve_wifi_device(conn, &nm, interface).await?;
+    debug!("Resolved WiFi device: {}", wifi_device.as_str());
 
     let wifi = NMWirelessProxy::builder(conn)
         .path(wifi_device.clone())?
@@ -503,6 +505,45 @@ async fn find_wifi_device(conn: &Connection, nm: &NMProxy<'_>) -> Result<OwnedOb
     find_device_by_type(conn, nm, device_type::WIFI).await
 }
 
+/// Resolves a Wi-Fi device path from an optional interface name.
+///
+/// `None` returns the first Wi-Fi device NM reports (back-compat behavior).
+/// `Some(name)` looks up the device by interface and verifies it is Wi-Fi:
+/// returns [`WifiInterfaceNotFound`] or [`NotAWifiDevice`] if not.
+///
+/// [`WifiInterfaceNotFound`]: ConnectionError::WifiInterfaceNotFound
+/// [`NotAWifiDevice`]: ConnectionError::NotAWifiDevice
+pub(crate) async fn resolve_wifi_device(
+    conn: &Connection,
+    nm: &NMProxy<'_>,
+    interface: Option<&str>,
+) -> Result<OwnedObjectPath> {
+    match interface {
+        None => find_wifi_device(conn, nm).await,
+        Some(name) => {
+            let path = match get_device_by_interface(conn, name).await {
+                Ok(p) => p,
+                Err(ConnectionError::NotFound) => {
+                    return Err(ConnectionError::WifiInterfaceNotFound {
+                        interface: name.to_string(),
+                    });
+                }
+                Err(e) => return Err(e),
+            };
+            let dev = NMDeviceProxy::builder(conn)
+                .path(path.clone())?
+                .build()
+                .await?;
+            if dev.device_type().await? != device_type::WIFI {
+                return Err(ConnectionError::NotAWifiDevice {
+                    interface: name.to_string(),
+                });
+            }
+            Ok(path)
+        }
+    }
+}
+
 /// Finds an access point by SSID.
 ///
 /// Searches through all visible access points on the wireless device
@@ -575,6 +616,7 @@ pub(crate) async fn connect_to_bssid(
     ssid: &str,
     bssid: Option<&str>,
     creds: WifiSecurity,
+    interface: Option<&str>,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     if let Some(b) = bssid {
@@ -582,15 +624,16 @@ pub(crate) async fn connect_to_bssid(
     }
 
     match bssid {
-        None => connect(conn, ssid, creds, timeout_config).await,
+        None => connect(conn, ssid, creds, interface, timeout_config).await,
         Some(target_bssid) => {
             validate_ssid(ssid)?;
             validate_wifi_security(&creds)?;
 
             debug!(
-                "Connecting to '{}' BSSID={} | secured={} is_psk={} is_eap={}",
+                "Connecting to '{}' BSSID={} on {:?} | secured={} is_psk={} is_eap={}",
                 ssid,
                 target_bssid,
+                interface,
                 creds.secured(),
                 creds.is_psk(),
                 creds.is_eap()
@@ -599,7 +642,7 @@ pub(crate) async fn connect_to_bssid(
             let nm = NMProxy::new(conn).await?;
             let saved_raw = get_saved_connection_path(conn, ssid).await?;
             let decision = decide_saved_connection(saved_raw, &creds)?;
-            let wifi_device = find_wifi_device(conn, &nm).await?;
+            let wifi_device = resolve_wifi_device(conn, &nm, interface).await?;
             let wifi = NMWirelessProxy::builder(conn)
                 .path(wifi_device.clone())?
                 .build()
@@ -914,11 +957,12 @@ pub(crate) async fn is_connected(conn: &Connection, ssid: &str) -> Result<bool> 
 /// Returns `Ok(())` if disconnected successfully or if no active connection exists.
 pub(crate) async fn disconnect(
     conn: &Connection,
+    interface: Option<&str>,
     timeout_config: Option<TimeoutConfig>,
 ) -> Result<()> {
     let nm = NMProxy::new(conn).await?;
 
-    let wifi_device = match find_wifi_device(conn, &nm).await {
+    let wifi_device = match resolve_wifi_device(conn, &nm, interface).await {
         Ok(dev) => dev,
         Err(ConnectionError::NoWifiDevice) => {
             debug!("No WiFi device found");
@@ -940,6 +984,24 @@ pub(crate) async fn disconnect(
 
     if let Ok(conns) = nm.active_connections().await {
         for conn_path in conns {
+            let active = match crate::dbus::NMActiveConnectionProxy::builder(conn)
+                .path(conn_path.clone())?
+                .build()
+                .await
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!("Failed to build active connection proxy: {}", e);
+                    continue;
+                }
+            };
+            let owns_device = match active.devices().await {
+                Ok(devs) => devs.iter().any(|d| d == &wifi_device),
+                Err(_) => false,
+            };
+            if !owns_device {
+                continue;
+            }
             match nm.deactivate_connection(conn_path.clone()).await {
                 Ok(_) => debug!("Connection deactivated"),
                 Err(e) => warn!("Failed to deactivate connection: {}", e),
