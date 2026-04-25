@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 
-use super::vpn::{VpnConfig, VpnType};
+use super::vpn::{VpnConfig, VpnKind};
 use uuid::Uuid;
 
 /// WireGuard configuration for establishing a VPN connection.
@@ -124,8 +124,8 @@ impl WireGuardConfig {
 impl super::vpn::sealed::Sealed for WireGuardConfig {}
 
 impl VpnConfig for WireGuardConfig {
-    fn vpn_type(&self) -> VpnType {
-        VpnType::WireGuard
+    fn vpn_kind(&self) -> VpnKind {
+        VpnKind::WireGuard
     }
 
     fn name(&self) -> &str {
@@ -148,7 +148,7 @@ impl VpnConfig for WireGuardConfig {
 impl From<WireGuardConfig> for VpnCredentials {
     fn from(config: WireGuardConfig) -> Self {
         Self {
-            vpn_type: VpnType::WireGuard,
+            vpn_type: VpnKind::WireGuard,
             name: config.name,
             gateway: config.gateway,
             private_key: config.private_key,
@@ -184,7 +184,7 @@ impl From<VpnCredentials> for WireGuardConfig {
 #[derive(Debug, Clone)]
 pub struct VpnCredentials {
     /// The type of VPN (currently only WireGuard).
-    pub vpn_type: VpnType,
+    pub vpn_type: VpnKind,
     /// Unique name for the connection profile.
     pub name: String,
     /// VPN gateway endpoint (e.g., "vpn.example.com:51820").
@@ -211,7 +211,7 @@ impl VpnCredentials {
     /// # Examples
     ///
     /// ```rust
-    /// use nmrs::{VpnCredentials, VpnType, WireGuardPeer};
+    /// use nmrs::{VpnCredentials, VpnKind, WireGuardPeer};
     ///
     /// let peer = WireGuardPeer::new(
     ///     "server_public_key",
@@ -220,7 +220,7 @@ impl VpnCredentials {
     /// );
     ///
     /// let creds = VpnCredentials::new(
-    ///     VpnType::WireGuard,
+    ///     VpnKind::WireGuard,
     ///     "MyVPN",
     ///     "vpn.example.com:51820",
     ///     "client_private_key",
@@ -229,7 +229,7 @@ impl VpnCredentials {
     /// );
     /// ```
     pub fn new(
-        vpn_type: VpnType,
+        vpn_type: VpnKind,
         name: impl Into<String>,
         gateway: impl Into<String>,
         private_key: impl Into<String>,
@@ -280,7 +280,7 @@ impl VpnCredentials {
 impl super::vpn::sealed::Sealed for VpnCredentials {}
 
 impl VpnConfig for VpnCredentials {
-    fn vpn_type(&self) -> VpnType {
+    fn vpn_kind(&self) -> VpnKind {
         self.vpn_type
     }
 
@@ -354,7 +354,7 @@ impl VpnConfig for VpnCredentials {
 /// ```
 #[derive(Debug, Default)]
 pub struct VpnCredentialsBuilder {
-    vpn_type: Option<VpnType>,
+    vpn_type: Option<VpnKind>,
     name: Option<String>,
     gateway: Option<String>,
     private_key: Option<String>,
@@ -371,16 +371,16 @@ impl VpnCredentialsBuilder {
     /// Currently, WireGuard is the only supported VPN type.
     #[must_use]
     pub fn wireguard(mut self) -> Self {
-        self.vpn_type = Some(VpnType::WireGuard);
+        self.vpn_type = Some(VpnKind::WireGuard);
         self
     }
 
-    /// Sets the VPN type.
+    /// Sets the VPN kind.
     ///
     /// For most use cases, prefer using [`wireguard()`](Self::wireguard) instead.
     #[must_use]
-    pub fn vpn_type(mut self, vpn_type: VpnType) -> Self {
-        self.vpn_type = Some(vpn_type);
+    pub fn vpn_kind(mut self, vpn_kind: VpnKind) -> Self {
+        self.vpn_type = Some(vpn_kind);
         self
     }
 
