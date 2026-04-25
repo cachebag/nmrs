@@ -13,8 +13,10 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - `WifiInterfaceNotFound` and `NotAWifiDevice` error variants
 - Saved profile enumeration: `SavedConnection`, `SavedConnectionBrief`, `SettingsSummary`, `SettingsPatch`, `WifiSecuritySummary`, `WifiKeyMgmt`, `VpnSecretFlags`; `list_saved_connections()`, `list_saved_connections_brief()`, `list_saved_connection_ids()`, `get_saved_connection()`, `get_saved_connection_raw()`, `delete_saved_connection()`, `update_saved_connection()`, `reload_saved_connections()`; D-Bus proxies `NMSettingsProxy` / `NMSettingsConnectionProxy`; example `saved_list`
 - Connectivity state surface: `ConnectivityState`, `ConnectivityReport`, `connectivity()`, `check_connectivity()`, `connectivity_report()`, `captive_portal_url()`; `ConnectivityCheckDisabled` error variant
+- Generic VPN support: `VpnType` now carries protocol-specific metadata for OpenVPN, OpenConnect, strongSwan, PPTP, L2TP, and a `Generic` catch-all; `VpnKind` (Plugin vs WireGuard); `VpnConnection` enriched with `uuid`, `active`, `user_name`, `password_flags`, `service_type`; `connect_vpn_by_uuid()`, `connect_vpn_by_id()`, `disconnect_vpn_by_uuid()`, `active_vpn_connections()`
 
 ### Changed
+- `VpnType` is now a data-carrying enum; the old tag enum is renamed to `VpnKind`. `VpnConfig::vpn_type()` renamed to `vpn_kind()`. `VpnConnectionInfo.vpn_type` renamed to `vpn_kind`.
 -`list_saved_connections()` now returns `Vec<SavedConnection>` (full decode + summaries). Use `list_saved_connection_ids()` for the previous `Vec<String>` behavior (connection `id` names only).
 -`connect`, `connect_to_bssid`, `disconnect`, `scan_networks`, and `list_networks` now take an `interface: Option<&str>` parameter. Pass `None` to preserve previous behavior, or `Some("wlan1")` to scope to a specific Wi-Fi interface. For an ergonomic per-interface API, use `nm.wifi("wlan1")` to obtain a `WifiScope`.
 -`set_wifi_enabled` now requires an `interface: &str` argument and toggles only that radio (via `Device.Autoconnect` + `Device.Disconnect()`). For the global wireless killswitch use `set_wireless_enabled(bool)`.

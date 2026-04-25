@@ -13,7 +13,7 @@ Rust bindings for NetworkManager via D-Bus.
 ## Features
 
 - **WiFi Management**: Connect to WPA-PSK, WPA-EAP, and open networks
-- **VPN Support**: WireGuard VPN connections with full configuration
+- **VPN Support**: WireGuard, OpenVPN, OpenConnect, strongSwan, PPTP, L2TP, and generic plugin VPNs with rich enumeration and UUID-based activation
 - **Ethernet**: Wired network connection management
 - **Network Discovery**: Scan and list available access points with per-BSSID detail and security capabilities
 - **Per-Interface Scoping**: Target specific Wi-Fi radios on multi-NIC systems via `nm.wifi("wlan1")` or `Option<&str>` interface arguments
