@@ -132,7 +132,7 @@ impl NetworkRowController {
                         status_c.set_text(&format!("Connecting to {}...", ssid_c));
                         window_c.set_sensitive(false);
                         let creds = WifiSecurity::WpaPsk { psk: "".into() };
-                        match nm_c.connect(&ssid_c, creds).await {
+                        match nm_c.connect(&ssid_c, None, creds).await {
                             Ok(_) => {
                                 status_c.set_text("");
                                 on_success_c();
@@ -153,7 +153,7 @@ impl NetworkRowController {
                     status_c.set_text(&format!("Connecting to {}...", ssid_c));
                     window_c.set_sensitive(false);
                     let creds = WifiSecurity::Open;
-                    match nm_c.connect(&ssid_c, creds).await {
+                    match nm_c.connect(&ssid_c, None, creds).await {
                         Ok(_) => {
                             status_c.set_text("");
                             on_success_c();
