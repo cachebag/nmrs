@@ -205,7 +205,7 @@ fn draw_connect_modal(
                 };
 
                 debug!("Calling nm.connect() for '{ssid}'");
-                match nm.connect(&ssid, creds).await {
+                match nm.connect(&ssid, None, creds).await {
                     Ok(_) => {
                         debug!("nm.connect() succeeded!");
                         status.set_text("✓ Connected!");

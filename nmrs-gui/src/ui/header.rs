@@ -310,7 +310,7 @@ pub async fn refresh_networks(
     wireless_header.set_margin_start(12);
     list_container.append(&wireless_header);
 
-    if let Err(err) = ctx.nm.scan_networks().await {
+    if let Err(err) = ctx.nm.scan_networks(None).await {
         ctx.status.set_text(&format!("Scan failed: {err}"));
         is_scanning.set(false);
         return;
@@ -318,7 +318,7 @@ pub async fn refresh_networks(
 
     let mut last_len = 0;
     for _ in 0..5 {
-        let nets = ctx.nm.list_networks().await.unwrap_or_default();
+        let nets = ctx.nm.list_networks(None).await.unwrap_or_default();
         if nets.len() == last_len && last_len > 0 {
             break;
         }
@@ -326,7 +326,7 @@ pub async fn refresh_networks(
         glib::timeout_future_seconds(1).await;
     }
 
-    match ctx.nm.list_networks().await {
+    match ctx.nm.list_networks(None).await {
         Ok(mut nets) => {
             let current_conn = ctx.nm.current_connection_info().await;
             let (current_ssid, current_band) = if let Some((ssid, freq)) = current_conn {
@@ -460,7 +460,7 @@ pub async fn refresh_networks_no_scan(
     wireless_header.set_margin_start(12);
     list_container.append(&wireless_header);
 
-    match ctx.nm.list_networks().await {
+    match ctx.nm.list_networks(None).await {
         Ok(mut nets) => {
             let current_conn = ctx.nm.current_connection_info().await;
             let (current_ssid, current_band) = if let Some((ssid, freq)) = current_conn {
