@@ -27,13 +27,37 @@ use zbus::Connection;
 
 use crate::Result;
 use crate::api::models::{
-    ActiveConnectionState, ConnectionError, ConnectionStateReason, connection_state_reason_to_error,
+    ActiveConnectionState, ConnectionError, ConnectionStateReason,
+    connection_state_reason_to_error, reason_to_error,
 };
 use crate::dbus::{NMActiveConnectionProxy, NMDeviceProxy};
 use crate::types::constants::{device_state, timeouts};
 
 /// Default timeout for connection activation (30 seconds).
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// When the active connection reports `DeviceDisconnected`, the real failure
+/// reason lives on the device itself. Query it and return a more specific error.
+async fn refine_device_disconnected_error(
+    conn: &Connection,
+    active_conn: &NMActiveConnectionProxy<'_>,
+) -> ConnectionError {
+    if let Ok(devices) = active_conn.devices().await {
+        for dev_path in &devices {
+            let Ok(builder) = NMDeviceProxy::builder(conn).path(dev_path.clone()) else {
+                continue;
+            };
+            let Ok(dev) = builder.build().await else {
+                continue;
+            };
+            if let Ok((_state, reason_code)) = dev.state_reason().await {
+                debug!("Device state reason: {reason_code}");
+                return reason_to_error(reason_code);
+            }
+        }
+    }
+    ConnectionError::ActivationFailed(ConnectionStateReason::DeviceDisconnected)
+}
 
 /// Default timeout for device disconnection (10 seconds).
 const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -75,9 +99,7 @@ pub(crate) async fn wait_for_connection_activation(
         }
         ActiveConnectionState::Deactivated => {
             warn!("Connection already deactivated");
-            return Err(ConnectionError::ActivationFailed(
-                ConnectionStateReason::Unknown,
-            ));
+            return Err(refine_device_disconnected_error(conn, &active_conn).await);
         }
         _ => {}
     }
@@ -97,11 +119,8 @@ pub(crate) async fn wait_for_connection_activation(
                 return Ok(());
             }
             ActiveConnectionState::Deactivated => {
-                // Connection deactivated between subscription and loop - reason unknown
                 warn!("Connection deactivated during loop");
-                return Err(ConnectionError::ActivationFailed(
-                    ConnectionStateReason::Unknown,
-                ));
+                return Err(refine_device_disconnected_error(conn, &active_conn).await);
             }
             _ => {}
         }
@@ -127,6 +146,9 @@ pub(crate) async fn wait_for_connection_activation(
                                     }
                                     ActiveConnectionState::Deactivated => {
                                         debug!("Connection activation failed: {reason}");
+                                        if reason == ConnectionStateReason::DeviceDisconnected {
+                                            return Err(refine_device_disconnected_error(conn, &active_conn).await);
+                                        }
                                         return Err(connection_state_reason_to_error(args.reason));
                                     }
                                     _ => {}
