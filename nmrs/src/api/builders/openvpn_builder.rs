@@ -906,20 +906,7 @@ mod tests {
 
     // --- from_ovpn_str tests ---
 
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    fn with_fake_xdg<R>(f: impl FnOnce() -> R) -> R {
-        let _g = ENV_LOCK.lock().unwrap();
-        let base = std::env::temp_dir().join(format!("nmrs-ovpn-test-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&base).unwrap();
-        unsafe { std::env::set_var("XDG_DATA_HOME", &base) };
-        let out = f();
-        unsafe { std::env::remove_var("XDG_DATA_HOME") };
-        let _ = std::fs::remove_dir_all(&base);
-        out
-    }
+    use crate::util::test_utils::with_fake_xdg;
 
     #[test]
     fn from_ovpn_str_basic_tls_file_certs() {
