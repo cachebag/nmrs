@@ -71,6 +71,7 @@
 pub mod bluetooth;
 pub mod connection_builder;
 pub mod openvpn_builder;
+pub mod vlan;
 pub mod vpn;
 pub mod wifi;
 pub mod wifi_builder;
@@ -84,5 +85,6 @@ pub use wireguard_builder::WireGuardBuilder;
 
 // Re-export builder functions for convenience
 pub use bluetooth::build_bluetooth_connection;
+pub use vlan::build_vlan_connection;
 pub use vpn::{build_openvpn_connection, build_wireguard_connection};
 pub use wifi::{build_ethernet_connection, build_wifi_connection};
