@@ -3,6 +3,7 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+- Implement loopback support ([#391](https://github.com/cachebag/nmrs/issues/391))
 
 ## [3.0.1] - 2026-04-25
 ### Changed
