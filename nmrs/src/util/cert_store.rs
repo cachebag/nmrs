@@ -161,25 +161,7 @@ fn filename_for(cert_type: &str) -> Result<&'static str, ConnectionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    fn with_fake_xdg<R>(f: impl FnOnce() -> R) -> R {
-        let _g = ENV_LOCK.lock().unwrap();
-        let base = std::env::temp_dir().join(format!("nmrs-cert-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&base).unwrap();
-        // SAFETY: tests are serialized on this mutex; no other thread reads env concurrently.
-        unsafe {
-            std::env::set_var("XDG_DATA_HOME", &base);
-        }
-        let out = f();
-        unsafe {
-            std::env::remove_var("XDG_DATA_HOME");
-        }
-        let _ = std::fs::remove_dir_all(&base);
-        out
-    }
+    use crate::util::test_utils::with_fake_xdg;
 
     #[test]
     fn write_read_cleanup_cycle() {
