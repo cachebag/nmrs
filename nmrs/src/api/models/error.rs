@@ -247,4 +247,20 @@ pub enum ConnectionError {
     /// The BlueZ Bluetooth stack is unavailable.
     #[error("bluetooth stack unavailable: {0}")]
     BluezUnavailable(String),
+
+    /// Invalid VLAN ID (must be 1-4094).
+    #[error("invalid VLAN ID {id}: must be between 1 and 4094")]
+    InvalidVlanId {
+        /// The invalid VLAN ID that was provided.
+        id: u16,
+    },
+
+    /// Invalid input for a configuration field.
+    #[error("invalid {field}: {reason}")]
+    InvalidInput {
+        /// The field that was invalid.
+        field: String,
+        /// Why the input was invalid.
+        reason: String,
+    },
 }
