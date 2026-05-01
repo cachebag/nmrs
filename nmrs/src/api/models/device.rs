@@ -27,6 +27,8 @@ use zvariant::OwnedObjectPath;
 ///         println!("  This is an Ethernet device");
 ///     } else if device.is_bluetooth() {
 ///         println!("  This is a Bluetooth device");
+///     } else if device.is_loopback() {
+///         println!("  This is a loopback device");
 ///     }
 ///
 ///     if let Some(driver) = &device.driver {
@@ -299,6 +301,12 @@ impl Device {
     #[must_use]
     pub fn is_bluetooth(&self) -> bool {
         matches!(self.device_type, DeviceType::Bluetooth)
+    }
+
+    /// Returns `true` if this is a loopback device (e.g., `lo`).
+    #[must_use]
+    pub fn is_loopback(&self) -> bool {
+        matches!(self.device_type, DeviceType::Loopback)
     }
 }
 

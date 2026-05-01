@@ -111,9 +111,9 @@ To follow and/or discuss the development of nmrs, you can join the [public Disco
 - [x] Generic  
 - [x] Wireless  
 - [ ] Any  
-- [X] Wired  
+- [x] Wired  
 - [ ] ADSL  
-- [X] Bluetooth  
+- [x] Bluetooth  
 - [ ] Bond  
 - [ ] Bridge  
 - [ ] Dummy  
@@ -122,7 +122,7 @@ To follow and/or discuss the development of nmrs, you can join the [public Disco
 - [ ] IP Tunnel  
 - [ ] IPVLAN *(NetworkManager ≥ 1.52)*  
 - [ ] Lowpan  
-- [ ] Loopback  
+- [x] Loopback  
 - [ ] MACsec  
 - [ ] MACVLAN  
 - [ ] Modem  

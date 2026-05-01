@@ -320,6 +320,17 @@ mod tests {
     }
 
     #[test]
+    fn loopback_type_info() {
+        let info = get_device_type_info(32).expect("Loopback should be registered");
+        assert_eq!(info.nm_type_code(), 32);
+        assert_eq!(info.display_name(), "Loopback");
+        assert_eq!(info.connection_type(), "loopback");
+        assert!(!info.supports_scanning());
+        assert!(!info.requires_specific_object());
+        assert!(!info.has_global_enabled_state());
+    }
+
+    #[test]
     fn unknown_device_type() {
         let info = get_device_type_info(999);
         assert!(info.is_none());
