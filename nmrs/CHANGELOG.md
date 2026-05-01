@@ -4,6 +4,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 - Implement loopback support ([#391](https://github.com/cachebag/nmrs/issues/391))
+- Implement add VLAN (802.1Q) device support with VlanConfig model and connection builder([#392](https://github.com/cachebag/nmrs/issues/392))
 
 ## [3.0.1] - 2026-04-25
 ### Changed
