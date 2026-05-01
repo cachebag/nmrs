@@ -354,10 +354,10 @@ pub use api::models::{
     EapMethod, EapOptions, Network, NetworkInfo, OpenVpnAuthType, OpenVpnCompression,
     OpenVpnConfig, OpenVpnConnectionType, OpenVpnProxy, Phase2, RadioState, SavedConnection,
     SavedConnectionBrief, SecurityFeatures, SettingsPatch, SettingsSummary, StateReason,
-    TimeoutConfig, VpnConfig, VpnConfiguration, VpnConnection, VpnConnectionInfo, VpnCredentials,
-    VpnDetails, VpnKind, VpnRoute, VpnSecretFlags, VpnType, WifiDevice, WifiKeyMgmt, WifiSecurity,
-    WifiSecuritySummary, WireGuardConfig, WireGuardPeer, connection_state_reason_to_error,
-    reason_to_error,
+    TimeoutConfig, VlanConfig, VpnConfig, VpnConfiguration, VpnConnection, VpnConnectionInfo,
+    VpnCredentials, VpnDetails, VpnKind, VpnRoute, VpnSecretFlags, VpnType, WifiDevice,
+    WifiKeyMgmt, WifiSecurity, WifiSecuritySummary, WireGuardConfig, WireGuardPeer,
+    connection_state_reason_to_error, reason_to_error,
 };
 pub use api::network_manager::NetworkManager;
 pub use api::wifi_scope::WifiScope;

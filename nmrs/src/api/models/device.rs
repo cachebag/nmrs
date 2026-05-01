@@ -144,6 +144,8 @@ pub enum DeviceType {
     Loopback,
     /// Bluetooth
     Bluetooth,
+    /// VLAN (802.1Q) virtual device.
+    Vlan,
     /// Unknown or unsupported device type with raw code.
     ///
     /// Use the methods on `DeviceType` to query capabilities of unknown device types,
@@ -208,6 +210,7 @@ impl DeviceType {
             Self::WifiP2P => "wifi-p2p",
             Self::Loopback => "loopback",
             Self::Bluetooth => "bluetooth",
+            Self::Vlan => "vlan",
             Self::Other(code) => {
                 crate::types::device_type_registry::connection_type_for_code(*code)
                     .unwrap_or("generic")
@@ -224,6 +227,7 @@ impl DeviceType {
             Self::WifiP2P => 30,
             Self::Loopback => 32,
             Self::Bluetooth => 6,
+            Self::Vlan => 11,
             Self::Other(code) => *code,
         }
     }
@@ -308,6 +312,12 @@ impl Device {
     pub fn is_loopback(&self) -> bool {
         matches!(self.device_type, DeviceType::Loopback)
     }
+
+    /// Returns `true` if this is a VLAN (802.1Q) device.
+    #[must_use]
+    pub fn is_vlan(&self) -> bool {
+        matches!(self.device_type, DeviceType::Vlan)
+    }
 }
 
 impl Display for Device {
@@ -326,6 +336,7 @@ impl From<u32> for DeviceType {
             1 => DeviceType::Ethernet,
             2 => DeviceType::Wifi,
             5 => DeviceType::Bluetooth,
+            11 => DeviceType::Vlan,
             30 => DeviceType::WifiP2P,
             32 => DeviceType::Loopback,
             v => DeviceType::Other(v),
@@ -361,6 +372,7 @@ impl Display for DeviceType {
             DeviceType::WifiP2P => write!(f, "Wi-Fi P2P"),
             DeviceType::Loopback => write!(f, "Loopback"),
             DeviceType::Bluetooth => write!(f, "Bluetooth"),
+            DeviceType::Vlan => write!(f, "VLAN"),
             DeviceType::Other(v) => write!(
                 f,
                 "{}",

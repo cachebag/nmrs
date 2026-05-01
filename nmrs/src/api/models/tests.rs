@@ -18,6 +18,7 @@ use crate::api::models::DeviceType;
 fn device_type_from_u32_all_variants() {
     assert_eq!(DeviceType::from(1), DeviceType::Ethernet);
     assert_eq!(DeviceType::from(2), DeviceType::Wifi);
+    assert_eq!(DeviceType::from(11), DeviceType::Vlan);
     assert_eq!(DeviceType::from(30), DeviceType::WifiP2P);
     assert_eq!(DeviceType::from(32), DeviceType::Loopback);
     assert_eq!(DeviceType::from(999), DeviceType::Other(999));
@@ -26,7 +27,9 @@ fn device_type_from_u32_all_variants() {
 
 #[test]
 fn device_type_from_u32_registry_types() {
-    assert_eq!(DeviceType::from(11), DeviceType::Other(11));
+    // VLAN is now a first-class variant
+    assert_eq!(DeviceType::from(11), DeviceType::Vlan);
+    // These still fall through to Other since they're only in the registry
     assert_eq!(DeviceType::from(12), DeviceType::Other(12));
     assert_eq!(DeviceType::from(13), DeviceType::Other(13));
     assert_eq!(DeviceType::from(16), DeviceType::Other(16));
@@ -39,6 +42,7 @@ fn device_type_display() {
     assert_eq!(format!("{}", DeviceType::Wifi), "Wi-Fi");
     assert_eq!(format!("{}", DeviceType::WifiP2P), "Wi-Fi P2P");
     assert_eq!(format!("{}", DeviceType::Loopback), "Loopback");
+    assert_eq!(format!("{}", DeviceType::Vlan), "VLAN");
     assert_eq!(format!("{}", DeviceType::Other(42)), "Other(42)");
 }
 
@@ -100,6 +104,7 @@ fn device_type_connection_type_str() {
     assert_eq!(DeviceType::Wifi.connection_type_str(), "802-11-wireless");
     assert_eq!(DeviceType::WifiP2P.connection_type_str(), "wifi-p2p");
     assert_eq!(DeviceType::Loopback.connection_type_str(), "loopback");
+    assert_eq!(DeviceType::Vlan.connection_type_str(), "vlan");
 }
 
 #[test]
@@ -114,6 +119,7 @@ fn device_type_connection_type_str_registry() {
 fn device_type_to_code() {
     assert_eq!(DeviceType::Ethernet.to_code(), 1);
     assert_eq!(DeviceType::Wifi.to_code(), 2);
+    assert_eq!(DeviceType::Vlan.to_code(), 11);
     assert_eq!(DeviceType::WifiP2P.to_code(), 30);
     assert_eq!(DeviceType::Loopback.to_code(), 32);
     assert_eq!(DeviceType::Other(999).to_code(), 999);
