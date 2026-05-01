@@ -47,14 +47,6 @@
 - [Network Monitor Dashboard](./examples/network-monitor.md)
 - [Connection Manager](./examples/connection-manager.md)
 
-# nmrs-gui
-
-- [GUI Overview](./gui/overview.md)
-- [Installation](./gui/installation.md)
-- [Configuration](./gui/configuration.md)
-- [Themes](./gui/themes.md)
-- [Waybar Integration](./gui/waybar.md)
-
 # API Reference
 
 - [Core Types](./api/types.md)

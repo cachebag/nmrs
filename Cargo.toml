@@ -1,7 +1,6 @@
 [workspace]
 members = [
-  "nmrs", 
-  "nmrs-gui"
+  "nmrs"
 ]
 
 resolver = "3"
@@ -12,8 +11,6 @@ license = "MIT"
 repository = "https://github.com/cachebag/nmrs"
 
 [workspace.lints.rust]
-# This shouldn't apply to nmrs-gui
-# missing_docs = "warn"
 unused = { level = "warn", priority = -1 }
 
 [workspace.lints.clippy]
@@ -33,13 +30,6 @@ futures = "0.3.32"
 futures-timer = "3.0.3"
 base64 = "0.22.1"
 nmrs = { path = "nmrs", version = "3.0" }
-gtk = { version = "0.11.2", package = "gtk4" }
-glib = "0.22.7"
-dirs = "6.0.0"
-fs2 = "0.4.3"
-anyhow = "1.0.102" 
-clap = { version = "4.6.1", features = ["derive"] }
 async-trait = "0.1.89"
 bitflags = "2.11.1"
 tokio = { version = "1.52.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
-tokio-util = { version = "0.7.18" }

@@ -70,24 +70,6 @@ Yes. Use `nm.import_ovpn("client.ovpn", Some("user"), Some("pass")).await?` to p
 
 Not directly. Extract the values from the config file and pass them to `WireGuardConfig::new()`.
 
-## GUI
-
-### Is nmrs-gui required to use nmrs?
-
-No. `nmrs` is a library crate. `nmrs-gui` is a separate application built on top of it. You can use the library without the GUI.
-
-### Does nmrs-gui work on X11?
-
-Yes. While it's designed for Wayland, it works on X11 through GTK4's X11 backend.
-
-### Can I use nmrs-gui with a tiling window manager?
-
-Yes! nmrs-gui is designed to work well with tiling WMs like Hyprland, Sway, and i3. Add a floating window rule for `org.nmrs.ui`. See [Configuration](../gui/configuration.md).
-
-### How do I change the theme?
-
-Use the theme dropdown in the header bar, or edit `~/.config/nmrs/theme`. See [Themes](../gui/themes.md).
-
 ## Troubleshooting
 
 ### Where can I get help?

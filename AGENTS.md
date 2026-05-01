@@ -5,10 +5,6 @@ Context for AI agents working in this repository.
 ## Project overview
 
 `nmrs` is a Rust library for managing network connections via NetworkManager over D-Bus.
-The workspace has two crates:
-
-- **`nmrs/`** — the core library (async, D-Bus, no GUI dependencies)
-- **`nmrs-gui/`** — a GTK4/libadwaita GUI frontend
 
 ## Architecture
 
@@ -79,11 +75,10 @@ Atomic commits — one logical change per commit.
 
 ## Changelog
 
-[Keep a Changelog](https://keepachangelog.com/) format in `nmrs/CHANGELOG.md` and `nmrs-gui/CHANGELOG.md`.
+[Keep a Changelog](https://keepachangelog.com/) format in `nmrs/CHANGELOG.md`.
 Sections: `Added`, `Changed`, `Fixed`. Link PRs/issues in parentheses.
 
 ## Things to watch out for
 
 - The `VpnCredentials` type is deprecated — prefer `WireGuardConfig` for new WireGuard code.
-- `nmrs-gui` depends on GTK4/libadwaita and only builds on Linux with those dev libs installed.
 

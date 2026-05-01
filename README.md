@@ -9,13 +9,6 @@
 
 An async-first Rust API for [NetworkManager](https://networkmanager.dev/) over [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html). The goal is to provide a safe and simple high-level API for managing Wi-Fi connections on Linux systems, built on [`zbus`](https://docs.rs/zbus) for reliable D-Bus communication.
 
-The project is divided into the following crates:
-
-* `nmrs`: The core library providing NetworkManager bindings and Wi-Fi management API.
-* `nmrs-gui`: A Wayland-compatible GTK4 graphical interface for NetworkManager.
-
-[Jump to the GUI section of this repo](#installation)
-
 ## Documentation
 
 - **[User Guide](https://cachebag.github.io/nmrs/)** - Comprehensive guide with tutorials and examples
@@ -109,53 +102,6 @@ async fn main() -> nmrs::Result<()> {
 ```
 
 To follow and/or discuss the development of nmrs, you can join the [public Discord channel](https://discord.gg/Sk3VfrHrN4).
- 
-# <p align="center"> nmrs-gui </p>
-
-[![Crates.io](https://img.shields.io/crates/v/nmrs-gui)](https://crates.io/crates/nmrs-gui)
-[![Nix](https://github.com/cachebag/nmrs/actions/workflows/nix.yml/badge.svg)](https://github.com/cachebag/nmrs/actions/workflows/nix.yml)
-
-This repository also includes `nmrs-gui`, a Wayland-compatible NetworkManager frontend built with GTK4.
-
-<p align="center">
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/fc0fc636-2fa3-4d80-b43e-71f830b10053" />
-</p>
-
-### Installation
-
-**Arch Linux (AUR)**
-
-```bash
-yay -S nmrs
-# or
-paru -S nmrs
-```
-
-**Nix**
-
-```bash
-nix-shell -p nmrs
-```
-
-### Configuration
-
-**Waybar Integration**
-
-```json
-"network": {
-    "on-click": "nmrs"
-}
-```
-
-**Tiling Window Managers** (Hyprland, Sway, i3)
-
-```
-windowrule = float 1, match:class org.nmrs.ui
-```
-
-**Custom Styling**
-
-Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-defined themes you can pick from in the interface itself.
 
 <details>
 <summary><strong>Roadmap / Implementation Status</strong></summary>
@@ -217,8 +163,8 @@ Edit `~/.config/nmrs/style.css` to customize the interface. There are also pre-d
 - [ ] DNS Manager  
 - [ ] PPP  
 - [x] Secret Agent  
-- [x] VPN Connection (WireGuard + plugin VPNs)  
-- [ ] VPN Plugin  
+- [x] VPN Connection (WireGuard + OpenVPN)  
+- [x] General Plugin VPN (OpenConnect, strongSwan, PPTP, L2TP, etc.)  
 - [ ] Wi-Fi P2P  
 - [ ] WiMAX NSP  
 
@@ -230,7 +176,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for 
 
 ## Requirements
 
-- **Rust**: 1.90.0+ for `nmrs`, 1.94.0+ for `nmrs-gui`
+- **Rust**: 1.90.0+
 - **NetworkManager**: Running and accessible via D-Bus
 - **Linux**: This library is Linux-specific
 

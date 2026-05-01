@@ -14,31 +14,13 @@ Welcome to the **nmrs** documentation! This guide will help you understand and u
 - **Type Safety** - Comprehensive error handling with specific failure reasons
 - **Async/Await** - Built on modern async Rust with runtime flexibility
 
-## Project Structure
-
-The nmrs project consists of two main components:
-
-### nmrs (Library)
-The core Rust library providing NetworkManager bindings and network management capabilities. This is what you'll use if you're building applications that need to manage network connections programmatically.
-
-### nmrs-gui (Application)
-A beautiful, Wayland-compatible GTK4 graphical interface for NetworkManager. Perfect for desktop users who want a modern network management GUI.
-
 ## Why nmrs?
 
-### For Developers
 - **Safe Abstractions** - No unsafe code, leveraging Rust's type system
 - **Async-First** - Built for modern async Rust applications
 - **Signal-Based** - Efficient D-Bus signal monitoring instead of polling
 - **Well-Documented** - Comprehensive docs with examples for every feature
 - **Runtime Agnostic** - Works with Tokio, async-std, smol, and more
-
-### For Users (nmrs-gui)
-- **Modern UI** - Clean GTK4 interface with multiple themes
-- **Wayland Native** - First-class Wayland support
-- **Lightweight** - Fast and efficient
-- **Customizable** - CSS-based theming system
-- **DE Integration** - Works great with tiling WMs (Hyprland, Sway, i3)
 
 ## Quick Example
 
