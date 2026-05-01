@@ -2,19 +2,18 @@
 """
 Version bumping script for nmrs.
 
-This script updates version numbers for a specific crate:
-- Cargo.toml (nmrs or nmrs-gui)
-- CHANGELOG.md (per-crate, in the crate's directory)
+This script updates version numbers:
+- nmrs/Cargo.toml
+- nmrs/CHANGELOG.md
 
 Usage:
-    python3 scripts/bump_version.py <version> <release_type> --crate <crate>
+    python3 scripts/bump_version.py <version> <release_type>
 """
 
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 
 def update_cargo_toml(file_path: Path, version: str) -> bool:
@@ -38,8 +37,8 @@ def update_cargo_toml(file_path: Path, version: str) -> bool:
         return False
 
 
-def update_changelog(file_path: Path, version: str, release_type: str, crate: str) -> bool:
-    """Update per-crate CHANGELOG.md: move Unreleased to new version section."""
+def update_changelog(file_path: Path, version: str, release_type: str) -> bool:
+    """Update CHANGELOG.md: move Unreleased to new version section."""
     try:
         content = file_path.read_text()
         today = datetime.now().strftime("%Y-%m-%d")
@@ -77,11 +76,7 @@ def update_changelog(file_path: Path, version: str, release_type: str, crate: st
             flags=re.DOTALL
         )
         
-        # Determine git tag format
-        if crate == "nmrs-gui":
-            git_tag = f"gui-v{version_tag}"
-        else:
-            git_tag = f"nmrs-v{version_tag}"
+        git_tag = f"nmrs-v{version_tag}"
         
         # Update the [Unreleased] comparison link
         unreleased_link_pattern = r'\[Unreleased\]:\s*https://github\.com/[^/]+/[^/]+/compare/[^\s]+\.\.\.HEAD'
@@ -127,30 +122,22 @@ def update_changelog(file_path: Path, version: str, release_type: str, crate: st
 
 def main():
     """Main entry point."""
-    if len(sys.argv) < 4 or '--crate' not in sys.argv:
-        print("Usage: bump_version.py <version> <release_type> --crate <crate>")
+    if len(sys.argv) < 3:
+        print("Usage: bump_version.py <version> <release_type>")
         print()
         print("Arguments:")
         print("  version       Version number (e.g., 1.2.0)")
         print("  release_type  'beta' or 'stable'")
-        print("  --crate       Required: 'nmrs' or 'nmrs-gui'")
         print()
         print("Examples:")
-        print("  python3 scripts/bump_version.py 1.2.0 stable --crate nmrs")
-        print("  python3 scripts/bump_version.py 0.6.0 beta --crate nmrs-gui")
+        print("  python3 scripts/bump_version.py 3.1.0 stable")
+        print("  python3 scripts/bump_version.py 3.1.0 beta")
         print()
         print("This script should be run on the dev branch before creating a PR to master.")
         sys.exit(1)
     
     version = sys.argv[1]
     release_type = sys.argv[2]
-    
-    # Parse --crate argument
-    crate: Optional[str] = None
-    if '--crate' in sys.argv:
-        crate_idx = sys.argv.index('--crate')
-        if crate_idx + 1 < len(sys.argv):
-            crate = sys.argv[crate_idx + 1]
     
     # Validate inputs
     if not re.match(r'^\d+\.\d+\.\d+$', version):
@@ -163,21 +150,16 @@ def main():
         print("Expected: 'beta' or 'stable'")
         sys.exit(1)
     
-    if crate not in ['nmrs', 'nmrs-gui']:
-        print(f"✗ Invalid or missing crate: {crate}")
-        print("Expected: 'nmrs' or 'nmrs-gui'")
-        sys.exit(1)
-    
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
     
-    print(f"Preparing {crate} release: {version}-{release_type}")
+    print(f"Preparing nmrs release: {version}-{release_type}")
     print("=" * 50)
     
     success = True
     
-    # Update Cargo.toml for the specified crate
-    cargo_toml_path = project_root / crate / 'Cargo.toml'
+    # Update Cargo.toml
+    cargo_toml_path = project_root / 'nmrs' / 'Cargo.toml'
     if not cargo_toml_path.exists():
         print(f"✗ File not found: {cargo_toml_path}")
         success = False
@@ -185,14 +167,14 @@ def main():
         if not update_cargo_toml(cargo_toml_path, version):
             success = False
     
-    # Update per-crate CHANGELOG.md
-    changelog_path = project_root / crate / 'CHANGELOG.md'
+    # Update CHANGELOG.md
+    changelog_path = project_root / 'nmrs' / 'CHANGELOG.md'
     if not changelog_path.exists():
         print(f"✗ File not found: {changelog_path}")
-        print(f"  Create {crate}/CHANGELOG.md with an [Unreleased] section first")
+        print("  Create nmrs/CHANGELOG.md with an [Unreleased] section first")
         success = False
     else:
-        if not update_changelog(changelog_path, version, release_type, crate):
+        if not update_changelog(changelog_path, version, release_type):
             success = False
     
     print("=" * 50)
@@ -204,27 +186,16 @@ def main():
         else:
             version_tag = f"{version}-{release_type}"
         
-        if crate == "nmrs-gui":
-            git_tag = f"gui-v{version_tag}"
-        else:
-            git_tag = f"nmrs-v{version_tag}"
+        git_tag = f"nmrs-v{version_tag}"
         
-        print(f"✓ Successfully prepared {crate} release {version}-{release_type}")
+        print(f"✓ Successfully prepared nmrs release {version}-{release_type}")
         print()
         print("Next steps:")
         print(f"  1. Review the changes: git diff")
-        print(f"  2. Commit: git commit -am 'chore({crate}): prepare {version_tag} release'")
+        print(f"  2. Commit: git commit -am 'chore(nmrs): prepare {version_tag} release'")
         print(f"  3. Push and open PR to master")
         print(f"  4. After merge, create tag: git tag {git_tag} && git push origin {git_tag}")
-        if crate == "nmrs":
-            print(f"  5. CI will automatically publish to crates.io and create GitHub release")
-        else:
-            print(f"  5. CI will automatically create GitHub release with binary")
-            print()
-            print("For nmrs-gui releases:")
-            print(f"  6. Manually update AUR in nmrs-aur/ directory")
-            print(f"  7. Update PKGBUILD and run: updpkgsums && makepkg --printsrcinfo > .SRCINFO")
-            print(f"  8. Commit and push to AUR repository")
+        print(f"  5. CI will automatically publish to crates.io and create GitHub release")
     else:
         print("✗ Some errors occurred during version bumping")
         sys.exit(1)

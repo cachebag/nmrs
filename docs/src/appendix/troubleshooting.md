@@ -185,25 +185,6 @@ Monitor NetworkManager's own logs:
 journalctl -u NetworkManager -f
 ```
 
-## GUI Issues
-
-### nmrs-gui won't start
-
-- Check if another instance is running (single-instance lock)
-- Verify GTK4 is installed: `pkg-config --modversion gtk4`
-- Check for missing libraries: `ldd $(which nmrs) | grep "not found"`
-
-### Theme not loading
-
-- Check `~/.config/nmrs/theme` contains a valid theme name
-- Delete the file to reset to defaults
-
-### Custom CSS not working
-
-- Verify the file exists: `~/.config/nmrs/style.css`
-- User CSS loads last and should override themes
-- Check CSS syntax in the file
-
 ## Getting Help
 
 - **Discord:** [discord.gg/Sk3VfrHrN4](https://discord.gg/Sk3VfrHrN4)

@@ -55,19 +55,10 @@ dbus-send --system --print-reply \
 
 ## Rust Requirements
 
-### For nmrs Library
-
-- **Rust**: 1.78.0 or later
-- **Edition**: 2021
+- **Rust**: 1.90.0 or later
+- **Edition**: 2024
 
 The library uses stable Rust features only.
-
-### For nmrs-gui
-
-- **Rust**: 1.85.1 or later
-- **Edition**: 2021
-
-The GUI requires a newer Rust version due to GTK4 bindings.
 
 ## Dependencies
 
@@ -82,30 +73,6 @@ The library depends on:
 - `futures` - Async utilities
 
 All dependencies are automatically handled by Cargo.
-
-### nmrs-gui Dependencies
-
-Additional system libraries required:
-
-**Arch Linux:**
-```bash
-sudo pacman -S gtk4 libadwaita
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt install libgtk-4-dev libadwaita-1-dev build-essential
-```
-
-**Fedora:**
-```bash
-sudo dnf install gtk4-devel libadwaita-devel
-```
-
-**NixOS:**
-```nix
-# Handled automatically by the Nix package
-```
 
 ## Permissions
 
@@ -250,19 +217,11 @@ cargo update
 
 ## Version Compatibility
 
-### nmrs Library
-
 | nmrs Version | Minimum Rust | NetworkManager | Notable Features |
 |--------------|--------------|----------------|------------------|
+| 3.0.0        | 1.90.0       | 1.0+           | Edition 2024     |
 | 2.0.0        | 1.78.0       | 1.0+           | Full API rewrite |
 | 1.x          | 1.70.0       | 1.0+           | Initial release  |
-
-### nmrs-gui
-
-| GUI Version | Minimum Rust | GTK | Notable Features |
-|-------------|--------------|-----|------------------|
-| 1.1.0       | 1.85.1       | 4.0 | Themes support   |
-| 1.0.0       | 1.82.0       | 4.0 | Initial release  |
 
 ## Next Steps
 

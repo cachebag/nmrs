@@ -39,8 +39,6 @@ async fn main() -> nmrs::Result<()> {
 }
 ```
 
-This is what `nmrs-gui` uses internally.
-
 ## async-std
 
 ```rust
@@ -99,8 +97,6 @@ glib::MainContext::default().spawn_local(async {
     }
 });
 ```
-
-This is how `nmrs-gui` integrates nmrs into its GTK4 interface.
 
 ## How It Works
 

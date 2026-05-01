@@ -1,6 +1,6 @@
 # Release Process
 
-This page documents the release process for nmrs and nmrs-gui.
+This page documents the release process for nmrs.
 
 ## Versioning
 
@@ -10,21 +10,9 @@ nmrs follows [Semantic Versioning](https://semver.org/):
 - **Minor** (0.X.0) — new features, backward-compatible
 - **Patch** (0.0.X) — bug fixes, backward-compatible
 
-The library (`nmrs`) and GUI (`nmrs-gui`) are versioned independently.
+## Changelog
 
-## Current Versions
-
-| Crate | Version |
-|-------|---------|
-| `nmrs` | 2.2.0 |
-| `nmrs-gui` | 1.1.0 |
-
-## Changelogs
-
-Each crate maintains its own changelog:
-
-- [`nmrs/CHANGELOG.md`](https://github.com/cachebag/nmrs/blob/master/nmrs/CHANGELOG.md) — Core library
-- [`nmrs-gui/CHANGELOG.md`](https://github.com/cachebag/nmrs/blob/master/nmrs-gui/CHANGELOG.md) — GUI application
+See [`nmrs/CHANGELOG.md`](https://github.com/cachebag/nmrs/blob/master/nmrs/CHANGELOG.md) for the full changelog.
 
 ## Release Checklist
 
@@ -43,8 +31,6 @@ Each crate maintains its own changelog:
 | Channel | Package |
 |---------|---------|
 | [crates.io](https://crates.io/crates/nmrs) | `nmrs` library |
-| [AUR](https://aur.archlinux.org/packages/nmrs) | `nmrs` (GUI binary) |
-| [Nix](https://github.com/cachebag/nmrs/blob/master/flake.nix) | Nix flake |
 
 ## API Stability
 

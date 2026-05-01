@@ -26,18 +26,12 @@ docker compose run test
 docker compose run shell
 ```
 
-It goes without saying that this image only works with nmrs. nmrs-gui requires GTK deps which in that case, you are better off just running a VM or learning how to use Linux on a machine instead.
-
 If you decide to run the shell, ensure you run all commands from within the nmrs directory, not root.
 ```bash
 cargo test -p nmrs           # run library tests
 cargo build -p nmrs          # build the library
 cargo check                  # you get the point...
 ```
-
-### To develop nmrs-gui, you'll need:
-- GTK4 and libadwaita development libraries
-- A Wayland compositor
 
 ## When your branch falls behind `master`
 

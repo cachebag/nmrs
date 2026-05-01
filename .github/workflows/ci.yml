@@ -44,13 +44,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
-            libglib2.0-dev \
-            libgirepository1.0-dev \
-            libgdk-pixbuf2.0-dev \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev
+            libdbus-1-dev
       
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -79,13 +73,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
-            libglib2.0-dev \
-            libgirepository1.0-dev \
-            libgdk-pixbuf2.0-dev \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev
+            libdbus-1-dev
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -137,7 +125,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            packages: nmrs nmrs-gui
+            packages: nmrs
           - target: aarch64-unknown-linux-gnu
             packages: nmrs
     steps:
@@ -148,13 +136,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
-            libglib2.0-dev \
-            libgirepository1.0-dev \
-            libgdk-pixbuf2.0-dev \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev
+            libdbus-1-dev
       
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'

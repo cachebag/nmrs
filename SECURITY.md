@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-We take security seriously and provide security updates for the latest version of nmrs and nmrs-gui alike. 
+We take security seriously and provide security updates for the latest version of nmrs. 
 We strongly recommend keeping your nmrs dependencies up to date.
 
 ## Reporting a Vulnerability
@@ -33,11 +33,6 @@ For nmrs, security vulnerabilities may include but are not limited to:
 - **Input validation failures**: Improper handling of malformed SSIDs, credentials, or configuration data leading to undefined behavior
 - **Race conditions**: Timing vulnerabilities in connection state management that could lead to security issues
 - **Dependency vulnerabilities**: Security issues in upstream crates (zbus, tokio, etc.) that affect nmrs
-
-For nmrs-gui specifically:
-- **UI injection**: Malicious network names or data that could execute unintended actions in the GUI
-- **File system access**: Unauthorized reading or writing of configuration files outside the intended scope
-
 
 ## Response Timeline
 
@@ -90,7 +85,7 @@ If you prefer to remain anonymous, please let us know in your report.
 
 ## Scope
 
-This security policy covers both nmrs and nmrs-gui alike.
+This security policy covers nmrs.
 
 ## Additional Resources
 
@@ -98,4 +93,4 @@ This security policy covers both nmrs and nmrs-gui alike.
 - [Code of Conduct](https://www.rust-lang.org/policies/code-of-conduct)
 - [Rust Security Policy](https://www.rust-lang.org/policies/security)
 
-Thank you for helping to keep nmrs and the Rust ecosystem secure!
+Thank you for helping keep nmrs and the Rust ecosystem secure!

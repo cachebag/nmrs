@@ -1,9 +1,6 @@
 # Changelog
 
-Each crate maintains its own changelog. See the full changelogs on GitHub:
-
-- [**nmrs** (library) CHANGELOG](https://github.com/cachebag/nmrs/blob/master/nmrs/CHANGELOG.md)
-- [**nmrs-gui** (GUI) CHANGELOG](https://github.com/cachebag/nmrs/blob/master/nmrs-gui/CHANGELOG.md)
+See the full changelog on GitHub: [**nmrs** CHANGELOG](https://github.com/cachebag/nmrs/blob/master/nmrs/CHANGELOG.md)
 
 ## nmrs (Library) Highlights
 
@@ -40,38 +37,3 @@ Each crate maintains its own changelog. See the full changelogs on GitHub:
 - VPN error handling improvements
 - Docker image for testing
 - Initial release with Wi-Fi and Ethernet support
-
-## nmrs-gui (Application) Highlights
-
-### 1.1.0
-
-- Binary name fix for `.desktop` files and Nix
-
-### 0.5.0-beta
-
-- Ethernet support
-- UI freeze fixes
-- WPA-EAP certificate path support
-
-### 0.4.0-beta
-
-- Five themes: Catppuccin, Dracula, Gruvbox, Nord, Tokyo Night
-- `--version` flag
-- Crate rename to `nmrs-gui`
-
-### 0.3.0-beta
-
-- System default light/dark toggle
-
-### 0.2.0-beta
-
-- Default CSS file creation
-- Nix dependencies
-- Connection success feedback
-
-### 0.1.0-beta
-
-- Initial GTK4 GUI
-- Basic and advanced network detail pages
-- Refresh functionality
-- Desktop entry and AUR support
