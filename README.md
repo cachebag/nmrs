@@ -135,7 +135,7 @@ To follow and/or discuss the development of nmrs, you can join the [public Disco
 - [ ] Team  
 - [ ] TUN/TAP  
 - [ ] VETH  
-- [ ] VLAN  
+- [x] VLAN  
 - [ ] VRF  
 - [ ] VXLAN  
 - [ ] Wi-Fi P2P  
