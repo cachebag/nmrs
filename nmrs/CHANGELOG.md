@@ -6,6 +6,25 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - Implement loopback support ([#391](https://github.com/cachebag/nmrs/issues/391))
 - Implement add VLAN (802.1Q) device support with VlanConfig model and connection builder([#392](https://github.com/cachebag/nmrs/issues/392))
 
+### Added
+- `RadioState::present` indicates whether a controllable instance of the radio
+  exists on the host. `RadioState::with_presence(enabled, hardware_enabled,
+  present)` constructor; `RadioState::new` keeps existing behavior and defaults
+  `present = true`.
+
+### Fixed
+- `AirplaneModeState::is_airplane_mode` no longer returns `false` on hosts
+  without Bluetooth/WWAN. Radios reported with `present = false` are now
+  ignored when computing both `is_airplane_mode` and `any_hardware_killed`.
+- `set_airplane_mode` no longer returns `BluezUnavailable` (and therefore no
+  longer leaves Wi-Fi soft-killed while reporting failure to the caller) when
+  the host has no Bluetooth stack. A missing BlueZ is treated as a successful
+  no-op for the Bluetooth leg of the toggle.
+- `set_bluetooth_radio_enabled` waits up to 2s for each adapter's `Powered`
+  property to actually flip before returning, so a read-after-write of
+  `airplane_mode_state()` no longer observes the pre-toggle Bluetooth state
+  and concludes that airplane mode failed to engage.
+
 ## [3.0.1] - 2026-04-25
 ### Changed
 - Lower MSRV from 1.94.0 to 1.90.0
