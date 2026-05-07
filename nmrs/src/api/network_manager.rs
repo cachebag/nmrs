@@ -721,8 +721,9 @@ impl NetworkManager {
     /// Returns the combined software/hardware state of the Bluetooth radio.
     ///
     /// Reads power state from all BlueZ adapters and cross-references rfkill.
-    /// If BlueZ is not running or no adapters exist, returns
-    /// `RadioState { enabled: true, hardware_enabled: false }`.
+    /// If BlueZ is not running or no adapters exist, returns a [`RadioState`]
+    /// with `present = false` so callers can ignore Bluetooth on hosts that
+    /// don't have it.
     pub async fn bluetooth_radio_state(&self) -> Result<RadioState> {
         airplane::bluetooth_radio_state(&self.conn).await
     }
@@ -730,7 +731,11 @@ impl NetworkManager {
     /// Returns the aggregated airplane-mode state across all radios.
     ///
     /// Fans out to Wi-Fi, WWAN, and Bluetooth concurrently and returns
-    /// an [`AirplaneModeState`] snapshot.
+    /// an [`AirplaneModeState`] snapshot. Radios that are not actually
+    /// present on the host (no Wi-Fi card, no modem, no BlueZ) are reported
+    /// with `present = false` and are ignored by
+    /// [`AirplaneModeState::is_airplane_mode`] /
+    /// [`AirplaneModeState::any_hardware_killed`].
     pub async fn airplane_mode_state(&self) -> Result<AirplaneModeState> {
         airplane::airplane_mode_state(&self.conn).await
     }
@@ -740,6 +745,11 @@ impl NetworkManager {
     /// This replaces the deprecated [`set_wifi_enabled`](Self::set_wifi_enabled).
     /// If the radio is hardware-killed, NM accepts the write but the radio
     /// remains off until hardware is unkilled.
+    ///
+    /// Note: NetworkManager implements this by writing rfkill soft blocks,
+    /// which most distributions persist across reboots via `rfkill-restore`
+    /// or systemd. A wifi disabled this way will remain disabled until it
+    /// is explicitly re-enabled.
     pub async fn set_wireless_enabled(&self, enabled: bool) -> Result<()> {
         airplane::set_wireless_enabled(&self.conn, enabled).await
     }
@@ -764,7 +774,11 @@ impl NetworkManager {
     /// **`enabled = true` means airplane mode is on, i.e. radios are off.**
     ///
     /// Does not fail fast: attempts all three toggles concurrently and
-    /// returns the first error at the end, if any.
+    /// returns the first error at the end, if any. A missing Bluetooth
+    /// stack (BlueZ not running or no adapters) is treated as a successful
+    /// no-op rather than as an error so that flipping airplane mode on a
+    /// wifi-only host still succeeds and leaves the toggle in the expected
+    /// state.
     pub async fn set_airplane_mode(&self, enabled: bool) -> Result<()> {
         airplane::set_airplane_mode(&self.conn, enabled).await
     }
