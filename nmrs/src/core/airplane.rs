@@ -168,8 +168,9 @@ pub(crate) async fn set_wwan_enabled(conn: &Connection, enabled: bool) -> Result
 ///
 /// - [`ConnectionError::BluezUnavailable`] if BlueZ is not running or no
 ///   adapters exist.
-/// - [`ConnectionError::BluetoothToggleFailed`] if adapters exist but none
-///   could be toggled (e.g., D-Bus errors on all adapters).
+/// - [`ConnectionError::BluetoothToggleFailed`] if one or more adapters could
+///   not be toggled, or their `Powered` property did not reach the requested
+///   state (e.g., D-Bus errors or timeout).
 pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool) -> Result<()> {
     let adapter_paths = enumerate_bluetooth_adapters(conn).await.map_err(|e| {
         ConnectionError::BluezUnavailable(format!("failed to enumerate adapters: {e}"))
@@ -180,6 +181,8 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
             "no Bluetooth adapters found".to_string(),
         ));
     }
+
+    let n_adapters = adapter_paths.len();
 
     // Build proxies and toggle power concurrently
     let toggle_futures = adapter_paths.iter().map(|path| async move {
@@ -206,15 +209,18 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
     });
 
     let results: Vec<_> = futures::future::join_all(toggle_futures).await;
-    let successful_proxies: Vec<_> = results.into_iter().flatten().collect();
-
-    if successful_proxies.is_empty() {
-        return Err(ConnectionError::BluetoothToggleFailed(
-            "failed to toggle any Bluetooth adapters".to_string(),
-        ));
+    let n_ok = results.iter().filter(|r| r.is_some()).count();
+    if n_ok != n_adapters {
+        return Err(ConnectionError::BluetoothToggleFailed(format!(
+            "failed to toggle {} of {} Bluetooth adapter(s)",
+            n_adapters.saturating_sub(n_ok),
+            n_adapters
+        )));
     }
 
-    // Wait for all successfully toggled adapters to settle, with a single overall timeout
+    let successful_proxies: Vec<_> = results.into_iter().flatten().collect();
+
+    // Wait for all adapters' Powered to settle, with a single overall timeout
     let wait_futures = successful_proxies
         .iter()
         .map(|proxy| wait_for_powered_no_timeout(proxy, enabled));
@@ -226,6 +232,22 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
     let timer = pin!(timer.fuse());
     let _ = future::select(all_waits, timer).await;
 
+    for proxy in &successful_proxies {
+        match proxy.powered().await {
+            Ok(v) if v == enabled => {}
+            Ok(_) => {
+                return Err(ConnectionError::BluetoothToggleFailed(
+                    "Bluetooth adapter Powered did not reach requested state in time".to_string(),
+                ));
+            }
+            Err(e) => {
+                return Err(ConnectionError::BluetoothToggleFailed(format!(
+                    "could not read Powered after toggle: {e}"
+                )));
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -234,9 +256,9 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
 /// `enabled = true` means airplane mode **on** (radios **off**).
 /// Does not fail fast — attempts all three and returns the first error,
 /// except that a missing Bluetooth stack (BlueZ not running or no adapters)
-/// is treated as a successful no-op. If Bluetooth adapters exist but no
-/// adapter could be toggled successfully (e.g., due to D-Bus errors), that
-/// error is propagated.
+/// is treated as a successful no-op. If Bluetooth adapters exist but any of
+/// them could not be toggled or did not report the expected `Powered` state,
+/// that error is propagated.
 pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Result<()> {
     let radio_on = !enabled;
 
@@ -260,7 +282,7 @@ pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Resul
                 message
             );
         }
-        // BluetoothToggleFailed means no adapter could be toggled — propagate.
+        // BluetoothToggleFailed — at least one adapter failed or wrong state.
         Err(e) => return Err(e),
     }
     Ok(())
