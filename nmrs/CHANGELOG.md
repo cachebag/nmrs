@@ -10,7 +10,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - `RadioState::present` indicates whether a controllable instance of the radio
   exists on the host. `RadioState::with_presence(enabled, hardware_enabled,
   present)` constructor; `RadioState::new` keeps existing behavior and defaults
-  `present = true`.([#396](https://github.com/cachebag/nmrs/issues/396))
+  `present = true`. ([#396](https://github.com/cachebag/nmrs/issues/396))
 
 ### Fixed
 - `NetworkManager::wifi_state` and `wwan_state` now set `RadioState::present`
