@@ -772,7 +772,8 @@ impl NetworkManager {
     /// Enables or disables the Bluetooth radio by toggling all BlueZ adapters.
     ///
     /// Returns [`BluezUnavailable`](crate::ConnectionError::BluezUnavailable) if BlueZ is not running
-    /// or no adapters exist.
+    /// or no adapters exist, or [`BluetoothToggleFailed`](crate::ConnectionError::BluetoothToggleFailed)
+    /// if any adapter could not be toggled or did not reach the requested power state.
     pub async fn set_bluetooth_radio_enabled(&self, enabled: bool) -> Result<()> {
         airplane::set_bluetooth_radio_enabled(&self.conn, enabled).await
     }
@@ -786,8 +787,8 @@ impl NetworkManager {
     /// stack (BlueZ not running or no adapters) is treated as a successful
     /// no-op rather than as an error so that flipping airplane mode on a
     /// wifi-only host still succeeds and leaves the toggle in the expected
-    /// state. However, if Bluetooth adapters exist but no adapter could be
-    /// toggled successfully (e.g., due to D-Bus errors), that error is
+    /// state. However, if Bluetooth adapters exist but any adapter could not
+    /// be toggled or did not reach the expected power state, that error is
     /// propagated.
     pub async fn set_airplane_mode(&self, enabled: bool) -> Result<()> {
         airplane::set_airplane_mode(&self.conn, enabled).await
