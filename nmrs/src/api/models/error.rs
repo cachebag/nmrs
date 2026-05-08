@@ -244,9 +244,13 @@ pub enum ConnectionError {
     #[error("radio is hardware-disabled (rfkill)")]
     HardwareRadioKilled,
 
-    /// The BlueZ Bluetooth stack is unavailable.
+    /// The BlueZ Bluetooth stack is unavailable (not running or no adapters).
     #[error("bluetooth stack unavailable: {0}")]
     BluezUnavailable(String),
+
+    /// Bluetooth adapters exist but toggling them failed.
+    #[error("bluetooth toggle failed: {0}")]
+    BluetoothToggleFailed(String),
 
     /// Invalid VLAN ID (must be 1-4094).
     #[error("invalid VLAN ID {id}: must be between 1 and 4094")]
