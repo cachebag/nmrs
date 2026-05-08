@@ -303,27 +303,23 @@ fn reconcile_hardware(nm_hardware_enabled: bool, rfkill_hard_block: bool, radio:
     nm_hardware_enabled && !rfkill_hard_block
 }
 
-/// Fetches all device types present in NetworkManager.
+/// Fetches all device types present in NetworkManager device objects.
 ///
 /// Queries the device list once and returns a set of device type codes.
-/// Returns `None` if the device list could not be fetched (NM unavailable,
-/// D-Bus error), signaling that callers should assume radios are present
-/// rather than incorrectly marking them absent.
-async fn fetch_present_device_types(conn: &Connection) -> Option<HashSet<u32>> {
+/// Returns `None` if the device list could not be fetched at all (NM
+/// unavailable, `GetDevices` failed) or if any enumerated device could not
+/// be introspected (incomplete enumeration), signaling that callers should
+/// assume radios are present rather than risk a false negative.
+pub(crate) async fn fetch_present_device_types(conn: &Connection) -> Option<HashSet<u32>> {
     let nm = NMProxy::new(conn).await.ok()?;
     let paths = nm.get_devices().await.ok()?;
 
     let mut types = HashSet::new();
     for p in paths {
-        let Ok(builder) = NMDeviceProxy::builder(conn).path(p) else {
-            continue;
-        };
-        let Ok(dev) = builder.build().await else {
-            continue;
-        };
-        if let Ok(t) = dev.device_type().await {
-            types.insert(t);
-        }
+        let builder = NMDeviceProxy::builder(conn).path(p).ok()?;
+        let dev = builder.build().await.ok()?;
+        let t = dev.device_type().await.ok()?;
+        types.insert(t);
     }
 
     Some(types)
@@ -339,7 +335,9 @@ async fn fetch_present_device_types(conn: &Connection) -> Option<HashSet<u32>> {
 async fn wait_for_powered_no_timeout(proxy: &BluezAdapterProxy<'_>, target: bool) {
     let mut stream = proxy.receive_powered_changed().await;
 
-    if proxy.powered().await.unwrap_or(target) == target {
+    if let Ok(value) = proxy.powered().await
+        && value == target
+    {
         return;
     }
 
