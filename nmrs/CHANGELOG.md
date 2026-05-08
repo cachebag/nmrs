@@ -10,20 +10,20 @@ All notable changes to the `nmrs` crate will be documented in this file.
 - `RadioState::present` indicates whether a controllable instance of the radio
   exists on the host. `RadioState::with_presence(enabled, hardware_enabled,
   present)` constructor; `RadioState::new` keeps existing behavior and defaults
-  `present = true`.
+  `present = true`.([#396](https://github.com/cachebag/nmrs/issues/396))
 
 ### Fixed
 - `AirplaneModeState::is_airplane_mode` no longer returns `false` on hosts
   without Bluetooth/WWAN. Radios reported with `present = false` are now
-  ignored when computing both `is_airplane_mode` and `any_hardware_killed`.
+  ignored when computing both `is_airplane_mode` and `any_hardware_killed`. ([#396](https://github.com/cachebag/nmrs/pull/396))
 - `set_airplane_mode` no longer returns `BluezUnavailable` (and therefore no
   longer leaves Wi-Fi soft-killed while reporting failure to the caller) when
   the host has no Bluetooth stack. A missing BlueZ is treated as a successful
-  no-op for the Bluetooth leg of the toggle.
+  no-op for the Bluetooth leg of the toggle. ([#396](https://github.com/cachebag/nmrs/pull/396))
 - `set_bluetooth_radio_enabled` waits up to 2s for each adapter's `Powered`
   property to actually flip before returning, so a read-after-write of
   `airplane_mode_state()` no longer observes the pre-toggle Bluetooth state
-  and concludes that airplane mode failed to engage.
+  and concludes that airplane mode failed to engage. ([#396](https://github.com/cachebag/nmrs/pull/396))
 
 ## [3.0.1] - 2026-04-25
 ### Changed
