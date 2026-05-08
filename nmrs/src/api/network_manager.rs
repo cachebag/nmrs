@@ -708,14 +708,22 @@ impl NetworkManager {
     /// Returns the combined software/hardware state of the Wi-Fi radio.
     ///
     /// See [`RadioState`] for the distinction between `enabled` (software)
-    /// and `hardware_enabled` (rfkill).
+    /// and `hardware_enabled` (rfkill). The `present` flag reflects whether
+    /// NetworkManager has a Wi-Fi device object; if device enumeration fails,
+    /// `present` defaults to `true` so callers are not misled into thinking
+    /// Wi-Fi is absent.
     pub async fn wifi_state(&self) -> Result<RadioState> {
-        airplane::wifi_state(&self.conn, None).await
+        let present_types = airplane::fetch_present_device_types(&self.conn).await;
+        airplane::wifi_state(&self.conn, present_types.as_ref()).await
     }
 
     /// Returns the combined software/hardware state of the WWAN radio.
+    ///
+    /// The `present` flag reflects whether NetworkManager has a modem device
+    /// object; if device enumeration fails, `present` defaults to `true`.
     pub async fn wwan_state(&self) -> Result<RadioState> {
-        airplane::wwan_state(&self.conn, None).await
+        let present_types = airplane::fetch_present_device_types(&self.conn).await;
+        airplane::wwan_state(&self.conn, present_types.as_ref()).await
     }
 
     /// Returns the combined software/hardware state of the Bluetooth radio.
