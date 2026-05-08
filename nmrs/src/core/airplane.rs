@@ -7,6 +7,7 @@
 //! the host does not actually have (no Wi-Fi card, no modem, BlueZ not
 //! running) instead of blocking airplane-mode aggregation forever.
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use futures::{FutureExt, StreamExt, future};
@@ -21,20 +22,30 @@ use crate::dbus::{BluezAdapterProxy, NMDeviceProxy, NMProxy};
 use crate::types::constants::device_type;
 use crate::{ConnectionError, Result};
 
-/// Maximum time to wait for a BlueZ adapter's `Powered` property to reflect
-/// a write before we give up and return Ok anyway. BlueZ usually settles in
-/// well under a second; we cap at two to avoid hanging UI consumers.
+/// Maximum time to wait for all BlueZ adapters' `Powered` properties to settle
+/// after a write. BlueZ usually settles in well under a second; we cap at two
+/// to avoid hanging UI consumers. This is an overall timeout for all adapters,
+/// not per-adapter.
 const BLUEZ_POWER_SETTLE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Reads Wi-Fi radio state from NetworkManager, cross-referenced with rfkill.
-pub(crate) async fn wifi_state(conn: &Connection) -> Result<RadioState> {
+///
+/// If `present_device_types` is provided, uses it to determine whether a Wi-Fi
+/// device exists; otherwise queries NetworkManager directly.
+pub(crate) async fn wifi_state(
+    conn: &Connection,
+    present_device_types: Option<&HashSet<u32>>,
+) -> Result<RadioState> {
     let nm = NMProxy::new(conn).await?;
     let enabled = nm.wireless_enabled().await?;
     let nm_hw = nm.wireless_hardware_enabled().await?;
 
     let rfkill = read_rfkill();
     let hardware_enabled = reconcile_hardware(nm_hw, rfkill.wlan_hard_block, "wifi");
-    let present = has_device_of_type(conn, device_type::WIFI).await;
+    let present = match present_device_types {
+        Some(types) => types.contains(&device_type::WIFI),
+        None => has_device_of_type(conn, device_type::WIFI).await,
+    };
 
     Ok(RadioState::with_presence(
         enabled,
@@ -44,14 +55,23 @@ pub(crate) async fn wifi_state(conn: &Connection) -> Result<RadioState> {
 }
 
 /// Reads WWAN radio state from NetworkManager, cross-referenced with rfkill.
-pub(crate) async fn wwan_state(conn: &Connection) -> Result<RadioState> {
+///
+/// If `present_device_types` is provided, uses it to determine whether a modem
+/// device exists; otherwise queries NetworkManager directly.
+pub(crate) async fn wwan_state(
+    conn: &Connection,
+    present_device_types: Option<&HashSet<u32>>,
+) -> Result<RadioState> {
     let nm = NMProxy::new(conn).await?;
     let enabled = nm.wwan_enabled().await?;
     let nm_hw = nm.wwan_hardware_enabled().await?;
 
     let rfkill = read_rfkill();
     let hardware_enabled = reconcile_hardware(nm_hw, rfkill.wwan_hard_block, "wwan");
-    let present = has_device_of_type(conn, device_type::MODEM).await;
+    let present = match present_device_types {
+        Some(types) => types.contains(&device_type::MODEM),
+        None => has_device_of_type(conn, device_type::MODEM).await,
+    };
 
     Ok(RadioState::with_presence(
         enabled,
@@ -103,10 +123,15 @@ pub(crate) async fn bluetooth_radio_state(conn: &Connection) -> Result<RadioStat
 }
 
 /// Returns the combined airplane mode state for all radios.
+///
+/// Fetches the device list once and passes it to wifi/wwan state queries to
+/// avoid redundant D-Bus round-trips.
 pub(crate) async fn airplane_mode_state(conn: &Connection) -> Result<AirplaneModeState> {
+    let present_types = fetch_present_device_types(conn).await;
+
     let (wifi, wwan, bt) = futures::future::join3(
-        wifi_state(conn),
-        wwan_state(conn),
+        wifi_state(conn, Some(&present_types)),
+        wwan_state(conn, Some(&present_types)),
         bluetooth_radio_state(conn),
     )
     .await;
@@ -129,9 +154,12 @@ pub(crate) async fn set_wwan_enabled(conn: &Connection, enabled: bool) -> Result
 /// Enables or disables Bluetooth radio by toggling all BlueZ adapters.
 ///
 /// After writing `Powered` we wait up to [`BLUEZ_POWER_SETTLE_TIMEOUT`] for
-/// the adapter's reported state to actually flip. Otherwise a consumer that
+/// all adapters' reported state to actually flip. Otherwise a consumer that
 /// re-reads [`bluetooth_radio_state`] right after this call can observe the
 /// pre-toggle value briefly and conclude the toggle didn't take effect.
+///
+/// Adapters are toggled concurrently with a single overall timeout to keep
+/// latency bounded regardless of adapter count.
 ///
 /// If BlueZ is not running, returns [`ConnectionError::BluezUnavailable`].
 pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool) -> Result<()> {
@@ -145,31 +173,45 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
         ));
     }
 
-    let mut first_err: Option<ConnectionError> = None;
-    for path in &adapter_paths {
-        let result: Result<()> = async {
-            let proxy = BluezAdapterProxy::builder(conn)
-                .path(path.as_str())?
-                .build()
-                .await?;
-            proxy.set_powered(enabled).await?;
-            wait_for_powered(&proxy, enabled, BLUEZ_POWER_SETTLE_TIMEOUT).await;
-            Ok(())
-        }
-        .await;
+    // Build proxies and toggle power concurrently
+    let toggle_futures = adapter_paths.iter().map(|path| async move {
+        let proxy_result = BluezAdapterProxy::builder(conn)
+            .path(path.as_str())
+            .ok()?
+            .build()
+            .await
+            .ok()?;
 
-        if let Err(e) = result {
+        if let Err(e) = proxy_result.set_powered(enabled).await {
             warn!("failed to set Powered on {}: {}", path, e);
-            if first_err.is_none() {
-                first_err = Some(e);
-            }
+            return None;
         }
+
+        Some(proxy_result)
+    });
+
+    let results: Vec<_> = futures::future::join_all(toggle_futures).await;
+    let successful_proxies: Vec<_> = results.into_iter().flatten().collect();
+
+    if successful_proxies.is_empty() && !adapter_paths.is_empty() {
+        return Err(ConnectionError::BluezUnavailable(
+            "failed to toggle any Bluetooth adapters".to_string(),
+        ));
     }
 
-    match first_err {
-        Some(e) => Err(e),
-        None => Ok(()),
-    }
+    // Wait for all successfully toggled adapters to settle, with a single overall timeout
+    let wait_futures = successful_proxies
+        .iter()
+        .map(|proxy| wait_for_powered_no_timeout(proxy, enabled));
+
+    let all_waits = futures::future::join_all(wait_futures);
+    let timer = Delay::new(BLUEZ_POWER_SETTLE_TIMEOUT);
+
+    let all_waits = pin!(all_waits.fuse());
+    let timer = pin!(timer.fuse());
+    let _ = future::select(all_waits, timer).await;
+
+    Ok(())
 }
 
 /// Flips all three radios in parallel.
@@ -177,7 +219,7 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
 /// `enabled = true` means airplane mode **on** (radios **off**).
 /// Does not fail fast — attempts all three and returns the first error,
 /// except that a missing Bluetooth stack is not treated as a failure
-/// (`BluezUnavailable` is silently downgraded to a no-op).
+/// (`BluezUnavailable` is downgraded to a logged no-op).
 pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Result<()> {
     let radio_on = !enabled;
 
@@ -193,10 +235,14 @@ pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Resul
     wwan_res?;
     match bt_res {
         Ok(()) => {}
-        Err(ConnectionError::BluezUnavailable(_)) => {
+        Err(ConnectionError::BluezUnavailable(message)) => {
             // No Bluetooth on this host — that's fine, don't fail the whole
             // call (and don't leave callers thinking the wifi/wwan flips
             // didn't happen).
+            warn!(
+                "Ignoring Bluetooth airplane-mode toggle because BlueZ is unavailable: {}",
+                message
+            );
         }
         Err(e) => return Err(e),
     }
@@ -240,18 +286,21 @@ fn reconcile_hardware(nm_hardware_enabled: bool, rfkill_hard_block: bool, radio:
     nm_hardware_enabled && !rfkill_hard_block
 }
 
-/// Returns `true` if NetworkManager has at least one device of the given type.
+/// Fetches all device types present in NetworkManager.
 ///
-/// Failures (D-Bus error, no NM running) are treated as "no devices of this
-/// type" — we'd rather mark a radio as absent than spuriously block the
-/// airplane-mode aggregator.
-async fn has_device_of_type(conn: &Connection, type_code: u32) -> bool {
+/// Queries the device list once and returns a set of device type codes.
+/// Failures are treated as "no devices" — we'd rather mark radios as absent
+/// than spuriously block the airplane-mode aggregator.
+async fn fetch_present_device_types(conn: &Connection) -> HashSet<u32> {
+    let mut types = HashSet::new();
+
     let Ok(nm) = NMProxy::new(conn).await else {
-        return false;
+        return types;
     };
     let Ok(paths) = nm.get_devices().await else {
-        return false;
+        return types;
     };
+
     for p in paths {
         let Ok(builder) = NMDeviceProxy::builder(conn).path(p) else {
             continue;
@@ -259,13 +308,24 @@ async fn has_device_of_type(conn: &Connection, type_code: u32) -> bool {
         let Ok(dev) = builder.build().await else {
             continue;
         };
-        if let Ok(t) = dev.device_type().await
-            && t == type_code
-        {
-            return true;
+        if let Ok(t) = dev.device_type().await {
+            types.insert(t);
         }
     }
-    false
+
+    types
+}
+
+/// Returns `true` if NetworkManager has at least one device of the given type.
+///
+/// Failures (D-Bus error, no NM running) are treated as "no devices of this
+/// type" — we'd rather mark a radio as absent than spuriously block the
+/// airplane-mode aggregator.
+///
+/// Prefer using [`fetch_present_device_types`] when checking multiple device
+/// types to avoid redundant D-Bus round-trips.
+async fn has_device_of_type(conn: &Connection, type_code: u32) -> bool {
+    fetch_present_device_types(conn).await.contains(&type_code)
 }
 
 /// Waits for a BlueZ adapter's `Powered` property to settle on `target`.
@@ -273,25 +333,20 @@ async fn has_device_of_type(conn: &Connection, type_code: u32) -> bool {
 /// Subscribes to `PropertiesChanged` on `Powered` first, then re-reads the
 /// current value (so we don't miss a fast transition that happened between
 /// the `set_powered` write and the subscription). Returns when the property
-/// matches `target` or when `timeout` elapses (whichever comes first).
-async fn wait_for_powered(proxy: &BluezAdapterProxy<'_>, target: bool, timeout: Duration) {
+/// matches `target`. This variant has no timeout — use with an external
+/// timeout wrapper when waiting on multiple adapters concurrently.
+async fn wait_for_powered_no_timeout(proxy: &BluezAdapterProxy<'_>, target: bool) {
     let mut stream = proxy.receive_powered_changed().await;
 
     if proxy.powered().await.unwrap_or(target) == target {
         return;
     }
 
-    let watcher = async {
-        while let Some(change) = stream.next().await {
-            if let Ok(value) = change.get().await
-                && value == target
-            {
-                return;
-            }
+    while let Some(change) = stream.next().await {
+        if let Ok(value) = change.get().await
+            && value == target
+        {
+            return;
         }
-    };
-
-    let watcher = pin!(watcher.fuse());
-    let timer = pin!(Delay::new(timeout).fuse());
-    let _ = future::select(watcher, timer).await;
+    }
 }

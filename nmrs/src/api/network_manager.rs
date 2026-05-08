@@ -710,12 +710,12 @@ impl NetworkManager {
     /// See [`RadioState`] for the distinction between `enabled` (software)
     /// and `hardware_enabled` (rfkill).
     pub async fn wifi_state(&self) -> Result<RadioState> {
-        airplane::wifi_state(&self.conn).await
+        airplane::wifi_state(&self.conn, None).await
     }
 
     /// Returns the combined software/hardware state of the WWAN radio.
     pub async fn wwan_state(&self) -> Result<RadioState> {
-        airplane::wwan_state(&self.conn).await
+        airplane::wwan_state(&self.conn, None).await
     }
 
     /// Returns the combined software/hardware state of the Bluetooth radio.
