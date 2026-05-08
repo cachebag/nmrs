@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+
+## [3.1.0] - 2026-05-08
 - Implement loopback support ([#391](https://github.com/cachebag/nmrs/issues/391))
 - Implement add VLAN (802.1Q) device support with VlanConfig model and connection builder([#392](https://github.com/cachebag/nmrs/issues/392))
 
@@ -261,7 +263,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [2.4.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v2.4.0
 [3.0.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v3.0.0
 [3.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v3.0.0...nmrs-v3.0.1
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v3.0.1...HEAD
+[3.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v3.1.0
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v3.1.0...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
