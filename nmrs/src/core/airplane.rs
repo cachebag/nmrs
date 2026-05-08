@@ -208,7 +208,7 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
     let results: Vec<_> = futures::future::join_all(toggle_futures).await;
     let successful_proxies: Vec<_> = results.into_iter().flatten().collect();
 
-    if successful_proxies.is_empty() && !adapter_paths.is_empty() {
+    if successful_proxies.is_empty() {
         return Err(ConnectionError::BluetoothToggleFailed(
             "failed to toggle any Bluetooth adapters".to_string(),
         ));
@@ -234,8 +234,9 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
 /// `enabled = true` means airplane mode **on** (radios **off**).
 /// Does not fail fast — attempts all three and returns the first error,
 /// except that a missing Bluetooth stack (BlueZ not running or no adapters)
-/// is treated as a successful no-op. If Bluetooth adapters exist but fail
-/// to toggle, that error is propagated.
+/// is treated as a successful no-op. If Bluetooth adapters exist but no
+/// adapter could be toggled successfully (e.g., due to D-Bus errors), that
+/// error is propagated.
 pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Result<()> {
     let radio_on = !enabled;
 
@@ -259,8 +260,7 @@ pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Resul
                 message
             );
         }
-        // BluetoothToggleFailed means adapters exist but couldn't be toggled —
-        // that's a real failure, propagate it.
+        // BluetoothToggleFailed means no adapter could be toggled — propagate.
         Err(e) => return Err(e),
     }
     Ok(())
