@@ -13,7 +13,7 @@ use zvariant::OwnedObjectPath;
 /// # Signals
 ///
 /// The `StateChanged` signal is emitted whenever the modem state changes.
-/// Use `receive_state_changed()` to get a stream of state change events:
+/// Use `receive_modem_state_changed()` to get a stream of state change events:
 ///
 /// ```ignore
 /// let mut stream = modem_proxy.receive_modem_state_changed().await?;
@@ -55,7 +55,7 @@ pub trait MMModem {
     #[zbus(property)]
     fn sim(&self) -> zbus::Result<OwnedObjectPath>;
 
-    /// Current modem state (see `MMModemState` enum values).
+    /// Current modem state as the raw numeric ModemManager D-Bus value.
     #[zbus(property)]
     fn state(&self) -> zbus::Result<i32>;
 

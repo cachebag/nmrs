@@ -18,8 +18,11 @@ pub trait MMManager {
     /// Set the logging verbosity level.
     fn set_logging(&self, level: &str) -> zbus::Result<()>;
 
-    /// Inhibit or release a modem device by its UID.
-    fn inhibit_device(&self, uid: &str, inhibit: bool) -> zbus::Result<()>;
+    /// Inhibit a modem device by its UID and return the inhibition cookie.
+    fn inhibit_device(&self, uid: &str) -> zbus::Result<u32>;
+
+    /// Release a previously acquired device inhibition cookie.
+    fn uninhibit_device(&self, cookie: u32) -> zbus::Result<()>;
 
     /// ModemManager version string.
     #[zbus(property)]
