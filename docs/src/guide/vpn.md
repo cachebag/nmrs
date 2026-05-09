@@ -231,8 +231,8 @@ match nm.connect_vpn(config).await {
         eprintln!("Connection timed out — check gateway address");
     }
 
-    Err(ConnectionError::VpnFailed) => {
-        eprintln!("VPN activation failed — check plugin or config");
+    Err(ConnectionError::VpnFailed(reason)) => {
+        eprintln!("VPN activation failed — check plugin or config: {reason}");
     }
 
     Err(ConnectionError::NotFound) => {

@@ -22,7 +22,7 @@ pub struct Device {
 }
 ```
 
-Methods: `is_wireless()`, `is_wired()`, `is_bluetooth()`
+Methods: `is_wireless()`, `is_wired()`, `is_bluetooth()`, `is_loopback()`, `is_vlan()`
 
 ### DeviceIdentity
 
@@ -42,6 +42,7 @@ pub enum DeviceType {
     WifiP2P,
     Loopback,
     Bluetooth,
+    Vlan,
     Other(u32),
 }
 ```
@@ -65,20 +66,28 @@ Methods: `is_transitional()`
 
 ### Network
 
-A discovered Wi-Fi network.
+A discovered Wi-Fi network. Networks sharing an SSID on the same device
+are grouped, keeping the strongest AP as the representative; the merged
+peers are still recorded in `bssids`.
 
 ```rust
 pub struct Network {
     pub device: String,
     pub ssid: String,
-    pub bssid: Option<String>,
-    pub strength: Option<u8>,
-    pub frequency: Option<u32>,
+    pub bssid: Option<String>,         // best BSSID (strongest AP)
+    pub strength: Option<u8>,          // 0..=100
+    pub frequency: Option<u32>,        // MHz
     pub secured: bool,
     pub is_psk: bool,
     pub is_eap: bool,
-    pub ip4_address: Option<String>,
+    pub is_hotspot: bool,
+    pub ip4_address: Option<String>,   // populated only when this is the active network
     pub ip6_address: Option<String>,
+    pub best_bssid: String,            // mirror of `bssid` for the strongest AP
+    pub bssids: Vec<String>,           // every BSSID seen for this SSID, strongest first
+    pub is_active: bool,               // true if currently connected
+    pub known: bool,                   // true if a saved profile exists for this SSID
+    pub security_features: SecurityFeatures, // decoded security flag triplet
 }
 ```
 
@@ -103,9 +112,15 @@ A Wi-Fi device discovered by `list_wifi_devices()`.
 
 ```rust
 pub struct WifiDevice {
-    pub interface: String,
-    pub mac: String,
+    pub path: OwnedObjectPath,
+    pub interface: String,                  // e.g. "wlan0"
+    pub hw_address: String,                 // current MAC (may be randomized)
+    pub permanent_hw_address: Option<String>,
+    pub driver: Option<String>,
     pub state: DeviceState,
+    pub managed: bool,
+    pub autoconnect: bool,
+    pub is_active: bool,
     pub active_ssid: Option<String>,
 }
 ```
@@ -407,8 +422,12 @@ pub struct BluetoothDevice {
 pub struct BluetoothIdentity {
     pub bdaddr: String,
     pub bt_device_type: BluetoothNetworkRole,
+    pub adapter: Option<String>,        // e.g. Some("hci1"); defaults to "hci0"
 }
 ```
+
+Constructors: `new(bdaddr, role)` and `with_adapter(bdaddr, role, adapter)`.
+Both validate the MAC and return [`ConnectionError`] on bad input.
 
 ### BluetoothNetworkRole
 

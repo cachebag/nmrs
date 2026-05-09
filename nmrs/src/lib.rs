@@ -97,33 +97,55 @@
 //!
 //! The main entry point is [`NetworkManager`], which provides methods for:
 //! - Listing and managing network devices
-//! - Scanning for available WiFi networks
-//! - Connecting to networks (WiFi, Ethernet, VPN)
+//! - Scanning for available Wi-Fi networks
+//! - Connecting to networks (Wi-Fi, Ethernet, Bluetooth PAN, VPN)
 //! - Managing saved connection profiles
-//! - Real-time monitoring of network changes
+//! - Real-time monitoring of network and device changes
+//! - Querying connectivity state and captive-portal URLs
+//! - Toggling Wi-Fi/WWAN/Bluetooth radios and airplane mode
 //!
 //! ## Models
 //!
-//! The [`models`] module contains all types, enums, and errors:
-//! - [`Device`] - Represents a network device (WiFi, Ethernet, etc.)
-//! - [`Network`] - Represents a discovered WiFi network
-//! - [`WifiSecurity`] - Security types (Open, WPA-PSK, WPA-EAP)
-//! - [`VpnCredentials`] - Legacy VPN connection credentials
-//! - [`VpnType`] - Protocol-specific VPN metadata (WireGuard, OpenVPN, strongSwan, etc.)
-//! - [`VpnKind`] - Plugin-based vs kernel WireGuard distinction
-//! - [`VpnConnection`] - VPN connection information
-//! - [`VpnDetails`] - Protocol-specific VPN details (WireGuard / OpenVPN)
-//! - [`WireGuardConfig`] - WireGuard connection configuration
-//! - [`WireGuardPeer`] - WireGuard peer configuration
-//! - [`OpenVpnConfig`] - OpenVPN connection configuration
-//! - [`OpenVpnAuthType`] - OpenVPN authentication types
-//! - [`ConnectionError`] - Comprehensive error types
+//! The [`models`] module contains all types, enums, and errors. The most
+//! commonly used items are also re-exported at the crate root:
+//!
+//! - [`Device`] / [`DeviceType`] / [`DeviceState`] — network devices and their state
+//! - [`Network`] / [`AccessPoint`] / [`NetworkInfo`] — discovered Wi-Fi data
+//! - [`WifiDevice`] — per-Wi-Fi-device summary
+//! - [`WifiSecurity`] / [`EapOptions`] / [`EapMethod`] / [`Phase2`] — Wi-Fi security
+//! - [`ConnectionOptions`] / [`TimeoutConfig`] — connection knobs
+//! - [`WireGuardConfig`] / [`WireGuardPeer`] — WireGuard configuration
+//! - [`OpenVpnConfig`] / [`OpenVpnAuthType`] / [`OpenVpnProxy`] — OpenVPN configuration
+//! - [`VpnConfig`] / [`VpnConfiguration`] — generic VPN dispatch trait/enum
+//! - [`VpnConnection`] / [`VpnConnectionInfo`] / [`VpnDetails`] / [`VpnType`] / [`VpnKind`] — saved or active VPN data
+//! - [`SavedConnection`] / [`SavedConnectionBrief`] / [`SettingsSummary`] / [`SettingsPatch`] — saved profile management
+//! - [`AirplaneModeState`] / [`RadioState`] — radio/rfkill state
+//! - [`BluetoothDevice`] / [`BluetoothIdentity`] / [`BluetoothNetworkRole`] — Bluetooth networking
+//! - [`ConnectivityState`] / [`ConnectivityReport`] — internet connectivity
+//! - [`ConnectionError`] / [`StateReason`] / [`ConnectionStateReason`] — errors
+//!
+//! [`VpnCredentials`] is still re-exported but is **deprecated**; new code
+//! should use [`WireGuardConfig`] together with [`NetworkManager::connect_vpn`].
 //!
 //! ## Connection Builders
 //!
-//! The [`builders`] module provides functions to construct connection settings
-//! for different network types. These are typically used internally but exposed
-//! for advanced use cases.
+//! The [`builders`] module provides both fluent builder types
+//! ([`builders::ConnectionBuilder`], [`builders::WifiConnectionBuilder`],
+//! [`builders::WireGuardBuilder`], [`builders::OpenVpnBuilder`]) and
+//! free functions (`build_wifi_connection`, `build_ethernet_connection`,
+//! `build_wireguard_connection`, `build_openvpn_connection`,
+//! `build_bluetooth_connection`, `build_vlan_connection`) for constructing
+//! NetworkManager settings dictionaries. Most callers should reach for the
+//! higher-level [`NetworkManager`] API; these builders are exposed for
+//! advanced use cases that need to assemble the raw settings dictionary
+//! before calling a D-Bus method directly.
+//!
+//! ## Secret Agent
+//!
+//! The [`agent`] module lets a consumer register a NetworkManager **secret
+//! agent** to handle interactive credential prompts (Wi-Fi passwords, VPN
+//! tokens, 802.1X passwords) over D-Bus. See the module docs for the
+//! three-stream model and a full example.
 //!
 //! # Examples
 //!
@@ -288,24 +310,37 @@ pub mod agent;
 // Public API
 // ============================================================================
 
-/// Connection builders for WiFi, Ethernet, and VPN connections.
+/// Connection builders for Wi-Fi, Ethernet, Bluetooth, VLAN, and VPN connections.
 ///
-/// This module provides functions to construct NetworkManager connection settings
-/// dictionaries. These are primarily used internally but exposed for advanced use cases.
+/// This module provides two complementary APIs for constructing NetworkManager
+/// settings dictionaries:
 ///
-/// # Examples
+/// - **Fluent builder types** — [`ConnectionBuilder`](builders::ConnectionBuilder),
+///   [`WifiConnectionBuilder`](builders::WifiConnectionBuilder),
+///   [`WireGuardBuilder`](builders::WireGuardBuilder), and
+///   [`OpenVpnBuilder`](builders::OpenVpnBuilder), which support method
+///   chaining and validation at `.build()`.
+/// - **Free functions** — `build_wifi_connection`, `build_ethernet_connection`,
+///   `build_wireguard_connection`, `build_openvpn_connection`,
+///   `build_bluetooth_connection`, and `build_vlan_connection`, which are
+///   handy for one-shot construction.
+///
+/// Most callers should prefer [`NetworkManager`](crate::NetworkManager)'s
+/// high-level methods such as [`connect`](crate::NetworkManager::connect)
+/// and [`connect_vpn`](crate::NetworkManager::connect_vpn). Use these
+/// builders only when you need to feed a raw settings dictionary to
+/// NetworkManager's `AddConnection` or `AddAndActivateConnection` D-Bus
+/// methods directly.
+///
+/// # Example
 ///
 /// ```rust
 /// use nmrs::builders::build_wifi_connection;
-/// use nmrs::{WifiSecurity, ConnectionOptions};
+/// use nmrs::{ConnectionOptions, WifiSecurity};
 ///
 /// let opts = ConnectionOptions::new(true);
-///
-/// let settings = build_wifi_connection(
-///     "MyNetwork",
-///     &WifiSecurity::Open,
-///     &opts
-/// );
+/// let settings = build_wifi_connection("MyNetwork", &WifiSecurity::Open, &opts);
+/// // `settings` can be passed straight to NetworkManager via D-Bus.
 /// ```
 pub mod builders {
     pub use crate::api::builders::*;
@@ -313,34 +348,59 @@ pub mod builders {
 
 /// Types, enums, and errors for NetworkManager operations.
 ///
-/// This module contains all the public types used throughout the crate:
+/// This module re-exports every public data type used by the crate.
+/// The same types are also re-exported at the crate root for convenience
+/// (so `nmrs::Device` and `nmrs::models::Device` refer to the same type),
+/// with the exceptions of [`NetworkManager`](crate::NetworkManager) and
+/// [`WifiScope`](crate::WifiScope), which live only at the crate root.
 ///
-/// # Core Types
-/// - [`NetworkManager`] - Main API entry point
-/// - [`Device`] - Network device representation
-/// - [`Network`] - WiFi network representation
-/// - [`NetworkInfo`] - Detailed network information
+/// # Core Data Types
+/// - [`Device`] — Network device representation
+/// - [`Network`] — Wi-Fi network representation (SSID-grouped)
+/// - [`AccessPoint`] — Per-BSSID access point details
+/// - [`NetworkInfo`] — Detailed network information returned by `show_details`
+/// - [`WifiDevice`] — Wi-Fi-specific device summary
+/// - [`BluetoothDevice`] — Discovered Bluetooth peer
+/// - [`SavedConnection`] / [`SavedConnectionBrief`] — Saved profile snapshots
+/// - [`SettingsSummary`] / [`SettingsPatch`] — Decoded NM settings & update patches
+/// - [`VpnConnection`] / [`VpnConnectionInfo`] / [`VpnDetails`] — Active or saved VPN data
 ///
 /// # Configuration
-/// - [`WifiSecurity`] - WiFi security types (Open, WPA-PSK, WPA-EAP)
-/// - [`EapOptions`] - Enterprise authentication options
-/// - [`ConnectionOptions`] - Connection settings (autoconnect, priority, etc.)
-/// - [`TimeoutConfig`] - Timeout configuration for network operations
+/// - [`WifiSecurity`] — Wi-Fi security types (Open, WPA-PSK, WPA-EAP)
+/// - [`EapOptions`] — Enterprise authentication options
+/// - [`ConnectionOptions`] — Connection settings (autoconnect, priority, retries)
+/// - [`TimeoutConfig`] — Timeout configuration for connection operations
+/// - [`WireGuardConfig`] / [`WireGuardPeer`] — WireGuard tunnel configuration
+/// - [`OpenVpnConfig`] — OpenVPN plugin configuration
+/// - [`VlanConfig`] — VLAN tagging configuration
+/// - [`BluetoothIdentity`] — Bluetooth target (bdaddr + role)
+/// - [`VpnConfig`] / [`VpnConfiguration`] — Trait & enum used by `connect_vpn`
 ///
 /// # Enums
-/// - [`DeviceType`] - Device types (Ethernet, WiFi, etc.)
-/// - [`DeviceState`] - Device states (Disconnected, Activated, etc.)
-/// - [`EapMethod`] - EAP authentication methods
-/// - [`Phase2`] - Phase 2 authentication for EAP
+/// - [`DeviceType`] — Device types (Ethernet, Wi-Fi, Bluetooth, etc.)
+/// - [`DeviceState`] — Device states (Disconnected, Activated, etc.)
+/// - [`ActiveConnectionState`] — State of an active connection
+/// - [`ConnectivityState`] — NM-reported internet connectivity
+/// - [`RadioState`] / [`AirplaneModeState`] — Radio/rfkill state
+/// - [`ApMode`] — Access point operating mode
+/// - [`BluetoothNetworkRole`] — PAN-U / NAP / DUN roles
+/// - [`EapMethod`] — EAP authentication methods
+/// - [`Phase2`] — Phase 2 authentication for EAP
+/// - [`OpenVpnAuthType`] / [`OpenVpnConnectionType`] / [`OpenVpnCompression`] — OpenVPN auth/transport options
+/// - [`OpenVpnProxy`] — OpenVPN HTTP/SOCKS proxy configuration
+/// - [`VpnKind`] / [`VpnType`] — Plugin vs. kernel WireGuard, plus protocol-specific metadata
+/// - [`VpnSecretFlags`] — NM secret flags for VPN credentials
+/// - [`WifiKeyMgmt`] / [`WifiSecuritySummary`] / [`SecurityFeatures`] — Decoded Wi-Fi security info
+/// - [`ConnectType`] — How a `connect_vpn` call resolved (saved vs. new)
 ///
 /// # Errors
-/// - [`ConnectionError`] - Comprehensive error type for all operations
-/// - [`StateReason`] - Device state change reasons
-/// - [`ConnectionStateReason`] - Connection state change reasons
+/// - [`ConnectionError`] — Comprehensive error type for all operations
+/// - [`StateReason`] — Device state change reasons
+/// - [`ConnectionStateReason`] — Connection state change reasons
 ///
 /// # Helper Functions
-/// - [`reason_to_error`] - Convert device state reason to error
-/// - [`connection_state_reason_to_error`] - Convert connection state reason to error
+/// - [`reason_to_error`] — Convert a device state reason to a [`ConnectionError`]
+/// - [`connection_state_reason_to_error`] — Convert an active-connection state reason to a [`ConnectionError`]
 pub mod models {
     pub use crate::api::models::*;
 }

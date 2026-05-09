@@ -14,8 +14,14 @@ Or manually add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-nmrs = "2.0.0"
+nmrs = "3.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
+
+`nmrs` is async and ships no runtime of its own. The examples in this book
+use [Tokio](https://tokio.rs/) but `nmrs` works with any reactor that is
+compatible with the [`zbus`](https://docs.rs/zbus) executor (Tokio,
+`async-std`, `smol`, …). See [Async Runtime Support](../advanced/async-runtimes.md).
 
 ### From Source
 

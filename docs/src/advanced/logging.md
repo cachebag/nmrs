@@ -8,7 +8,7 @@ nmrs produces log messages but doesn't configure a logger — that's up to your 
 
 ```toml
 [dependencies]
-nmrs = "2.2"
+nmrs = "3.1"
 env_logger = "0.11"
 log = "0.4"
 ```

@@ -219,8 +219,9 @@ cargo update
 
 | nmrs Version | Minimum Rust | NetworkManager | Notable Features |
 |--------------|--------------|----------------|------------------|
-| 3.0.0        | 1.90.0       | 1.0+           | Edition 2024     |
-| 2.0.0        | 1.78.0       | 1.0+           | Full API rewrite |
+| 3.1.x        | 1.90.0       | 1.0+           | Per-interface Wi-Fi scoping, OpenVPN support, secret agent, airplane mode |
+| 3.0.x        | 1.90.0       | 1.0+           | Edition 2024, breaking API revamp |
+| 2.x          | 1.78.0       | 1.0+           | Full API rewrite |
 | 1.x          | 1.70.0       | 1.0+           | Initial release  |
 
 ## Next Steps

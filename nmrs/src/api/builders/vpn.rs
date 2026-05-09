@@ -130,6 +130,31 @@ fn string_pairs_to_dict(
     Ok(dict)
 }
 
+/// Pushes `(key, value.clone())` onto `out` if `value` is `Some`.
+///
+/// Convenience wrapper around the common pattern of mapping an
+/// `Option<String>` field on an [`OpenVpnConfig`] to an entry in the flat
+/// `vpn.data` dict.
+fn push_opt_str(out: &mut Vec<(String, String)>, key: &str, value: Option<&String>) {
+    if let Some(v) = value {
+        out.push((key.to_string(), v.clone()));
+    }
+}
+
+/// Pushes `(key, value.to_string())` onto `out` if `value` is `Some`.
+///
+/// Used for numeric/boolean OpenVPN options that NetworkManager stores as
+/// strings (`tunnel-mtu`, `ping`, `connect-timeout`, …).
+fn push_opt_display<T: std::fmt::Display>(
+    out: &mut Vec<(String, String)>,
+    key: &str,
+    value: Option<T>,
+) {
+    if let Some(v) = value {
+        out.push((key.to_string(), v.to_string()));
+    }
+}
+
 /// Builds OpenVPN connection settings for NetworkManager.
 ///
 /// Returns a settings dictionary suitable for `AddAndActivateConnection`.
@@ -182,110 +207,71 @@ pub fn build_openvpn_connection(
         vpn_data.push(("proto-tcp".into(), "yes".into()));
     }
 
-    if let Some(ref username) = config.username {
-        vpn_data.push(("username".into(), username.clone()));
-    }
-    if let Some(ref auth) = config.auth {
-        vpn_data.push(("auth".into(), auth.clone()));
-    }
-    if let Some(ref cipher) = config.cipher {
-        vpn_data.push(("cipher".into(), cipher.clone()));
-    }
-    if let Some(mtu) = config.mtu {
-        vpn_data.push(("tunnel-mtu".into(), mtu.to_string()));
-    }
+    push_opt_str(&mut vpn_data, "username", config.username.as_ref());
+    push_opt_str(&mut vpn_data, "auth", config.auth.as_ref());
+    push_opt_str(&mut vpn_data, "cipher", config.cipher.as_ref());
+    push_opt_display(&mut vpn_data, "tunnel-mtu", config.mtu);
 
     // certs
-    if let Some(ref ca) = config.ca_cert {
-        vpn_data.push(("ca".into(), ca.clone()));
-    }
-    if let Some(ref cert) = config.client_cert {
-        vpn_data.push(("cert".into(), cert.clone()));
-    }
-    if let Some(ref key) = config.client_key {
-        vpn_data.push(("key".into(), key.clone()));
-    }
+    push_opt_str(&mut vpn_data, "ca", config.ca_cert.as_ref());
+    push_opt_str(&mut vpn_data, "cert", config.client_cert.as_ref());
+    push_opt_str(&mut vpn_data, "key", config.client_key.as_ref());
 
     if let Some(ref compression) = config.compression {
         #[allow(deprecated)]
-        match compression {
-            OpenVpnCompression::No => {
-                vpn_data.push(("compress".into(), "no".into()));
-            }
-            OpenVpnCompression::Lzo => {
-                vpn_data.push(("comp-lzo".into(), "yes".into()));
-            }
-            OpenVpnCompression::Lz4 => {
-                vpn_data.push(("compress".into(), "lz4".into()));
-            }
-            OpenVpnCompression::Lz4V2 => {
-                vpn_data.push(("compress".into(), "lz4-v2".into()));
-            }
-            OpenVpnCompression::Yes => {
-                vpn_data.push(("compress".into(), "yes".into()));
-            }
-        }
+        let (key, value) = match compression {
+            OpenVpnCompression::No => ("compress", "no"),
+            OpenVpnCompression::Lzo => ("comp-lzo", "yes"),
+            OpenVpnCompression::Lz4 => ("compress", "lz4"),
+            OpenVpnCompression::Lz4V2 => ("compress", "lz4-v2"),
+            OpenVpnCompression::Yes => ("compress", "yes"),
+        };
+        vpn_data.push((key.into(), value.into()));
     }
 
     // TLS hardening options
     if let Some(ref key) = config.tls_auth_key {
         vpn_data.push(("tls-auth".into(), key.clone()));
-        if let Some(dir) = config.tls_auth_direction {
-            vpn_data.push(("ta-dir".into(), dir.to_string()));
-        }
+        push_opt_display(&mut vpn_data, "ta-dir", config.tls_auth_direction);
     }
-    // FIXME: surely, there must be a better way to do this
-    if let Some(ref key) = config.tls_crypt {
-        vpn_data.push(("tls-crypt".into(), key.clone()));
-    }
-    if let Some(ref key) = config.tls_crypt_v2 {
-        vpn_data.push(("tls-crypt-v2".into(), key.clone()));
-    }
-    if let Some(ref ver) = config.tls_version_min {
-        vpn_data.push(("tls-version-min".into(), ver.clone()));
-    }
-    if let Some(ref ver) = config.tls_version_max {
-        vpn_data.push(("tls-version-max".into(), ver.clone()));
-    }
-    if let Some(ref cipher) = config.tls_cipher {
-        vpn_data.push(("tls-cipher".into(), cipher.clone()));
-    }
-    if let Some(ref cert_type) = config.remote_cert_tls {
-        vpn_data.push(("remote-cert-tls".into(), cert_type.clone()));
-    }
+    push_opt_str(&mut vpn_data, "tls-crypt", config.tls_crypt.as_ref());
+    push_opt_str(&mut vpn_data, "tls-crypt-v2", config.tls_crypt_v2.as_ref());
+    push_opt_str(
+        &mut vpn_data,
+        "tls-version-min",
+        config.tls_version_min.as_ref(),
+    );
+    push_opt_str(
+        &mut vpn_data,
+        "tls-version-max",
+        config.tls_version_max.as_ref(),
+    );
+    push_opt_str(&mut vpn_data, "tls-cipher", config.tls_cipher.as_ref());
+    push_opt_str(
+        &mut vpn_data,
+        "remote-cert-tls",
+        config.remote_cert_tls.as_ref(),
+    );
     if let Some((ref name, ref name_type)) = config.verify_x509_name {
         vpn_data.push(("verify-x509-name".into(), name.clone()));
         vpn_data.push(("verify-x509-type".into(), name_type.clone()));
     }
-    if let Some(ref path) = config.crl_verify {
-        vpn_data.push(("crl-verify".into(), path.clone()));
-    }
+    push_opt_str(&mut vpn_data, "crl-verify", config.crl_verify.as_ref());
 
-    if let Some(v) = config.ping {
-        vpn_data.push(("ping".into(), v.to_string()));
-    }
-    if let Some(v) = config.ping_exit {
-        vpn_data.push(("ping-exit".into(), v.to_string()));
-    }
-    if let Some(v) = config.ping_restart {
-        vpn_data.push(("ping-restart".into(), v.to_string()));
-    }
-    if let Some(v) = config.reneg_seconds {
-        vpn_data.push(("reneg-sec".into(), v.to_string()));
-    }
-    if let Some(v) = config.connect_timeout {
-        vpn_data.push(("connect-timeout".into(), v.to_string()));
-    }
-    if let Some(ref s) = config.data_ciphers {
-        vpn_data.push(("data-ciphers".into(), s.clone()));
-    }
-    if let Some(ref s) = config.data_ciphers_fallback {
-        vpn_data.push(("data-ciphers-fallback".into(), s.clone()));
-    }
+    push_opt_display(&mut vpn_data, "ping", config.ping);
+    push_opt_display(&mut vpn_data, "ping-exit", config.ping_exit);
+    push_opt_display(&mut vpn_data, "ping-restart", config.ping_restart);
+    push_opt_display(&mut vpn_data, "reneg-sec", config.reneg_seconds);
+    push_opt_display(&mut vpn_data, "connect-timeout", config.connect_timeout);
+    push_opt_str(&mut vpn_data, "data-ciphers", config.data_ciphers.as_ref());
+    push_opt_str(
+        &mut vpn_data,
+        "data-ciphers-fallback",
+        config.data_ciphers_fallback.as_ref(),
+    );
     if config.ncp_disable {
         vpn_data.push(("ncp-disable".into(), "yes".into()));
     }
-    // holy moly
 
     if let Some(ref proxy) = config.proxy {
         match proxy {
@@ -339,12 +325,8 @@ pub fn build_openvpn_connection(
     let data_dict = string_pairs_to_dict(vpn_data)?;
 
     let mut vpn_secrets: Vec<(String, String)> = Vec::new();
-    if let Some(ref password) = config.password {
-        vpn_secrets.push(("password".into(), password.clone()));
-    }
-    if let Some(ref key_password) = config.key_password {
-        vpn_secrets.push(("cert-pass".into(), key_password.clone()));
-    }
+    push_opt_str(&mut vpn_secrets, "password", config.password.as_ref());
+    push_opt_str(&mut vpn_secrets, "cert-pass", config.key_password.as_ref());
 
     let mut vpn: HashMap<&'static str, Value<'static>> = HashMap::new();
     vpn.insert(

@@ -6,7 +6,7 @@ language = "en"
 src = "src"
 
 [rust]
-edition = "2021"
+edition = "2024"
 
 [build]
 build-dir = "book"

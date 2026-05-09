@@ -49,6 +49,7 @@ use nmrs::DeviceType;
 | `DeviceType::Bluetooth` | Bluetooth network device |
 | `DeviceType::WifiP2P` | Wi-Fi Direct (peer-to-peer) |
 | `DeviceType::Loopback` | Loopback interface (localhost) |
+| `DeviceType::Vlan` | 802.1Q virtual VLAN |
 | `DeviceType::Other(u32)` | Unknown type with raw code |
 
 ### Type Helper Methods
@@ -66,6 +67,14 @@ if device.is_wired() {
 
 if device.is_bluetooth() {
     println!("{} is a Bluetooth device", device.interface);
+}
+
+if device.is_loopback() {
+    println!("{} is the loopback interface", device.interface);
+}
+
+if device.is_vlan() {
+    println!("{} is a VLAN", device.interface);
 }
 ```
 

@@ -4,6 +4,15 @@ NetworkManager stores connection profiles for every network you've connected to.
 
 ## Listing Saved Connections
 
+`nmrs` exposes three flavors of "list the saved profiles", trading off
+detail for cost:
+
+| Method | Cost | Returns |
+|--------|------|---------|
+| [`list_saved_connections`](../api/network-manager.md#connection-profile-methods) | One `GetSettings` call per profile, full decode | `Vec<SavedConnection>` |
+| [`list_saved_connections_brief`](../api/network-manager.md#connection-profile-methods) | One `GetSettings` per profile, minimal decode | `Vec<SavedConnectionBrief>` |
+| [`list_saved_connection_ids`](../api/network-manager.md#connection-profile-methods) | Same calls as `_brief`, only the names | `Vec<String>` |
+
 ```rust
 use nmrs::NetworkManager;
 
@@ -11,16 +20,23 @@ use nmrs::NetworkManager;
 async fn main() -> nmrs::Result<()> {
     let nm = NetworkManager::new().await?;
 
-    let connections = nm.list_saved_connections().await?;
-    for conn in &connections {
-        println!("  {} ({})", conn.id, conn.connection_type);
+    // Full decode — useful for showing IP / autoconnect / security in a UI.
+    for conn in nm.list_saved_connections().await? {
+        println!("  {:<32} {:<12} {}", conn.id, conn.connection_type, conn.uuid);
+    }
+
+    // Lightweight — just names and types, useful for menus.
+    for brief in nm.list_saved_connections_brief().await? {
+        println!("  {:<32} ({})", brief.id, brief.connection_type);
     }
 
     Ok(())
 }
 ```
 
-`list_saved_connections()` returns full `SavedConnection` objects for all saved connection profiles across all connection types — Wi-Fi, Ethernet, VPN, and Bluetooth. Each `SavedConnection` includes the profile `id` (name), `connection_type`, and other metadata.
+Each `SavedConnection` includes the profile `id` (display name), `uuid`,
+`connection_type` (`"802-11-wireless"`, `"vpn"`, `"wireguard"`, `"bluetooth"`,
+…), and a decoded [`SettingsSummary`](../api/models.md#settingspatch).
 
 ## Checking for a Saved Connection
 
@@ -79,9 +95,49 @@ nm.forget_vpn("MyVPN").await?;
 nm.forget_bluetooth("My Phone").await?;
 ```
 
+## Loading a Single Profile by UUID
+
+```rust
+let nm = NetworkManager::new().await?;
+
+let profile = nm.get_saved_connection("a1b2c3d4-...").await?;
+println!("{} ({}) autoconnect={}", profile.id, profile.connection_type, profile.autoconnect);
+```
+
+For the raw `GetSettings` map (advanced consumers building their own
+decoder), use `nm.get_saved_connection_raw(uuid)`.
+
+## Updating a Profile
+
+`update_saved_connection` merges a [`SettingsPatch`](../api/models.md#settingspatch)
+into an existing profile via NM's `Update` / `UpdateUnsaved` methods.
+This is the right call to flip `autoconnect`, change a priority, or
+update DNS without rebuilding the entire profile.
+
+## Deleting by UUID
+
+When the profile UUID is known, you can delete it directly:
+
+```rust
+nm.delete_saved_connection("a1b2c3d4-...").await?;
+```
+
+For SSID-based deletion (which also disconnects first if active), use
+`forget`, `forget_vpn`, or `forget_bluetooth` as shown above.
+
+## Reloading from Disk
+
+If you've edited keyfiles in `/etc/NetworkManager/system-connections/`
+out-of-band, ask NetworkManager to re-read them:
+
+```rust
+nm.reload_saved_connections().await?;
+```
+
 ## Getting the D-Bus Path
 
-For advanced use cases, you can retrieve the D-Bus object path of a saved connection:
+For advanced use cases, you can retrieve the D-Bus object path of a saved
+connection by SSID:
 
 ```rust
 let nm = NetworkManager::new().await?;

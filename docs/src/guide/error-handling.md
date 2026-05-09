@@ -14,17 +14,23 @@ All public API methods return `nmrs::Result<T>`.
 
 ## ConnectionError Variants
 
+For a complete listing of every variant and its payload, see the
+[Error Types reference](../api/errors.md). The tables below group the
+most commonly handled variants by category.
+
 ### Network & Wi-Fi Errors
 
 | Variant | Description |
 |---------|-------------|
 | `NotFound` | Network not visible during scan |
+| `ApBssidNotFound { ssid, bssid }` | No AP matching both the SSID and BSSID |
+| `InvalidBssid(String)` | Invalid BSSID format |
 | `AuthFailed` | Wrong password or rejected credentials |
 | `MissingPassword` | Empty password provided |
 | `NoWifiDevice` | No Wi-Fi adapter found |
 | `WifiNotReady` | Wi-Fi device not ready in time |
-| `WifiInterfaceNotFound` | Specified Wi-Fi interface doesn't exist |
-| `NotAWifiDevice` | Interface exists but isn't Wi-Fi |
+| `WifiInterfaceNotFound { interface }` | Specified Wi-Fi interface doesn't exist |
+| `NotAWifiDevice { interface }` | Interface exists but isn't Wi-Fi |
 | `HardwareRadioKilled` | Hardware kill switch is on |
 | `NoWiredDevice` | No Ethernet adapter found |
 | `DhcpFailed` | Failed to obtain an IP address via DHCP |
@@ -42,27 +48,49 @@ All public API methods return `nmrs::Result<T>`.
 
 | Variant | Description |
 |---------|-------------|
-| `NoVpnConnection` | VPN not found or not active |
+| `NoVpnConnection` | No VPN connection (or not active) |
+| `VpnNotFound(String)` | VPN connection not found by UUID/name |
 | `VpnFailed(String)` | VPN connection failed with details |
-| `VpnIdAmbiguous` | Multiple VPNs share the same name |
-| `IncompleteBuilder` | VPN builder missing required fields |
+| `VpnIdAmbiguous(String)` | Multiple VPNs share the same name; use UUID |
+| `IncompleteBuilder(String)` | VPN/Wi-Fi builder missing required fields |
 | `InvalidPrivateKey(String)` | Bad WireGuard private key |
 | `InvalidPublicKey(String)` | Bad WireGuard public key |
 | `InvalidAddress(String)` | Bad IP address or CIDR notation |
 | `InvalidGateway(String)` | Bad gateway format (host:port) |
 | `InvalidPeers(String)` | Invalid peer configuration |
+| `ParseError(OvpnParseError)` | Failed to parse a `.ovpn` file |
 
 ### Bluetooth Errors
 
 | Variant | Description |
 |---------|-------------|
 | `NoBluetoothDevice` | No Bluetooth adapter found |
+| `BluezUnavailable(String)` | BlueZ not running or no adapters |
+| `BluetoothToggleFailed(String)` | Adapter exists but failed to power on/off |
 
-### Profile Errors
+### Profile & Settings Errors
 
 | Variant | Description |
 |---------|-------------|
 | `NoSavedConnection` | No saved profile for the requested network |
+| `SavedConnectionNotFound(String)` | No saved profile with that UUID |
+| `MalformedSavedConnection(String)` | Saved settings missing/invalid keys |
+| `InvalidVlanId { id }` | VLAN ID outside `1..=4094` |
+| `InvalidInput { field, reason }` | Generic config-field validation failure |
+
+### Connectivity Errors
+
+| Variant | Description |
+|---------|-------------|
+| `ConnectivityCheckDisabled` | NM connectivity checks are disabled in config |
+
+### Secret Agent Errors
+
+| Variant | Description |
+|---------|-------------|
+| `AgentRegistration { context }` | Secret agent failed to register with NM |
+| `AgentNotRegistered` | Used a handle whose registration was already torn down |
+| `AgentAlreadyRegistered` | Identifier collision with another agent in this process |
 
 ### Low-Level Errors
 
@@ -183,7 +211,8 @@ async fn connect() -> Result<()> {
 | Variant | Description |
 |---------|-------------|
 | `HardwareRadioKilled` | Hardware kill switch is on; Wi-Fi cannot be enabled until the switch is toggled |
-| `BluezUnavailable` | Bluetooth D-Bus service (BlueZ) is not running or unreachable |
+| `BluezUnavailable(String)` | Bluetooth stack (BlueZ) is not running or no adapters are present |
+| `BluetoothToggleFailed(String)` | A BlueZ adapter exists but failed to power on/off when toggling airplane mode |
 
 ## Non-Exhaustive
 

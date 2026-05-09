@@ -22,7 +22,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-nmrs = "2.2"
+nmrs = "3.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -55,7 +55,7 @@ async fn main() -> nmrs::Result<()> {
 
 ```toml
 [dependencies]
-nmrs = "2.2"
+nmrs = "3.1"
 async-std = { version = "1", features = ["attributes"] }
 ```
 
@@ -76,7 +76,7 @@ fn main() -> nmrs::Result<()> {
 
 ```toml
 [dependencies]
-nmrs = "2.2"
+nmrs = "3.1"
 smol = "2"
 ```
 
