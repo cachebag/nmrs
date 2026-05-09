@@ -66,7 +66,7 @@ All public methods return `nmrs::Result<T>`.
 | `WireGuardPeer` | WireGuard peer configuration |
 | `OpenVpnConfig` | OpenVPN configuration |
 | `OpenVpnAuthType` | OpenVPN auth: `Password`, `Tls`, `PasswordTls`, `StaticKey` |
-| `OpenVpnCompression` | Compression mode: `No`, `Lz4`, `Lz4V2`, `Yes` |
+| `OpenVpnCompression` | Compression mode: `No`, `Lzo` (deprecated), `Lz4`, `Lz4V2`, `Yes` |
 | `OpenVpnProxy` | Proxy: `Http { ... }`, `Socks { ... }` |
 | `VpnRoute` | Static IPv4 route for split tunneling |
 | `VpnType` | Protocol-specific metadata (data-carrying enum) |

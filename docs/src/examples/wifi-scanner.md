@@ -115,7 +115,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-nmrs = "2.0.0"
+nmrs = "3.1"
 tokio = { version = "1", features = ["full"] }
 ```
 

@@ -146,7 +146,7 @@ pub enum ConnectionError {
     #[error("invalid UTF-8 in SSID: {0}")]
     InvalidUtf8(#[from] std::str::Utf8Error),
 
-    /// No VPN connection found
+    /// No VPN connection found.
     #[error("no VPN connection found")]
     NoVpnConnection,
 
@@ -158,38 +158,40 @@ pub enum ConnectionError {
     #[error("multiple VPN connections named '{0}', use UUID")]
     VpnIdAmbiguous(String),
 
-    /// Invalid IP address or CIDR notation
+    /// Invalid IP address or CIDR notation.
     #[error("invalid address: {0}")]
     InvalidAddress(String),
 
-    /// Invalid VPN peer configuration
+    /// Invalid VPN peer configuration.
     #[error("invalid peer configuration: {0}")]
     InvalidPeers(String),
 
-    /// Invalid WireGuard private key format
+    /// Invalid WireGuard private key format.
     #[error("invalid WireGuard private key: {0}")]
     InvalidPrivateKey(String),
 
-    /// Invalid WireGuard public key format
+    /// Invalid WireGuard public key format.
     #[error("invalid WireGuard public key: {0}")]
     InvalidPublicKey(String),
 
-    /// Invalid VPN gateway format (should be host:port)
+    /// Invalid VPN gateway format (should be `host:port`).
     #[error("invalid VPN gateway: {0}")]
     InvalidGateway(String),
 
-    /// VPN connection failed
+    /// VPN connection failed.
     #[error("VPN connection failed: {0}")]
     VpnFailed(String),
 
-    /// Bluetooth device not found
+    /// Bluetooth device not found.
     #[error("Bluetooth device not found")]
     NoBluetoothDevice,
 
-    /// A D-Bus operation failed with context about what was being attempted
+    /// A D-Bus operation failed, with context about what was being attempted.
     #[error("{context}: {source}")]
     DbusOperation {
+        /// Human-readable description of the operation that failed.
         context: String,
+        /// The underlying `zbus` error.
         #[source]
         source: zbus::Error,
     },
@@ -209,7 +211,7 @@ pub enum ConnectionError {
     #[error("secret agent already registered under this identifier")]
     AgentAlreadyRegistered,
 
-    /// An error occured while parsing a configuration
+    /// An error occurred while parsing a configuration.
     #[error("error while parsing a configuration: {0}")]
     ParseError(OvpnParseError),
 

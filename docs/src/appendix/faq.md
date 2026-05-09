@@ -12,7 +12,10 @@ nmrs is a Rust library for managing network connections on Linux via NetworkMana
 
 ### Is nmrs production-ready?
 
-Yes. nmrs is at version 2.2.0 with a stable API. All public types are also `#[non_exhaustive]` to allow backward-compatible additions.
+Yes. nmrs is at version 3.1.x with a stable API. All public types are
+marked `#[non_exhaustive]` to allow backward-compatible additions, and
+the public surface is enforced in CI with
+[`cargo-semver-checks`](https://crates.io/crates/cargo-semver-checks).
 
 ### What Linux distributions are supported?
 

@@ -1,71 +1,81 @@
 //! Connection builders for different network types.
 //!
-//! This module provides functions to construct NetworkManager connection settings
-//! dictionaries for various connection types. These settings are used with
-//! NetworkManager's D-Bus API to create and activate connections.
+//! This module provides two complementary APIs for constructing NetworkManager
+//! settings dictionaries:
 //!
-//! # Available Builders
+//! - **Fluent builder types** that support method chaining and perform
+//!   validation when `.build()` is called.
+//! - **Free `build_*` functions** that take already-prepared structs and
+//!   produce the same settings map directly.
 //!
-//! - [`wifi`] - WiFi connection builders (WPA-PSK, WPA-EAP, Open)
-//! - [`vpn`] - VPN connection builders (WireGuard)
-//! - Ethernet builders (via [`build_ethernet_connection`])
+//! # Fluent builders
 //!
-//! # When to Use These
+//! - [`ConnectionBuilder`] — generic, low-level builder used as the foundation
+//!   for all other builders. Supports IPv4/IPv6 method, manual addresses,
+//!   routes, DNS, autoconnect, MTU, and more. See [`IpConfig`] / [`Route`].
+//! - [`WifiConnectionBuilder`] — Wi-Fi (open / WPA-PSK / WPA-EAP), with band,
+//!   channel, hidden SSID, BSSID pinning, and AP-mode shortcuts. See
+//!   [`WifiBand`] / [`WifiMode`].
+//! - [`WireGuardBuilder`] — kernel-level WireGuard tunnels.
+//! - [`OpenVpnBuilder`] — NM-plugin OpenVPN connections, with
+//!   [`from_ovpn_file`](OpenVpnBuilder::from_ovpn_file) for `.ovpn` import.
 //!
-//! Most users should use the high-level [`NetworkManager`](crate::NetworkManager) API
-//! instead of calling these builders directly. These are exposed for advanced use cases
-//! where you need fine-grained control over connection settings.
+//! # Free functions
+//!
+//! - [`build_wifi_connection`] / [`build_ethernet_connection`] (in [`wifi`])
+//! - [`build_wireguard_connection`] / [`build_openvpn_connection`] (in [`vpn`])
+//! - [`build_bluetooth_connection`] (in [`bluetooth`])
+//! - [`build_vlan_connection`] (in [`vlan`])
+//!
+//! # When to use these
+//!
+//! Most users should use the high-level
+//! [`NetworkManager`](crate::NetworkManager) API instead of calling these
+//! builders directly. They are exposed for advanced use cases where you
+//! need fine-grained control over the raw settings dictionary before
+//! handing it to NetworkManager's `AddConnection` or
+//! `AddAndActivateConnection` D-Bus methods.
 //!
 //! # Examples
 //!
-//! ```ignore
-//! use nmrs::builders::{build_wifi_connection, build_wireguard_connection, build_ethernet_connection};
-//! use nmrs::{WifiSecurity, ConnectionOptions, VpnCredentials, VpnKind, WireGuardPeer};
+//! ## Wi-Fi (free function)
 //!
-//! let opts = ConnectionOptions {
-//!     autoconnect: true,
-//!     autoconnect_priority: Some(10),
-//!     autoconnect_retries: Some(3),
-//! };
+//! ```rust
+//! use nmrs::builders::{build_ethernet_connection, build_wifi_connection};
+//! use nmrs::{ConnectionOptions, WifiSecurity};
 //!
-//! // Build WiFi connection settings
-//! let wifi_settings = build_wifi_connection(
+//! let opts = ConnectionOptions::new(true).with_priority(10);
+//!
+//! let wifi = build_wifi_connection(
 //!     "MyNetwork",
 //!     &WifiSecurity::WpaPsk { psk: "password".into() },
-//!     &opts
+//!     &opts,
 //! );
-//!
-//! // Build Ethernet connection settings
-//! let eth_settings = build_ethernet_connection("eth0", &opts);
-//! // Build WireGuard VPN connection settings
-//! let opts = ConnectionOptions {
-//!     autoconnect: true,
-//!     autoconnect_priority: Some(10),
-//!     autoconnect_retries: Some(3),
-//! };
-//!
-//! let creds = VpnCredentials {
-//!     vpn_type: VpnKind::WireGuard,
-//!     name: "MyVPN".into(),
-//!     gateway: "vpn.example.com:51820".into(),
-//!     private_key: "YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=".into(),
-//!     address: "10.0.0.2/24".into(),
-//!     peers: vec![WireGuardPeer {
-//!         public_key: "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=".into(),
-//!         gateway: "vpn.example.com:51820".into(),
-//!         allowed_ips: vec!["0.0.0.0/0".into()],
-//!         preshared_key: None,
-//!         persistent_keepalive: Some(25),
-//!     }],
-//!     dns: None,
-//!     mtu: None,
-//!     uuid: None,
-//! };
-//!
-//! let vpn_settings = build_wireguard_connection(&creds, &opts).unwrap();
+//! let eth = build_ethernet_connection("eth0", &opts);
 //! ```
 //!
-//! These settings can then be passed to NetworkManager's
+//! ## WireGuard (fluent builder)
+//!
+//! ```rust
+//! use nmrs::builders::WireGuardBuilder;
+//! use nmrs::WireGuardPeer;
+//!
+//! let peer = WireGuardPeer::new(
+//!     "HIgo9xNzJMWLKAShlKl6/bUT1VI9Q0SDBXGtLXkPFXc=",
+//!     "vpn.example.com:51820",
+//!     vec!["0.0.0.0/0".into()],
+//! ).with_persistent_keepalive(25);
+//!
+//! let settings = WireGuardBuilder::new("MyVPN")
+//!     .private_key("YBk6X3pP8KjKz7+HFWzVHNqL3qTZq8hX9VxFQJ4zVmM=")
+//!     .address("10.0.0.2/24")
+//!     .add_peer(peer)
+//!     .dns(vec!["1.1.1.1".into()])
+//!     .build()
+//!     .expect("WireGuardBuilder is fully configured");
+//! ```
+//!
+//! The returned settings can then be passed to NetworkManager's
 //! `AddConnection` or `AddAndActivateConnection` D-Bus methods.
 
 pub mod bluetooth;

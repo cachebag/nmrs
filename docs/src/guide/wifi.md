@@ -83,15 +83,25 @@ nm.connect("CorpWiFi", None, WifiSecurity::WpaEap {
 
 ## Network Information
 
-The `Network` struct contains detailed information about discovered networks:
+The `Network` struct contains detailed information about discovered networks
+(see the [Models reference](../api/models.md#network) for the full layout):
 
 ```rust
 pub struct Network {
-    pub ssid: String,              // Network name
-    pub strength: Option<u8>,      // Signal strength (0-100)
-    pub security: WifiSecurity,    // Security type
-    pub frequency: Option<u32>,    // Frequency in MHz
-    pub hwaddress: Option<String>, // BSSID/MAC address
+    pub device: String,                // owning Wi-Fi interface (e.g. "wlan0")
+    pub ssid: String,                  // network name
+    pub bssid: Option<String>,         // BSSID of the strongest AP
+    pub strength: Option<u8>,          // signal strength (0–100)
+    pub frequency: Option<u32>,        // MHz
+    pub secured: bool,                 // requires authentication
+    pub is_psk: bool,                  // WPA-PSK
+    pub is_eap: bool,                  // WPA-EAP / 802.1X
+    pub is_hotspot: bool,
+    pub bssids: Vec<String>,           // all merged BSSIDs (strongest first)
+    pub is_active: bool,
+    pub known: bool,                   // a saved profile exists for this SSID
+    pub security_features: SecurityFeatures,
+    // ...
 }
 ```
 
@@ -102,41 +112,53 @@ let networks = nm.list_networks(None).await?;
 
 for net in networks {
     println!("SSID: {}", net.ssid);
-    
+
     if let Some(strength) = net.strength {
-        println!("  Signal: {}%", strength);
-        
-        if strength > 70 {
-            println!("  Quality: Excellent");
-        } else if strength > 50 {
-            println!("  Quality: Good");
-        } else {
-            println!("  Quality: Weak");
-        }
+        let quality = match strength {
+            70..=100 => "Excellent",
+            50..=69 => "Good",
+            _ => "Weak",
+        };
+        println!("  Signal: {}% ({})", strength, quality);
     }
-    
+
     if let Some(freq) = net.frequency {
         let band = if freq > 5000 { "5GHz" } else { "2.4GHz" };
         println!("  Band: {}", band);
     }
+
+    let kind = if net.is_eap {
+        "WPA-EAP"
+    } else if net.is_psk {
+        "WPA-PSK"
+    } else if net.secured {
+        "Other (secured)"
+    } else {
+        "Open"
+    };
+    println!("  Security: {}", kind);
 }
 ```
 
 ## Connection Options
 
-Customize connection behavior with `ConnectionOptions`:
+`ConnectionOptions` controls the high-level behavior of profiles created by
+[`NetworkManager`](../api/network-manager.md):
 
 ```rust
-use nmrs::{NetworkManager, WifiSecurity, ConnectionOptions};
+use nmrs::ConnectionOptions;
 
-let opts = ConnectionOptions::new(true)  // autoconnect
-    .with_priority(10)                   // higher = preferred
-    .with_ipv4_method("auto")            // DHCP
-    .with_dns(vec!["1.1.1.1".into(), "8.8.8.8".into()]);
-
-// Note: Advanced connection options require using builders directly
-// See the Advanced Topics section for details
+let opts = ConnectionOptions::new(true)   // autoconnect
+    .with_priority(10)                    // higher = preferred
+    .with_retries(3);                     // 0 means never retry, None = unlimited
 ```
+
+This struct intentionally only covers the connection-management knobs
+NetworkManager exposes per-profile. To configure DHCP method, manual IP
+addresses, custom DNS servers, or static routes you need a builder — see
+the [`ConnectionBuilder`](../api/builders.md#connectionbuilder) reference,
+or use [`WifiConnectionBuilder`](../api/builders.md#wificonnectionbuilder)
+for Wi-Fi-specific defaults.
 
 ## WiFi Radio Control
 
@@ -217,10 +239,10 @@ match nm.connect("Network", None, WifiSecurity::WpaPsk {
         eprintln!("Failed to get IP address");
     }
     
-    Err(ConnectionError::NoSecrets) => {
+    Err(ConnectionError::MissingPassword) => {
         eprintln!("Missing password or credentials");
     }
-    
+
     Err(e) => eprintln!("Error: {}", e),
 }
 ```

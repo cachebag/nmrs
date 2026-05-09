@@ -5,7 +5,7 @@ This guide will get you up and running with nmrs in minutes.
 ## Prerequisites
 
 Make sure you have:
-- Rust installed (1.78.0+)
+- Rust 1.90.0 or later installed
 - NetworkManager running on your Linux system
 - Basic familiarity with async Rust
 
@@ -14,34 +14,44 @@ Make sure you have:
 ```bash
 cargo new nmrs-demo
 cd nmrs-demo
-cargo add nmrs tokio --features tokio/full
+cargo add nmrs
+cargo add tokio --features macros,rt-multi-thread
 ```
 
 ## Your First nmrs Program
 
-Let's create a simple program that lists available WiFi networks:
+Let's create a simple program that lists available Wi-Fi networks:
 
 ```rust
 use nmrs::NetworkManager;
 
 #[tokio::main]
 async fn main() -> nmrs::Result<()> {
-    // Initialize NetworkManager connection
     let nm = NetworkManager::new().await?;
-    
-    // List all available networks
+
+    // `None` enumerates every Wi-Fi device. Pass `Some("wlan0")` to scope
+    // the listing to a single interface (see "Per-Device Wi-Fi Scoping").
     let networks = nm.list_networks(None).await?;
-    
-    // Print network information
-    for network in networks {
+
+    for net in networks {
+        let kind = if net.is_eap {
+            "WPA-EAP"
+        } else if net.is_psk {
+            "WPA-PSK"
+        } else if net.secured {
+            "Other"
+        } else {
+            "Open"
+        };
+
         println!(
-            "SSID: {:<20} Signal: {:>3}% Security: {:?}",
-            network.ssid,
-            network.strength.unwrap_or(0),
-            network.security
+            "SSID: {:<20} Signal: {:>3}% Security: {}",
+            net.ssid,
+            net.strength.unwrap_or(0),
+            kind,
         );
     }
-    
+
     Ok(())
 }
 ```
@@ -208,54 +218,49 @@ async fn main() -> nmrs::Result<()> {
     
     println!("Scanning for networks...\n");
     let networks = nm.list_networks(None).await?;
-    
-    // Display networks with numbering
+
     for (i, net) in networks.iter().enumerate() {
         println!(
-            "{:2}. {:<25} Signal: {:>3}% {:?}",
+            "{:2}. {:<25} Signal: {:>3}% secured={}",
             i + 1,
             net.ssid,
             net.strength.unwrap_or(0),
-            net.security
+            net.secured,
         );
     }
-    
-    // Get user input
+
     print!("\nEnter network number to connect (or 0 to exit): ");
     io::stdout().flush().unwrap();
-    
+
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
-    
     let choice: usize = input.trim().parse().unwrap_or(0);
-    
+
     if choice == 0 || choice > networks.len() {
         println!("Exiting...");
         return Ok(());
     }
-    
+
     let selected = &networks[choice - 1];
-    
-    // Ask for password if needed
-    let security = match selected.security {
-        nmrs::models::WifiSecurity::Open => WifiSecurity::Open,
-        _ => {
-            print!("Enter password: ");
-            io::stdout().flush().unwrap();
-            let mut password = String::new();
-            io::stdin().read_line(&mut password).unwrap();
-            WifiSecurity::WpaPsk {
-                psk: password.trim().to_string()
-            }
+
+    // `Network` exposes `secured` / `is_psk` / `is_eap` rather than a single
+    // `WifiSecurity` value. Use them to pick the right authentication path.
+    let security = if !selected.secured {
+        WifiSecurity::Open
+    } else {
+        print!("Enter password: ");
+        io::stdout().flush().unwrap();
+        let mut password = String::new();
+        io::stdin().read_line(&mut password).unwrap();
+        WifiSecurity::WpaPsk {
+            psk: password.trim().to_string(),
         }
     };
-    
-    // Connect
+
     println!("Connecting to {}...", selected.ssid);
     nm.connect(&selected.ssid, None, security).await?;
-    
-    println!("✓ Connected successfully!");
-    
+    println!("Connected successfully");
+
     Ok(())
 }
 ```
@@ -272,13 +277,18 @@ Now that you've got the basics, explore more features:
 
 ## Using Different Async Runtimes
 
-nmrs works with any async runtime. Here are examples with popular runtimes:
+`nmrs` is built on top of [`zbus`], which supports several async executors.
+The choice of runtime is made by `zbus` at compile time; `nmrs` itself does
+not bring its own runtime. The examples in this book use Tokio, but
+async-std or smol works just as well.
+
+[`zbus`]: https://docs.rs/zbus
 
 ### async-std
 
 ```toml
 [dependencies]
-nmrs = "2.0.0"
+nmrs = "3.1"
 async-std = { version = "1.12", features = ["attributes"] }
 ```
 
@@ -295,7 +305,7 @@ async fn main() -> nmrs::Result<()> {
 
 ```toml
 [dependencies]
-nmrs = "2.0.0"
+nmrs = "3.1"
 smol = "2.0"
 ```
 
@@ -308,3 +318,5 @@ fn main() -> nmrs::Result<()> {
     })
 }
 ```
+
+See [Async Runtime Support](../advanced/async-runtimes.md) for a deeper look.

@@ -1,18 +1,23 @@
 # Error Types
 
-nmrs uses a single error enum, `ConnectionError`, for all operations. It implements `std::error::Error`, `Display`, and `Debug`.
+nmrs uses a single error enum, `ConnectionError`, for all operations. It
+implements `std::error::Error`, `Display`, and `Debug`, and is also
+re-exported as the source type for the [`nmrs::Result<T>`](./types.md#result-type)
+alias.
 
 ## ConnectionError
 
 ```rust
 #[non_exhaustive]
 pub enum ConnectionError {
-    // D-Bus errors
+    // D-Bus
     Dbus(zbus::Error),
     DbusOperation { context: String, source: zbus::Error },
 
-    // Network not found
+    // Network discovery
     NotFound,
+    ApBssidNotFound { ssid: String, bssid: String },
+    InvalidBssid(String),
 
     // Authentication
     AuthFailed,
@@ -24,48 +29,61 @@ pub enum ConnectionError {
     DhcpFailed,
     Timeout,
     Stuck(String),
+    DeviceFailed(StateReason),
+    ActivationFailed(ConnectionStateReason),
 
-    // Device errors
+    // Devices
     NoWifiDevice,
     NoWiredDevice,
     WifiNotReady,
     NoBluetoothDevice,
-    NoSavedConnection,
-
-    // Device/activation failures with reason codes
-    DeviceFailed(StateReason),
-    ActivationFailed(ConnectionStateReason),
-
-    // Per-device errors
     WifiInterfaceNotFound { interface: String },
     NotAWifiDevice { interface: String },
 
-    // Radio errors
+    // Radios / airplane mode
     HardwareRadioKilled,
-    BluezUnavailable,
+    BluezUnavailable(String),
+    BluetoothToggleFailed(String),
 
-    // VPN errors
-    NoVpnConnection,
-    VpnFailed(String),
-    VpnIdAmbiguous { id: String },
+    // Saved profiles
+    NoSavedConnection,
+    SavedConnectionNotFound(String),
+    MalformedSavedConnection(String),
     IncompleteBuilder(String),
+
+    // VPN
+    NoVpnConnection,
+    VpnNotFound(String),
+    VpnIdAmbiguous(String),
+    VpnFailed(String),
     InvalidPrivateKey(String),
     InvalidPublicKey(String),
     InvalidAddress(String),
     InvalidGateway(String),
     InvalidPeers(String),
+    ParseError(OvpnParseError),
+
+    // VLAN
+    InvalidVlanId { id: u16 },
+
+    // Generic input validation
+    InvalidInput { field: String, reason: String },
 
     // Connectivity
     ConnectivityCheckDisabled,
 
-    // BSSID
-    ApBssidNotFound { ssid: String, bssid: String },
-    InvalidBssid(String),
+    // Secret agent
+    AgentRegistration { context: String },
+    AgentNotRegistered,
+    AgentAlreadyRegistered,
 
-    // Other
-    InvalidUtf8(Utf8Error),
+    // Encoding
+    InvalidUtf8(std::str::Utf8Error),
 }
 ```
+
+> `ConnectionError` is `#[non_exhaustive]`, so always include a wildcard
+> arm in `match` expressions.
 
 ## Error Categories
 
@@ -109,6 +127,20 @@ These indicate infrastructure issues:
 | `Stuck` | NetworkManager in unexpected state |
 | `DeviceFailed` | Check the `StateReason` for details |
 | `ActivationFailed` | Check the `ConnectionStateReason` for details |
+| `BluezUnavailable` | BlueZ not running or no Bluetooth adapters present |
+| `BluetoothToggleFailed` | Adapter exists but failed to power on/off |
+| `MalformedSavedConnection` | Saved profile is missing required keys; consider deleting it |
+| `AgentRegistration` | Secret agent failed to register; check `context` |
+
+### Secret Agent Errors
+
+These come from the [`agent`](../../agent/index.html) module:
+
+| Error | Meaning |
+|-------|---------|
+| `AgentRegistration { context }` | `register()` failed (e.g. NetworkManager not reachable) |
+| `AgentNotRegistered` | Tried to use a handle whose registration was already torn down |
+| `AgentAlreadyRegistered` | Another `nmrs` agent in the process is using the same identifier |
 
 ## StateReason
 
