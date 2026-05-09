@@ -1,0 +1,15 @@
+[package]
+name = "mmrs"
+version = "0.1.0"
+edition.workspace = true
+rust-version = "1.90.0"
+description = "Rust bindings for modemmanager over D-Bus"
+license.workspace = true
+repository.workspace = true
+keywords = ["modemmanager", "dbus", "cellular", "linux", "modem"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+log.workspace = true
+zbus.workspace = true
+zvariant.workspace = true
