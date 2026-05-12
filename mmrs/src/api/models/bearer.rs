@@ -98,8 +98,12 @@ impl fmt::Display for IpType {
 
 /// IPv4 configuration reported on an active bearer.
 ///
-/// Decoded from the `Bearer.Ip4Config` dictionary. All fields are
-/// optional except the prefix, which defaults to `0` when not reported.
+/// Decoded from the `Bearer.Ip4Config` dictionary. [`method`](Ip4Config::method)
+/// is always present in this struct but may be an empty string when the
+/// dictionary omits or does not carry `method`; [`address`](Ip4Config::address),
+/// [`gateway`](Ip4Config::gateway), and [`mtu`](Ip4Config::mtu) use
+/// [`Option`]; [`prefix`](Ip4Config::prefix) defaults to `0` when not reported;
+/// [`dns`](Ip4Config::dns) is empty when none were supplied.
 /// External callers receive `Ip4Config` from the higher-level API; the
 /// example below shows how to inspect such an instance.
 ///

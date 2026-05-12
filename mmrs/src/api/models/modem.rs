@@ -11,7 +11,7 @@ use std::fmt;
 ///
 /// Maps from the `MM_MODEM_STATE_*` constants on the ModemManager
 /// [`org.freedesktop.ModemManager1.Modem`] interface. Use
-/// [`ModemState::from_raw`] (or the [`From`]/[`TryFrom`] impls) to convert
+/// [`ModemState::from_raw`] (or the `From<i32>` impl) to convert
 /// the raw `i32` returned over D-Bus.
 ///
 /// | Raw value | Constant                          | Variant         |
@@ -122,8 +122,9 @@ impl ModemState {
 
     /// Returns `true` when the modem is registered on a network.
     ///
-    /// This includes the higher [`Connecting`](Self::Connecting) and
-    /// [`Connected`](Self::Connected) states.
+    /// This includes [`Disconnecting`](Self::Disconnecting) (tearing down a
+    /// connection while still attached to the network), plus
+    /// [`Connecting`](Self::Connecting) and [`Connected`](Self::Connected).
     #[must_use]
     pub const fn is_registered(self) -> bool {
         matches!(
