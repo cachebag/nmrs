@@ -16,4 +16,7 @@ pub mod models {
     pub use crate::api::models::*;
 }
 
-pub use api::models::{AccessTechnology, Modem, ModemState, Sim, SimLockState};
+pub use api::models::{
+    AccessTechnology, Bearer, BearerConfig, BearerStats, Ip4Config, IpType, Modem, ModemState,
+    Sim, SimLockState,
+};
