@@ -8,10 +8,10 @@
 //!
 //! # Modules
 //!
-//! - [`models`] re-exports every public data type. The same types are
-//!   re-exported at the crate root for convenience (so
-//!   `mmrs::ModemState` and `mmrs::models::ModemState` refer to the same
-//!   item).
+//! - [`models`] re-exports every public data type under [`crate::api::models`].
+//!   The same types are re-exported at the crate root, so `mmrs::ModemState`,
+//!   `mmrs::models::ModemState`, and `mmrs::api::models::ModemState` refer to
+//!   the same item.
 //!
 //! # Quick reference
 //!
@@ -39,7 +39,7 @@
 //! assert_eq!(cfg.apn, "internet");
 //! ```
 
-mod api;
+pub mod api;
 pub mod core;
 pub mod dbus;
 pub mod monitoring;
