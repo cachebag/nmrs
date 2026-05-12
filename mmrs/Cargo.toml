@@ -11,5 +11,6 @@ categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
 log.workspace = true
+thiserror.workspace = true
 zbus.workspace = true
 zvariant.workspace = true
