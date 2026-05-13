@@ -270,6 +270,15 @@ pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Resul
     )
     .await;
 
+    finalize_airplane_toggle_results(wifi_res, wwan_res, bt_res)
+}
+
+// Applies aggregate airplane-mode error semantics after all three toggle attempts complete.
+fn finalize_airplane_toggle_results(
+    wifi_res: Result<()>,
+    wwan_res: Result<()>,
+    bt_res: Result<()>,
+) -> Result<()> {
     // Return the first error, but don't short-circuit — all three have been attempted.
     wifi_res?;
     wwan_res?;
@@ -376,5 +385,51 @@ async fn wait_for_powered_no_timeout(proxy: &BluezAdapterProxy<'_>, target: bool
         {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::finalize_airplane_toggle_results;
+    use crate::ConnectionError;
+
+    #[test]
+    fn aggregate_toggle_treats_bluetooth_toggle_failed_as_non_fatal() {
+        let result = finalize_airplane_toggle_results(
+            Ok(()),
+            Ok(()),
+            Err(ConnectionError::BluetoothToggleFailed(
+                "adapter did not settle".to_string(),
+            )),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn aggregate_toggle_treats_bluez_unavailable_as_non_fatal() {
+        let result = finalize_airplane_toggle_results(
+            Ok(()),
+            Ok(()),
+            Err(ConnectionError::BluezUnavailable(
+                "org.bluez not running".to_string(),
+            )),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn aggregate_toggle_propagates_other_bluetooth_errors() {
+        let result = finalize_airplane_toggle_results(
+            Ok(()),
+            Ok(()),
+            Err(ConnectionError::InvalidInput {
+                field: "bluetooth".to_string(),
+                reason: "unexpected failure".to_string(),
+            }),
+        );
+
+        assert!(matches!(result, Err(ConnectionError::InvalidInput { .. })));
     }
 }
