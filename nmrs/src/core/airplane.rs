@@ -256,9 +256,10 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
 /// `enabled = true` means airplane mode **on** (radios **off**).
 /// Does not fail fast — attempts all three and returns the first error,
 /// except that a missing Bluetooth stack (BlueZ not running or no adapters)
-/// is treated as a successful no-op. If Bluetooth adapters exist but any of
-/// them could not be toggled or did not report the expected `Powered` state,
-/// that error is propagated.
+/// is treated as a successful no-op. Bluetooth adapter toggle/settle failures
+/// are also treated as non-fatal for the aggregate operation: Wi-Fi/WWAN are
+/// still authoritative for the airplane-mode flip, while Bluetooth failures
+/// are logged for diagnostics.
 pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Result<()> {
     let radio_on = !enabled;
 
@@ -282,7 +283,13 @@ pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Resul
                 message
             );
         }
-        // BluetoothToggleFailed — at least one adapter failed or wrong state.
+        Err(ConnectionError::BluetoothToggleFailed(message)) => {
+            // Adapters exist but one or more did not settle. Avoid reporting
+            // total failure after Wi-Fi/WWAN were already applied.
+            warn!(
+                "Ignoring Bluetooth airplane-mode toggle failure during aggregate airplane toggle: {message}"
+            );
+        }
         Err(e) => return Err(e),
     }
     Ok(())

@@ -4,6 +4,13 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- `set_airplane_mode` now treats `BluetoothToggleFailed` as a non-fatal
+  warning (like missing BlueZ) for the aggregate airplane toggle. This avoids
+  reporting total failure after Wi-Fi/WWAN were already toggled successfully,
+  preventing UI/state divergence where airplane mode appears to fail while
+  radios remain disabled. ([#417](https://github.com/cachebag/nmrs/issues/417))
+
 ## [3.1.0] - 2026-05-08
 - Implement loopback support ([#391](https://github.com/cachebag/nmrs/issues/391))
 - Implement add VLAN (802.1Q) device support with VlanConfig model and connection builder([#392](https://github.com/cachebag/nmrs/issues/392))

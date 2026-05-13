@@ -787,9 +787,9 @@ impl NetworkManager {
     /// stack (BlueZ not running or no adapters) is treated as a successful
     /// no-op rather than as an error so that flipping airplane mode on a
     /// wifi-only host still succeeds and leaves the toggle in the expected
-    /// state. However, if Bluetooth adapters exist but any adapter could not
-    /// be toggled or did not reach the expected power state, that error is
-    /// propagated.
+    /// state. Bluetooth adapter toggle/settle failures are also treated as
+    /// non-fatal for this aggregate operation; such failures are logged while
+    /// Wi-Fi/WWAN success still yields `Ok(())`.
     pub async fn set_airplane_mode(&self, enabled: bool) -> Result<()> {
         airplane::set_airplane_mode(&self.conn, enabled).await
     }
