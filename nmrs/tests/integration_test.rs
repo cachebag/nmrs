@@ -1392,20 +1392,13 @@ async fn test_airplane_mode_toggle() {
     let target_enabled = !is_airplane_mode;
     println!("Toggling airplane mode to: {}", target_enabled);
 
-    match nm.set_airplane_mode(target_enabled).await {
-        Ok(_) => {
-            println!("Airplane mode toggle succeeded");
-        }
-        Err(e) => {
-            // On systems without proper permissions or Bluetooth issues,
-            // the toggle might fail, but we log it and continue
-            eprintln!(
-                "Warning: Airplane mode toggle failed (may lack permissions or Bluetooth issues): {}",
-                e
-            );
-            return;
-        }
-    }
+    // This must succeed; if it returns BluetoothToggleFailed, the regression has occurred.
+    // (Before the fix, Bluetooth settle failures would propagate as fatal errors
+    // after Wi-Fi/WWAN were already toggled, leaving the system in a bad state.)
+    nm.set_airplane_mode(target_enabled)
+        .await
+        .expect("set_airplane_mode toggle must succeed (no fatal Bluetooth errors)");
+    println!("Airplane mode toggle succeeded");
 
     // Give the radios time to settle (especially Bluetooth with its 2-second timeout)
     sleep(Duration::from_secs(3)).await;
@@ -1425,15 +1418,12 @@ async fn test_airplane_mode_toggle() {
         new_state.bluetooth.enabled
     );
 
-    // Check if the state actually changed
-    // On some systems without proper hardware/permissions, this may not change
-    if new_is_airplane_mode == is_airplane_mode {
-        eprintln!(
-            "Warning: Airplane mode state didn't actually change (may lack permissions). Initial: {}, New: {}",
-            is_airplane_mode, new_is_airplane_mode
-        );
-        return;
-    }
+    // Verify the toggle actually took effect
+    assert_ne!(
+        new_is_airplane_mode, is_airplane_mode,
+        "Airplane mode state must change after toggle (Initial: {}, New: {})",
+        is_airplane_mode, new_is_airplane_mode
+    );
 
     // Restore to initial state
     println!(
@@ -1441,9 +1431,10 @@ async fn test_airplane_mode_toggle() {
         is_airplane_mode
     );
 
+    // This must also succeed; regression would manifest as Bluetooth failure here too
     nm.set_airplane_mode(is_airplane_mode)
         .await
-        .expect("Failed to restore airplane mode to initial state");
+        .expect("set_airplane_mode restore must succeed (no fatal Bluetooth errors)");
 
     // Give radios time to settle again
     sleep(Duration::from_secs(3)).await;
