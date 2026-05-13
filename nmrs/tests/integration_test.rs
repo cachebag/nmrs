@@ -1379,6 +1379,14 @@ async fn test_airplane_mode_toggle() {
         .await
         .expect("Failed to get airplane mode state");
 
+    if !initial_state.wifi.present
+        && !initial_state.wwan.present
+        && !initial_state.bluetooth.present
+    {
+        eprintln!("Skipping test: no controllable radios present on host");
+        return;
+    }
+
     let is_airplane_mode = initial_state.is_airplane_mode();
     println!(
         "Initial airplane mode state: is_airplane_mode={}, WiFi enabled={}, WWAN enabled={}, Bluetooth enabled={}",
@@ -1392,38 +1400,51 @@ async fn test_airplane_mode_toggle() {
     let target_enabled = !is_airplane_mode;
     println!("Toggling airplane mode to: {}", target_enabled);
 
-    // This must succeed; if it returns BluetoothToggleFailed, the regression has occurred.
-    // (Before the fix, Bluetooth settle failures would propagate as fatal errors
-    // after Wi-Fi/WWAN were already toggled, leaving the system in a bad state.)
-    nm.set_airplane_mode(target_enabled)
-        .await
-        .expect("set_airplane_mode toggle must succeed (no fatal Bluetooth errors)");
-    println!("Airplane mode toggle succeeded");
+    let mut failures: Vec<String> = Vec::new();
+
+    if let Err(e) = nm.set_airplane_mode(target_enabled).await {
+        failures.push(format!(
+            "set_airplane_mode toggle returned error (regression candidate): {e}"
+        ));
+    } else {
+        println!("Airplane mode toggle succeeded");
+    }
 
     // Give the radios time to settle (especially Bluetooth with its 2-second timeout)
     sleep(Duration::from_secs(3)).await;
 
     // Verify the toggle took effect
-    let new_state = nm
-        .airplane_mode_state()
-        .await
-        .expect("Failed to get airplane mode state after toggle");
+    let new_state = match nm.airplane_mode_state().await {
+        Ok(state) => Some(state),
+        Err(e) => {
+            failures.push(format!(
+                "Failed to get airplane mode state after toggle: {e}"
+            ));
+            None
+        }
+    };
 
-    let new_is_airplane_mode = new_state.is_airplane_mode();
-    println!(
-        "New airplane mode state: is_airplane_mode={}, WiFi enabled={}, WWAN enabled={}, Bluetooth enabled={}",
-        new_is_airplane_mode,
-        new_state.wifi.enabled,
-        new_state.wwan.enabled,
-        new_state.bluetooth.enabled
-    );
+    if let Some(state) = &new_state {
+        let new_is_airplane_mode = state.is_airplane_mode();
+        println!(
+            "New airplane mode state: is_airplane_mode={}, WiFi enabled={}, WWAN enabled={}, Bluetooth enabled={}",
+            new_is_airplane_mode, state.wifi.enabled, state.wwan.enabled, state.bluetooth.enabled
+        );
 
-    // Verify the toggle actually took effect
-    assert_ne!(
-        new_is_airplane_mode, is_airplane_mode,
-        "Airplane mode state must change after toggle (Initial: {}, New: {})",
-        is_airplane_mode, new_is_airplane_mode
-    );
+        let expected_radio_on = !target_enabled;
+        for (name, radio) in [
+            ("WiFi", state.wifi),
+            ("WWAN", state.wwan),
+            ("Bluetooth", state.bluetooth),
+        ] {
+            if radio.present && radio.enabled != expected_radio_on {
+                failures.push(format!(
+                    "{name} enabled mismatch after toggle: expected {}, got {}",
+                    expected_radio_on, radio.enabled
+                ));
+            }
+        }
+    }
 
     // Restore to initial state
     println!(
@@ -1431,31 +1452,50 @@ async fn test_airplane_mode_toggle() {
         is_airplane_mode
     );
 
-    // This must also succeed; regression would manifest as Bluetooth failure here too
-    nm.set_airplane_mode(is_airplane_mode)
-        .await
-        .expect("set_airplane_mode restore must succeed (no fatal Bluetooth errors)");
+    if let Err(e) = nm.set_airplane_mode(is_airplane_mode).await {
+        failures.push(format!(
+            "Failed to restore airplane mode to initial state: {e}"
+        ));
+    }
 
     // Give radios time to settle again
     sleep(Duration::from_secs(3)).await;
 
     // Verify restoration
-    let restored_state = nm
-        .airplane_mode_state()
-        .await
-        .expect("Failed to get airplane mode state after restore");
+    match nm.airplane_mode_state().await {
+        Ok(restored_state) => {
+            let restored_is_airplane_mode = restored_state.is_airplane_mode();
+            println!(
+                "Restored airplane mode state: is_airplane_mode={}, WiFi enabled={}, WWAN enabled={}, Bluetooth enabled={}",
+                restored_is_airplane_mode,
+                restored_state.wifi.enabled,
+                restored_state.wwan.enabled,
+                restored_state.bluetooth.enabled
+            );
 
-    let restored_is_airplane_mode = restored_state.is_airplane_mode();
-    println!(
-        "Restored airplane mode state: is_airplane_mode={}, WiFi enabled={}, WWAN enabled={}, Bluetooth enabled={}",
-        restored_is_airplane_mode,
-        restored_state.wifi.enabled,
-        restored_state.wwan.enabled,
-        restored_state.bluetooth.enabled
-    );
+            for (name, initial_radio, restored_radio) in [
+                ("WiFi", initial_state.wifi, restored_state.wifi),
+                ("WWAN", initial_state.wwan, restored_state.wwan),
+                (
+                    "Bluetooth",
+                    initial_state.bluetooth,
+                    restored_state.bluetooth,
+                ),
+            ] {
+                if initial_radio.present && restored_radio.enabled != initial_radio.enabled {
+                    failures.push(format!(
+                        "{name} enabled state not restored: expected {}, got {}",
+                        initial_radio.enabled, restored_radio.enabled
+                    ));
+                }
+            }
+        }
+        Err(e) => failures.push(format!(
+            "Failed to get airplane mode state after restore: {e}"
+        )),
+    }
 
-    assert_eq!(
-        restored_is_airplane_mode, is_airplane_mode,
-        "Airplane mode should be restored to initial state"
-    );
+    if !failures.is_empty() {
+        panic!("{}", failures.join("\n"));
+    }
 }
