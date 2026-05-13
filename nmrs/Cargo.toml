@@ -71,3 +71,6 @@ path = "examples/connectivity.rs"
 [[example]]
 name = "vpn_list"
 path = "examples/vpn_list.rs"
+
+[dev-dependencies]
+serial_test = "3.4.0"

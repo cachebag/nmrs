@@ -262,6 +262,11 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
 /// are logged for diagnostics.
 pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Result<()> {
     let radio_on = !enabled;
+    let present_types = fetch_present_device_types(conn).await;
+    let allow_nonfatal_bt_toggle_failed = present_types
+        .as_ref()
+        .map(|types| types.contains(&device_type::WIFI) || types.contains(&device_type::MODEM))
+        .unwrap_or(true);
 
     let (wifi_res, wwan_res, bt_res) = futures::future::join3(
         set_wireless_enabled(conn, radio_on),
@@ -270,7 +275,7 @@ pub(crate) async fn set_airplane_mode(conn: &Connection, enabled: bool) -> Resul
     )
     .await;
 
-    finalize_airplane_toggle_results(wifi_res, wwan_res, bt_res)
+    finalize_airplane_toggle_results(wifi_res, wwan_res, bt_res, allow_nonfatal_bt_toggle_failed)
 }
 
 // Applies aggregate airplane-mode error semantics after all three toggle attempts complete.
@@ -278,6 +283,7 @@ fn finalize_airplane_toggle_results(
     wifi_res: Result<()>,
     wwan_res: Result<()>,
     bt_res: Result<()>,
+    allow_nonfatal_bt_toggle_failed: bool,
 ) -> Result<()> {
     // Return the first error, but don't short-circuit — all three have been attempted.
     wifi_res?;
@@ -293,11 +299,17 @@ fn finalize_airplane_toggle_results(
             );
         }
         Err(ConnectionError::BluetoothToggleFailed(message)) => {
-            // Adapters exist but one or more did not settle. Avoid reporting
-            // total failure after Wi-Fi/WWAN were already applied.
-            warn!(
-                "Ignoring Bluetooth airplane-mode toggle failure during aggregate airplane toggle: {message}"
-            );
+            if allow_nonfatal_bt_toggle_failed {
+                // Adapters exist but one or more did not settle. Avoid reporting
+                // total failure after Wi-Fi/WWAN were already applied.
+                warn!(
+                    "Ignoring Bluetooth airplane-mode toggle failure during aggregate airplane toggle: {message}"
+                );
+            } else {
+                // Bluetooth appears to be the only controllable radio on this host,
+                // so failing to toggle it should fail the aggregate operation.
+                return Err(ConnectionError::BluetoothToggleFailed(message));
+            }
         }
         Err(e) => return Err(e),
     }
@@ -401,9 +413,27 @@ mod tests {
             Err(ConnectionError::BluetoothToggleFailed(
                 "adapter did not settle".to_string(),
             )),
+            true,
         );
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn aggregate_toggle_propagates_bluetooth_toggle_failed_when_bt_only() {
+        let result = finalize_airplane_toggle_results(
+            Ok(()),
+            Ok(()),
+            Err(ConnectionError::BluetoothToggleFailed(
+                "adapter did not settle".to_string(),
+            )),
+            false,
+        );
+
+        assert!(matches!(
+            result,
+            Err(ConnectionError::BluetoothToggleFailed(_))
+        ));
     }
 
     #[test]
@@ -414,6 +444,7 @@ mod tests {
             Err(ConnectionError::BluezUnavailable(
                 "org.bluez not running".to_string(),
             )),
+            false,
         );
 
         assert!(result.is_ok());
@@ -428,6 +459,7 @@ mod tests {
                 field: "bluetooth".to_string(),
                 reason: "unexpected failure".to_string(),
             }),
+            true,
         );
 
         assert!(matches!(result, Err(ConnectionError::InvalidInput { .. })));
