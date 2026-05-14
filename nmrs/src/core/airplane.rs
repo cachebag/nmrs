@@ -154,24 +154,42 @@ pub(crate) async fn set_wwan_enabled(conn: &Connection, enabled: bool) -> Result
     Ok(nm.set_wwan_enabled(enabled).await?)
 }
 
-/// Enables or disables Bluetooth radio by toggling all BlueZ adapters.
+/// Enables or disables Bluetooth radio via kernel rfkill and BlueZ adapters.
 ///
-/// After writing `Powered` we wait up to [`BLUEZ_POWER_SETTLE_TIMEOUT`] for
-/// all adapters' reported state to actually flip. Otherwise a consumer that
-/// re-reads [`bluetooth_radio_state`] right after this call can observe the
-/// pre-toggle value briefly and conclude the toggle didn't take effect.
+/// Uses `rfkill block bluetooth` / `rfkill unblock bluetooth` as the primary
+/// mechanism — this is authoritative, persistent, and matches what other
+/// Cosmic components (e.g. `cosmic-settings-airplane-mode-subscription`) read
+/// back when determining airplane-mode state.
 ///
-/// Adapters are toggled concurrently with a single overall timeout to keep
-/// latency bounded regardless of adapter count.
+/// After rfkill, we also toggle BlueZ adapter `Powered` properties and wait
+/// up to [`BLUEZ_POWER_SETTLE_TIMEOUT`] for them to settle, so that a
+/// read-after-write of [`bluetooth_radio_state`] sees the correct value.
 ///
 /// # Errors
 ///
 /// - [`ConnectionError::BluezUnavailable`] if BlueZ is not running or no
 ///   adapters exist.
-/// - [`ConnectionError::BluetoothToggleFailed`] if one or more adapters could
-///   not be toggled, or their `Powered` property did not reach the requested
-///   state (e.g., D-Bus errors or timeout).
+/// - [`ConnectionError::BluetoothToggleFailed`] if rfkill failed, or one or
+///   more BlueZ adapters could not be toggled / did not reach the requested
+///   state.
 pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool) -> Result<()> {
+    let rfkill_arg = if enabled { "unblock" } else { "block" };
+    let rfkill_status = tokio::process::Command::new("rfkill")
+        .arg(rfkill_arg)
+        .arg("bluetooth")
+        .status()
+        .await;
+
+    match rfkill_status {
+        Ok(status) if status.success() => {}
+        Ok(status) => {
+            warn!("rfkill {rfkill_arg} bluetooth exited with {status}");
+        }
+        Err(e) => {
+            warn!("failed to run rfkill {rfkill_arg} bluetooth: {e}");
+        }
+    }
+
     let adapter_paths = enumerate_bluetooth_adapters(conn).await.map_err(|e| {
         ConnectionError::BluezUnavailable(format!("failed to enumerate adapters: {e}"))
     })?;
@@ -184,7 +202,6 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
 
     let n_adapters = adapter_paths.len();
 
-    // Build proxies and toggle power concurrently
     let toggle_futures = adapter_paths.iter().map(|path| async move {
         let proxy = match BluezAdapterProxy::builder(conn).path(path.as_str()) {
             Ok(builder) => match builder.build().await {
@@ -220,7 +237,6 @@ pub(crate) async fn set_bluetooth_radio_enabled(conn: &Connection, enabled: bool
 
     let successful_proxies: Vec<_> = results.into_iter().flatten().collect();
 
-    // Wait for all adapters' Powered to settle, with a single overall timeout
     let wait_futures = successful_proxies
         .iter()
         .map(|proxy| wait_for_powered_no_timeout(proxy, enabled));
