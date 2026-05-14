@@ -787,9 +787,13 @@ impl NetworkManager {
     /// stack (BlueZ not running or no adapters) is treated as a successful
     /// no-op rather than as an error so that flipping airplane mode on a
     /// wifi-only host still succeeds and leaves the toggle in the expected
-    /// state. Bluetooth adapter toggle/settle failures are also treated as
-    /// non-fatal for this aggregate operation; such failures are logged while
-    /// Wi-Fi/WWAN success still yields `Ok(())`.
+    /// state. Bluetooth adapter toggle/settle failures are treated as
+    /// non-fatal for this aggregate operation when at least one Wi-Fi or
+    /// WWAN device is present and succeeds; such failures are logged while
+    /// Wi-Fi/WWAN success still yields `Ok(())`. If no Wi-Fi or WWAN device
+    /// is detected, the aggregate call can still return
+    /// [`BluetoothToggleFailed`](crate::ConnectionError::BluetoothToggleFailed)
+    /// for Bluetooth toggle/settle failures.
     pub async fn set_airplane_mode(&self, enabled: bool) -> Result<()> {
         airplane::set_airplane_mode(&self.conn, enabled).await
     }
