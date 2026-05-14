@@ -774,6 +774,9 @@ impl NetworkManager {
     /// Returns [`BluezUnavailable`](crate::ConnectionError::BluezUnavailable) if BlueZ is not running
     /// or no adapters exist, or [`BluetoothToggleFailed`](crate::ConnectionError::BluetoothToggleFailed)
     /// if any adapter could not be toggled or did not reach the requested power state.
+    ///
+    /// Uses kernel rfkill (`rfkill block/unblock bluetooth`) as the primary
+    /// mechanism, then also toggles BlueZ adapter `Powered` properties.
     pub async fn set_bluetooth_radio_enabled(&self, enabled: bool) -> Result<()> {
         airplane::set_bluetooth_radio_enabled(&self.conn, enabled).await
     }
@@ -781,6 +784,11 @@ impl NetworkManager {
     /// Flips all three radios in one call.
     ///
     /// **`enabled = true` means airplane mode is on, i.e. radios are off.**
+    ///
+    /// Wi-Fi and WWAN are toggled via NetworkManager properties. Bluetooth
+    /// is toggled via kernel rfkill plus BlueZ adapter `Powered`, ensuring
+    /// the soft-block state is visible to other components that read rfkill
+    /// to determine airplane-mode status.
     ///
     /// Does not fail fast: attempts all three toggles concurrently and
     /// returns the first error at the end, if any. A missing Bluetooth
