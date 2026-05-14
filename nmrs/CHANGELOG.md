@@ -4,6 +4,9 @@ All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-05-14
+- `set_bluetooth_radio_enabled` now toggles kernel rfkill before BlueZ adapter `Powered`, fixing airplane-mode state desync with rfkill-based consumers ([#417](https://github.com/cachebag/nmrs/issues/418))
+
 ## [3.1.1] - 2026-05-13
 ### Fixed
 - `set_airplane_mode` now treats `BluetoothToggleFailed` as a non-fatal
@@ -275,7 +278,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [3.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v3.0.0...nmrs-v3.0.1
 [3.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v3.0.1...nmrs-v3.1.0
 [3.1.1]: https://github.com/cachebag/nmrs/compare/nmrs-v3.1.0...nmrs-v3.1.1
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v3.1.1...HEAD
+[3.1.2]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v3.1.2
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v3.1.2...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
