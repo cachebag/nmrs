@@ -1,10 +1,8 @@
 //! Rust bindings for [ModemManager](https://modemmanager.org/) over D-Bus.
 //!
-//! This crate is in early development. The currently stable surface is the
-//! set of public **model types** that describe modems, SIMs, and packet-data
-//! bearers as exposed by ModemManager. Higher-level helpers
-//! (connect / disconnect, monitoring, builders) will land on top of these
-//! types in subsequent releases.
+//! This crate is in early development. The public surface includes the
+//! high-level [`ModemManager`] entry point plus model types that describe
+//! modems, SIMs, and packet-data bearers as exposed by ModemManager.
 //!
 //! # Modules
 //!
@@ -23,8 +21,13 @@
 //!
 //! # Example
 //!
-//! ```rust
-//! use mmrs::{AccessTechnology, BearerConfig, IpType, ModemState};
+//! ```no_run
+//! use mmrs::{AccessTechnology, BearerConfig, IpType, ModemManager, ModemState};
+//!
+//! # async fn example() -> mmrs::Result<()> {
+//! let mm = ModemManager::new().await?;
+//! let modems = mm.list_modems().await?;
+//! # let _ = modems;
 //!
 //! let state = ModemState::from_raw(11);
 //! assert!(state.is_connected());
@@ -37,6 +40,8 @@
 //!     .with_user("user")
 //!     .with_password("hunter2");
 //! assert_eq!(cfg.apn, "internet");
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod api;
@@ -53,6 +58,7 @@ pub mod models {
 }
 
 pub use api::models::{
-    AccessTechnology, Bearer, BearerConfig, BearerStats, Ip4Config, IpType, Modem, ModemError,
-    ModemState, Result, Sim, SimLockState,
+    AccessTechnology, Bearer, BearerConfig, BearerStats, ConnectionStatus, Ip4Config, IpType,
+    Modem, ModemError, ModemState, Result, Sim, SimLockState,
 };
+pub use api::{ModemManager, ModemScope};

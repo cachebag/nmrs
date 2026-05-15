@@ -32,6 +32,10 @@ pub enum ModemError {
     #[error("d-bus error: {0}")]
     Dbus(#[from] zbus::Error),
 
+    /// A standard freedesktop.org D-Bus interface operation failed.
+    #[error("d-bus fdo error: {0}")]
+    DbusFdo(#[from] zbus::fdo::Error),
+
     /// A D-Bus operation failed, with context about what was being attempted.
     #[error("{context}: {source}")]
     DbusOperation {
