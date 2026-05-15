@@ -496,6 +496,29 @@ pub struct Modem {
     pub bearer_paths: Vec<String>,
 }
 
+/// Snapshot of a modem's current packet-data connection status.
+///
+/// Produced by [`crate::ModemManager::status`] and
+/// [`crate::ModemScope::status`]. It combines the fields most callers need
+/// when deciding whether a modem is ready, connected, and using a usable radio
+/// technology.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionStatus {
+    /// D-Bus object path of the modem this status belongs to.
+    pub modem_path: String,
+    /// Current modem state.
+    pub state: ModemState,
+    /// Whether the modem currently has an active packet-data bearer.
+    pub connected: bool,
+    /// Current radio access technology bitmask.
+    pub access_technology: AccessTechnology,
+    /// Signal quality percentage when ModemManager reports it.
+    pub signal_quality: Option<u32>,
+    /// D-Bus object paths of bearers owned by this modem.
+    pub bearer_paths: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,5 +16,5 @@ mod sim;
 
 pub use bearer::{Bearer, BearerConfig, BearerStats, Ip4Config, IpType};
 pub use error::{ModemError, Result};
-pub use modem::{AccessTechnology, Modem, ModemState};
+pub use modem::{AccessTechnology, ConnectionStatus, Modem, ModemState};
 pub use sim::{Sim, SimLockState};
