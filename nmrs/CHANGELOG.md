@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+
+## [3.1.4] - 2026-05-17
 ### Fixed
 - WireGuard builder now sets `service-type` property correctly ([#421](https://github.com/networkmanager-rs/nmrs/pull/421))
 
@@ -288,7 +290,8 @@ All notable changes to the `nmrs` crate will be documented in this file.
 [3.1.1]: https://github.com/cachebag/nmrs/compare/nmrs-v3.1.0...nmrs-v3.1.1
 [3.1.2]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v3.1.2
 [3.1.3]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v3.1.3
-[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v3.1.3...HEAD
+[3.1.4]: https://github.com/cachebag/nmrs/compare/nmrs-v1.2.0...nmrs-v3.1.4
+[Unreleased]: https://github.com/cachebag/nmrs/compare/nmrs-v3.1.4...HEAD
 [1.1.0]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.1...nmrs-v1.1.0
 [1.0.1]: https://github.com/cachebag/nmrs/compare/nmrs-v1.0.0...nmrs-v1.0.1
 [1.0.0]: https://github.com/cachebag/nmrs/compare/v0.5.0-beta...nmrs-v1.0.0
