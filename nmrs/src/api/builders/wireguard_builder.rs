@@ -245,10 +245,6 @@ impl WireGuardBuilder {
 
         // Build wireguard section
         let mut wireguard = HashMap::new();
-        wireguard.insert(
-            "service-type",
-            Value::from("org.freedesktop.NetworkManager.wireguard"),
-        );
         wireguard.insert("private-key", Value::from(private_key));
 
         // Build peers array
