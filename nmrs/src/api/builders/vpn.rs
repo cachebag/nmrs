@@ -440,17 +440,16 @@ mod tests {
     }
 
     #[test]
-    fn vpn_section_has_wireguard_service_type() {
+    fn wireguard_section_has_no_service_type() {
         let creds = create_test_credentials();
         let opts = create_test_options();
 
         let settings = build_wireguard_connection(&creds, &opts).unwrap();
-        let vpn = settings.get("wireguard").unwrap();
+        let wg = settings.get("wireguard").unwrap();
 
-        let service_type = vpn.get("service-type").unwrap();
-        assert_eq!(
-            service_type,
-            &Value::from("org.freedesktop.NetworkManager.wireguard")
+        assert!(
+            wg.get("service-type").is_none(),
+            "kernel WireGuard connections must not have a service-type property"
         );
     }
 

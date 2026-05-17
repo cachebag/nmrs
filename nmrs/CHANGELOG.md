@@ -3,6 +3,8 @@
 All notable changes to the `nmrs` crate will be documented in this file.
 
 ## [Unreleased]
+### Fixed
+- WireGuard builder now sets `service-type` property correctly ([#421](https://github.com/networkmanager-rs/nmrs/pull/421))
 
 ## [3.1.3] - 2026-05-14
 ### Fixed
@@ -11,7 +13,7 @@ All notable changes to the `nmrs` crate will be documented in this file.
 (No changes documented)
 
 ## [3.1.2] - 2026-05-14
-- `set_bluetooth_radio_enabled` now toggles kernel rfkill before BlueZ adapter `Powered`, fixing airplane-mode state desync with rfkill-based consumers ([#417](https://github.com/cachebag/nmrs/issues/418))
+- `set_bluetooth_radio_enabled` now toggles kernel rfkill before BlueZ adapter `Powered`, fixing airplane-mode state desync with rfkill-based consumers ([#417](https://github.com/networkmanager-rs/nmrs/issues/418))
 
 ## [3.1.1] - 2026-05-13
 ### Fixed
@@ -21,17 +23,17 @@ All notable changes to the `nmrs` crate will be documented in this file.
   those radios were disabled, preventing UI/state divergence where airplane
   mode appears to fail while radios remain disabled. On hosts with no
   Wi-Fi/WWAN device detected, `set_airplane_mode` can still return
-  `BluetoothToggleFailed`. ([#417](https://github.com/cachebag/nmrs/issues/417))
+  `BluetoothToggleFailed`. ([#417](https://github.com/networkmanager-rs/nmrs/issues/417))
 
 ## [3.1.0] - 2026-05-08
-- Implement loopback support ([#391](https://github.com/cachebag/nmrs/issues/391))
-- Implement add VLAN (802.1Q) device support with VlanConfig model and connection builder([#392](https://github.com/cachebag/nmrs/issues/392))
+- Implement loopback support ([#391](https://github.com/networkmanager-rs/nmrs/issues/391))
+- Implement add VLAN (802.1Q) device support with VlanConfig model and connection builder([#392](https://github.com/networkmanager-rs/nmrs/issues/392))
 
 ### Added
 - `RadioState::present` indicates whether a controllable instance of the radio
   exists on the host. `RadioState::with_presence(enabled, hardware_enabled,
   present)` constructor; `RadioState::new` keeps existing behavior and defaults
-  `present = true`. ([#396](https://github.com/cachebag/nmrs/issues/396))
+  `present = true`. ([#396](https://github.com/networkmanager-rs/nmrs/issues/396))
 
 ### Fixed
 - `NetworkManager::wifi_state` and `wwan_state` now set `RadioState::present`
